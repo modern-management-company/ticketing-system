@@ -3,6 +3,8 @@ import axios from "axios";
 
 const ViewTasks = ({ token }) => {
     const [tasks, setTasks] = useState([]);
+    const [status, setStatus] = useState("");
+    const [message, setMessage] = useState("");
 
     useEffect(() => {
         const fetchTasks = async () => {
@@ -10,11 +12,7 @@ const ViewTasks = ({ token }) => {
                 const response = await axios.get("/tasks", {
                     headers: { Authorization: `Bearer ${token}` },
                 });
-                const tasksWithStatus = response.data.tasks.map((task) => ({
-                    ...task,
-                    tempStatus: task.status, // Add a temporary status for editing
-                }));
-                setTasks(tasksWithStatus);
+                setTasks(response.data.tasks);
             } catch (error) {
                 console.error("Failed to fetch tasks", error);
             }
@@ -23,38 +21,34 @@ const ViewTasks = ({ token }) => {
         fetchTasks();
     }, [token]);
 
-    const updateTaskStatus = async (taskId) => {
-        const taskToUpdate = tasks.find((task) => task.task_id === taskId);
-        if (!taskToUpdate || !taskToUpdate.tempStatus) {
-            alert("Please select a status to update.");
-            return;
-        }
-
+    const handleEdit = async (taskId) => {
         try {
             const response = await axios.patch(
                 `/tasks/${taskId}`,
-                { status: taskToUpdate.tempStatus },
-                {
-                    headers: { Authorization: `Bearer ${token}` },
-                }
+                { status },
+                { headers: { Authorization: `Bearer ${token}` } }
             );
-            alert(response.data.message);
-            // Update tasks after the status change
-            const updatedTasks = tasks.map((task) =>
-                task.task_id === taskId ? { ...task, status: taskToUpdate.tempStatus } : task
+            setMessage(response.data.message);
+            setTasks((prev) =>
+                prev.map((task) =>
+                    task.task_id === taskId ? { ...task, status } : task
+                )
             );
-            setTasks(updatedTasks);
         } catch (error) {
-            console.error("Failed to update task status", error);
+            console.error("Failed to edit task", error);
         }
     };
 
-    const handleStatusChange = (taskId, newStatus) => {
-        setTasks((prevTasks) =>
-            prevTasks.map((task) =>
-                task.task_id === taskId ? { ...task, tempStatus: newStatus } : task
-            )
-        );
+    const handleDelete = async (taskId) => {
+        try {
+            const response = await axios.delete(`/tasks/${taskId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            setMessage(response.data.message);
+            setTasks((prev) => prev.filter((task) => task.task_id !== taskId));
+        } catch (error) {
+            console.error("Failed to delete task", error);
+        }
     };
 
     return (
@@ -76,25 +70,25 @@ const ViewTasks = ({ token }) => {
                             <td>{task.task_id}</td>
                             <td>{task.ticket_id}</td>
                             <td>{task.assigned_to}</td>
-                            <td>{task.status}</td>
                             <td>
                                 <select
-                                    value={task.tempStatus || ""}
-                                    onChange={(e) => handleStatusChange(task.task_id, e.target.value)}
+                                    value={status || task.status}
+                                    onChange={(e) => setStatus(e.target.value)}
                                 >
-                                    <option value="">Change Status</option>
                                     <option value="Pending">Pending</option>
                                     <option value="In Progress">In Progress</option>
                                     <option value="Completed">Completed</option>
                                 </select>
-                                <button onClick={() => updateTaskStatus(task.task_id)}>
-                                    Update
-                                </button>
+                            </td>
+                            <td>
+                                <button onClick={() => handleEdit(task.task_id)}>Update</button>
+                                <button onClick={() => handleDelete(task.task_id)}>Delete</button>
                             </td>
                         </tr>
                     ))}
                 </tbody>
             </table>
+            {message && <p>{message}</p>}
         </div>
     );
 };

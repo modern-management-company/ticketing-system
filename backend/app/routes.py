@@ -198,3 +198,133 @@ def update_ticket_status(ticket_id):
     ticket.status = data['status']
     db.session.commit()
     return jsonify({'message': 'Ticket status updated successfully!'})
+@app.route('/properties/<int:property_id>', methods=['PATCH'])
+@jwt_required()
+def edit_property(property_id):
+    data = request.json
+    if not data or not data.get('name') or not data.get('address'):
+        return jsonify({'message': 'Invalid input'}), 400
+
+    property = Property.query.get(property_id)
+    if not property:
+        return jsonify({'message': 'Property not found'}), 404
+
+    property.name = data['name']
+    property.address = data['address']
+    db.session.commit()
+    return jsonify({'message': 'Property updated successfully!'})
+
+@app.route('/properties/<int:property_id>', methods=['DELETE'])
+@jwt_required()
+def delete_property(property_id):
+    property = Property.query.get(property_id)
+    if not property:
+        return jsonify({'message': 'Property not found'}), 404
+
+    db.session.delete(property)
+    db.session.commit()
+    return jsonify({'message': 'Property deleted successfully!'})
+@app.route('/rooms/<int:room_id>', methods=['PATCH'])
+@jwt_required()
+def edit_room(room_id):
+    data = request.json
+    if not data or not data.get('name'):
+        return jsonify({'message': 'Invalid input'}), 400
+
+    room = Room.query.get(room_id)
+    if not room:
+        return jsonify({'message': 'Room not found'}), 404
+
+    room.name = data['name']
+    db.session.commit()
+    return jsonify({'message': 'Room updated successfully!'})
+
+@app.route('/rooms/<int:room_id>', methods=['DELETE'])
+@jwt_required()
+def delete_room(room_id):
+    room = Room.query.get(room_id)
+    if not room:
+        return jsonify({'message': 'Room not found'}), 404
+
+    db.session.delete(room)
+    db.session.commit()
+    return jsonify({'message': 'Room deleted successfully!'})
+@app.route('/tasks/<int:task_id>', methods=['PATCH'])
+@jwt_required()
+def edit_task(task_id):
+    data = request.json
+    if not data or not data.get('status'):
+        return jsonify({'message': 'Invalid input'}), 400
+
+    task = TaskAssignment.query.get(task_id)
+    if not task:
+        return jsonify({'message': 'Task not found'}), 404
+
+    task.status = data['status']
+    db.session.commit()
+    return jsonify({'message': 'Task updated successfully!'})
+
+@app.route('/tasks/<int:task_id>', methods=['DELETE'])
+@jwt_required()
+def delete_task(task_id):
+    task = TaskAssignment.query.get(task_id)
+    if not task:
+        return jsonify({'message': 'Task not found'}), 404
+
+    db.session.delete(task)
+    db.session.commit()
+    return jsonify({'message': 'Task deleted successfully!'})
+@app.route('/tickets/<int:ticket_id>', methods=['PATCH'])
+@jwt_required()
+def edit_ticket(ticket_id):
+    data = request.json
+    if not data or not data.get('title') or not data.get('description') or not data.get('priority'):
+        return jsonify({'message': 'Invalid input'}), 400
+
+    ticket = Ticket.query.get(ticket_id)
+    if not ticket:
+        return jsonify({'message': 'Ticket not found'}), 404
+
+    ticket.title = data['title']
+    ticket.description = data['description']
+    ticket.priority = data['priority']
+    db.session.commit()
+    return jsonify({'message': 'Ticket updated successfully!'})
+
+@app.route('/tickets/<int:ticket_id>', methods=['DELETE'])
+@jwt_required()
+def delete_ticket(ticket_id):
+    ticket = Ticket.query.get(ticket_id)
+    if not ticket:
+        return jsonify({'message': 'Ticket not found'}), 404
+
+    db.session.delete(ticket)
+    db.session.commit()
+    return jsonify({'message': 'Ticket deleted successfully!'})
+@app.route('/users/<int:user_id>', methods=['PATCH'])
+@jwt_required()
+def edit_user(user_id):
+    data = request.json
+    if not data or not data.get('username'):
+        return jsonify({'message': 'Invalid input'}), 400
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'message': 'User not found'}), 404
+
+    user.username = data['username']
+    if data.get('password'):
+        user.password = generate_password_hash(data['password'])
+    db.session.commit()
+    return jsonify({'message': 'User updated successfully!'})
+
+@app.route('/users/<int:user_id>', methods=['DELETE'])
+@jwt_required()
+def delete_user(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'message': 'User not found'}), 404
+
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({'message': 'User deleted successfully!'})

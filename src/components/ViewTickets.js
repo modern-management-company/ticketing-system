@@ -3,7 +3,8 @@ import axios from "axios";
 
 const ViewTickets = ({ token }) => {
     const [tickets, setTickets] = useState([]);
-    const [status, setStatus] = useState({});
+    const [editTicket, setEditTicket] = useState({});
+    const [message, setMessage] = useState("");
 
     useEffect(() => {
         const fetchTickets = async () => {
@@ -20,34 +21,46 @@ const ViewTickets = ({ token }) => {
         fetchTickets();
     }, [token]);
 
-    const updateTicketStatus = async (ticketId) => {
+    const handleEdit = async (ticketId) => {
         try {
             const response = await axios.patch(
                 `/tickets/${ticketId}`,
-                { status: status[ticketId] },
-                {
-                    headers: { Authorization: `Bearer ${token}` },
-                }
+                { title: editTicket.title, status: editTicket.status },
+                { headers: { Authorization: `Bearer ${token}` } }
             );
-            alert(response.data.message);
-            // Update the ticket status in the UI
-            setTickets((prevTickets) =>
-                prevTickets.map((ticket) =>
+            setMessage(response.data.message);
+            setTickets((prev) =>
+                prev.map((ticket) =>
                     ticket.id === ticketId
-                        ? { ...ticket, status: status[ticketId] }
+                        ? { ...ticket, title: editTicket.title, status: editTicket.status }
                         : ticket
                 )
             );
+            setEditTicket({});
         } catch (error) {
-            console.error("Failed to update ticket status", error);
+            console.error("Failed to edit ticket", error);
+        }
+    };
+
+    const handleDelete = async (ticketId) => {
+        try {
+            const response = await axios.delete(`/tickets/${ticketId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            setMessage(response.data.message);
+            setTickets((prev) => prev.filter((ticket) => ticket.id !== ticketId));
+        } catch (error) {
+            console.error("Failed to delete ticket", error);
         }
     };
 
     const handleStatusChange = (ticketId, newStatus) => {
-        setStatus((prevStatus) => ({
-            ...prevStatus,
-            [ticketId]: newStatus,
-        }));
+        setTickets((prev) =>
+            prev.map((ticket) =>
+                ticket.id === ticketId ? { ...ticket, status: newStatus } : ticket
+            )
+        );
+        setEditTicket((prev) => ({ ...prev, id: ticketId, status: newStatus }));
     };
 
     return (
@@ -58,8 +71,6 @@ const ViewTickets = ({ token }) => {
                     <tr>
                         <th>Ticket ID</th>
                         <th>Title</th>
-                        <th>Description</th>
-                        <th>Priority</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -68,30 +79,69 @@ const ViewTickets = ({ token }) => {
                     {tickets.map((ticket) => (
                         <tr key={ticket.id}>
                             <td>{ticket.id}</td>
-                            <td>{ticket.title}</td>
-                            <td>{ticket.description}</td>
-                            <td>{ticket.priority}</td>
-                            <td>{ticket.status}</td>
+                            <td>
+                                {editTicket.id === ticket.id ? (
+                                    <input
+                                        type="text"
+                                        defaultValue={ticket.title}
+                                        onChange={(e) =>
+                                            setEditTicket({
+                                                ...editTicket,
+                                                title: e.target.value,
+                                            })
+                                        }
+                                    />
+                                ) : (
+                                    ticket.title
+                                )}
+                            </td>
                             <td>
                                 <select
-                                    value={status[ticket.id] || ticket.status}
+                                    value={
+                                        editTicket.id === ticket.id
+                                            ? editTicket.status
+                                            : ticket.status
+                                    }
                                     onChange={(e) =>
                                         handleStatusChange(ticket.id, e.target.value)
                                     }
                                 >
-                                    <option value="Open">Open</option>
+                                    <option value="Pending">Pending</option>
                                     <option value="In Progress">In Progress</option>
-                                    <option value="Resolved">Resolved</option>
-                                    <option value="Closed">Closed</option>
+                                    <option value="Completed">Completed</option>
                                 </select>
-                                <button onClick={() => updateTicketStatus(ticket.id)}>
-                                    Update
+                            </td>
+                            <td>
+                                {editTicket.id === ticket.id ? (
+                                    <button
+                                        onClick={() => handleEdit(ticket.id)}
+                                    >
+                                        Save
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() =>
+                                            setEditTicket({
+                                                id: ticket.id,
+                                                title: ticket.title,
+                                                status: ticket.status,
+                                            })
+                                        }
+                                    >
+                                        Edit
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => handleDelete(ticket.id)}
+                                >
+                                    Delete
                                 </button>
                             </td>
                         </tr>
                     ))}
                 </tbody>
             </table>
+            {message && <p>{message}</p>}
         </div>
     );
 };
