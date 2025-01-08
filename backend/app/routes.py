@@ -183,3 +183,18 @@ def get_rooms(property_id):
         for room in rooms
     ]
     return jsonify({'rooms': room_list}), 200
+
+@app.route('/tickets/<int:ticket_id>', methods=['PATCH'])
+@jwt_required()
+def update_ticket_status(ticket_id):
+    data = request.json
+    if not data or not data.get('status'):
+        return jsonify({'message': 'Invalid input'}), 400
+
+    ticket = Ticket.query.get(ticket_id)
+    if not ticket:
+        return jsonify({'message': 'Ticket not found'}), 404
+
+    ticket.status = data['status']
+    db.session.commit()
+    return jsonify({'message': 'Ticket status updated successfully!'})
