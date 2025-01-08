@@ -328,3 +328,47 @@ def delete_user(user_id):
     db.session.delete(user)
     db.session.commit()
     return jsonify({'message': 'User deleted successfully!'})
+
+@app.route('/reports/users', methods=['GET'])
+@jwt_required()
+def user_report():
+    users = User.query.all()
+    user_data = [{'user_id': user.user_id, 'username': user.username} for user in users]
+    return jsonify({'users': user_data})
+
+@app.route('/reports/properties', methods=['GET'])
+@jwt_required()
+def property_report():
+    properties = Property.query.all()
+    property_data = [{'property_id': prop.property_id, 'name': prop.name, 'address': prop.address} for prop in properties]
+    return jsonify({'properties': property_data})
+
+@app.route('/reports/tasks', methods=['GET'])
+@jwt_required()
+def task_report():
+    tasks = TaskAssignment.query.all()
+    task_data = [
+        {
+            'task_id': task.task_id,
+            'ticket_id': task.ticket_id,
+            'assigned_to_user_id': task.assigned_to_user_id,
+            'status': task.status
+        }
+        for task in tasks
+    ]
+    return jsonify({'tasks': task_data})
+
+@app.route('/reports/tickets', methods=['GET'])
+@jwt_required()
+def ticket_report():
+    tickets = Ticket.query.all()
+    ticket_data = [
+        {
+            'ticket_id': ticket.ticket_id,
+            'title': ticket.title,
+            'status': ticket.status,
+            'priority': ticket.priority,
+        }
+        for ticket in tickets
+    ]
+    return jsonify({'tickets': ticket_data})
