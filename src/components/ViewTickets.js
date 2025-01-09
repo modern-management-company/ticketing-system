@@ -1,149 +1,154 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import {
+  Box,
+  Grid,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Select,
+  MenuItem,
+  Button,
+} from "@mui/material";
 
 const ViewTickets = ({ token }) => {
-    const [tickets, setTickets] = useState([]);
-    const [editTicket, setEditTicket] = useState({});
-    const [message, setMessage] = useState("");
+  const [tickets, setTickets] = useState([]);
+  const [editTicket, setEditTicket] = useState({});
+  const [status, setStatus] = useState("");
+  const [message, setMessage] = useState("");
 
-    useEffect(() => {
-        const fetchTickets = async () => {
-            try {
-                const response = await axios.get("/tickets", {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                setTickets(response.data.tickets);
-            } catch (error) {
-                console.error("Failed to fetch tickets", error);
-            }
-        };
-
-        fetchTickets();
-    }, [token]);
-
-    const handleEdit = async (ticketId) => {
-        try {
-            const response = await axios.patch(
-                `/tickets/${ticketId}`,
-                { title: editTicket.title, status: editTicket.status },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            setMessage(response.data.message);
-            setTickets((prev) =>
-                prev.map((ticket) =>
-                    ticket.id === ticketId
-                        ? { ...ticket, title: editTicket.title, status: editTicket.status }
-                        : ticket
-                )
-            );
-            setEditTicket({});
-        } catch (error) {
-            console.error("Failed to edit ticket", error);
-        }
+  useEffect(() => {
+    const fetchTickets = async () => {
+      try {
+        const response = await axios.get("/tickets", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setTickets(response.data.tickets);
+      } catch (error) {
+        console.error("Failed to fetch tickets", error);
+      }
     };
 
-    const handleDelete = async (ticketId) => {
-        try {
-            const response = await axios.delete(`/tickets/${ticketId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            setMessage(response.data.message);
-            setTickets((prev) => prev.filter((ticket) => ticket.id !== ticketId));
-        } catch (error) {
-            console.error("Failed to delete ticket", error);
-        }
-    };
+    fetchTickets();
+  }, [token]);
 
-    const handleStatusChange = (ticketId, newStatus) => {
-        setTickets((prev) =>
-            prev.map((ticket) =>
-                ticket.id === ticketId ? { ...ticket, status: newStatus } : ticket
-            )
-        );
-        setEditTicket((prev) => ({ ...prev, id: ticketId, status: newStatus }));
-    };
+  const handleEdit = async (ticketId) => {
+    try {
+      const response = await axios.patch(
+        `/tickets/${ticketId}`,
+        { title: editTicket.title, status },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setMessage(response.data.message);
+      setTickets((prev) =>
+        prev.map((ticket) =>
+          ticket.id === ticketId
+            ? { ...ticket, title: editTicket.title, status }
+            : ticket
+        )
+      );
+      setEditTicket({});
+    } catch (error) {
+      console.error("Failed to edit ticket", error);
+    }
+  };
 
-    return (
-        <div>
-            <h2>View Tickets</h2>
-            <table border="1">
-                <thead>
-                    <tr>
-                        <th>Ticket ID</th>
-                        <th>Title</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {tickets.map((ticket) => (
-                        <tr key={ticket.id}>
-                            <td>{ticket.id}</td>
-                            <td>
-                                {editTicket.id === ticket.id ? (
-                                    <input
-                                        type="text"
-                                        defaultValue={ticket.title}
-                                        onChange={(e) =>
-                                            setEditTicket({
-                                                ...editTicket,
-                                                title: e.target.value,
-                                            })
-                                        }
-                                    />
-                                ) : (
-                                    ticket.title
-                                )}
-                            </td>
-                            <td>
-                                <select
-                                    value={
-                                        editTicket.id === ticket.id
-                                            ? editTicket.status
-                                            : ticket.status
-                                    }
-                                    onChange={(e) =>
-                                        handleStatusChange(ticket.id, e.target.value)
-                                    }
-                                >
-                                    <option value="Pending">Pending</option>
-                                    <option value="In Progress">In Progress</option>
-                                    <option value="Completed">Completed</option>
-                                </select>
-                            </td>
-                            <td>
-                                {editTicket.id === ticket.id ? (
-                                    <button
-                                        onClick={() => handleEdit(ticket.id)}
-                                    >
-                                        Save
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={() =>
-                                            setEditTicket({
-                                                id: ticket.id,
-                                                title: ticket.title,
-                                                status: ticket.status,
-                                            })
-                                        }
-                                    >
-                                        Edit
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => handleDelete(ticket.id)}
-                                >
-                                    Delete
-                                </button>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-            {message && <p>{message}</p>}
-        </div>
-    );
+  const handleDelete = async (ticketId) => {
+    try {
+      const response = await axios.delete(`/tickets/${ticketId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMessage(response.data.message);
+      setTickets((prev) => prev.filter((ticket) => ticket.id !== ticketId));
+    } catch (error) {
+      console.error("Failed to delete ticket", error);
+    }
+  };
+
+  return (
+    <Box p={3}>
+      <Typography variant="h4" gutterBottom>
+        View Tickets
+      </Typography>
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell align="center">Ticket ID</TableCell>
+              <TableCell align="center">Title</TableCell>
+              <TableCell align="center">Status</TableCell>
+              <TableCell align="center">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {tickets.map((ticket) => (
+              <TableRow key={ticket.id}>
+                <TableCell align="center">{ticket.id}</TableCell>
+                <TableCell align="center">
+                  {editTicket.id === ticket.id ? (
+                    <input
+                      type="text"
+                      defaultValue={ticket.title}
+                      onChange={(e) =>
+                        setEditTicket({
+                          ...editTicket,
+                          title: e.target.value,
+                        })
+                      }
+                    />
+                  ) : (
+                    ticket.title
+                  )}
+                </TableCell>
+                <TableCell align="center">
+                  <Select
+                    value={editTicket.id === ticket.id ? status : ticket.status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    displayEmpty
+                  >
+                    <MenuItem value="Pending">Pending</MenuItem>
+                    <MenuItem value="In Progress">In Progress</MenuItem>
+                    <MenuItem value="Completed">Completed</MenuItem>
+                  </Select>
+                </TableCell>
+                <TableCell align="center">
+                  {editTicket.id === ticket.id ? (
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={() => handleEdit(ticket.id)}
+                    >
+                      Save
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outlined"
+                      onClick={() => setEditTicket(ticket)}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    onClick={() => handleDelete(ticket.id)}
+                  >
+                    Delete
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      {message && <Typography color="success.main">{message}</Typography>}
+    </Box>
+  );
 };
 
 export default ViewTickets;

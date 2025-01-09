@@ -1,96 +1,110 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import {
+  Box,
+  Grid,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Select,
+  MenuItem,
+  Button,
+} from "@mui/material";
 
 const ViewTasks = ({ token }) => {
-    const [tasks, setTasks] = useState([]);
-    const [status, setStatus] = useState("");
-    const [message, setMessage] = useState("");
+  const [tasks, setTasks] = useState([]);
+  const [status, setStatus] = useState("");
+  const [message, setMessage] = useState("");
 
-    useEffect(() => {
-        const fetchTasks = async () => {
-            try {
-                const response = await axios.get("/tasks", {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                setTasks(response.data.tasks);
-            } catch (error) {
-                console.error("Failed to fetch tasks", error);
-            }
-        };
-
-        fetchTasks();
-    }, [token]);
-
-    const handleEdit = async (taskId) => {
-        try {
-            const response = await axios.patch(
-                `/tasks/${taskId}`,
-                { status },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            setMessage(response.data.message);
-            setTasks((prev) =>
-                prev.map((task) =>
-                    task.task_id === taskId ? { ...task, status } : task
-                )
-            );
-        } catch (error) {
-            console.error("Failed to edit task", error);
-        }
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const response = await axios.get("/tasks", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setTasks(response.data.tasks);
+      } catch (error) {
+        console.error("Failed to fetch tasks", error);
+      }
     };
 
-    const handleDelete = async (taskId) => {
-        try {
-            const response = await axios.delete(`/tasks/${taskId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            setMessage(response.data.message);
-            setTasks((prev) => prev.filter((task) => task.task_id !== taskId));
-        } catch (error) {
-            console.error("Failed to delete task", error);
-        }
-    };
+    fetchTasks();
+  }, [token]);
 
-    return (
-        <div>
-            <h2>View Tasks</h2>
-            <table border="1">
-                <thead>
-                    <tr>
-                        <th>Task ID</th>
-                        <th>Ticket ID</th>
-                        <th>Assigned User</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {tasks.map((task) => (
-                        <tr key={task.task_id}>
-                            <td>{task.task_id}</td>
-                            <td>{task.ticket_id}</td>
-                            <td>{task.assigned_to}</td>
-                            <td>
-                                <select
-                                    value={status || task.status}
-                                    onChange={(e) => setStatus(e.target.value)}
-                                >
-                                    <option value="Pending">Pending</option>
-                                    <option value="In Progress">In Progress</option>
-                                    <option value="Completed">Completed</option>
-                                </select>
-                            </td>
-                            <td>
-                                <button onClick={() => handleEdit(task.task_id)}>Update</button>
-                                <button onClick={() => handleDelete(task.task_id)}>Delete</button>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-            {message && <p>{message}</p>}
-        </div>
-    );
+  const updateTaskStatus = async (taskId) => {
+    try {
+      const response = await axios.patch(
+        `/tasks/${taskId}`,
+        { status },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setMessage(response.data.message);
+      const updatedTasks = tasks.map((task) =>
+        task.task_id === taskId ? { ...task, status } : task
+      );
+      setTasks(updatedTasks);
+    } catch (error) {
+      console.error("Failed to update task status", error);
+    }
+  };
+
+  return (
+    <Box p={3}>
+      <Typography variant="h4" gutterBottom>
+        View Tasks
+      </Typography>
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell align="center">Task ID</TableCell>
+              <TableCell align="center">Ticket ID</TableCell>
+              <TableCell align="center">Assigned User</TableCell>
+              <TableCell align="center">Status</TableCell>
+              <TableCell align="center">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {tasks.map((task) => (
+              <TableRow key={task.task_id}>
+                <TableCell align="center">{task.task_id}</TableCell>
+                <TableCell align="center">{task.ticket_id}</TableCell>
+                <TableCell align="center">{task.assigned_to}</TableCell>
+                <TableCell align="center">
+                  <Select
+                    value={task.status || status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    displayEmpty
+                  >
+                    <MenuItem value="Pending">Pending</MenuItem>
+                    <MenuItem value="In Progress">In Progress</MenuItem>
+                    <MenuItem value="Completed">Completed</MenuItem>
+                  </Select>
+                </TableCell>
+                <TableCell align="center">
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={() => updateTaskStatus(task.task_id)}
+                  >
+                    Update
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      {message && <Typography color="success.main">{message}</Typography>}
+    </Box>
+  );
 };
 
 export default ViewTasks;

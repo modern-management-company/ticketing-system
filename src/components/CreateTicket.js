@@ -1,169 +1,174 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import {
+  Box,
+  Button,
+  TextField,
+  Typography,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Snackbar,
+  Alert,
+} from "@mui/material";
 
 const CreateTicket = ({ token }) => {
-    const [categories] = useState(["Maintenance", "Cleaning", "Other"]);
-    const [properties, setProperties] = useState([]);
-    const [selectedProperty, setSelectedProperty] = useState("");
-    const [rooms, setRooms] = useState([]);
-    const [selectedRoom, setSelectedRoom] = useState("");
-    const [title, setTitle] = useState("");
-    const [description, setDescription] = useState("");
-    const [priority, setPriority] = useState("");
-    const [category, setCategory] = useState(categories[0]);
-    const [message, setMessage] = useState("");
+  const [categories] = useState(["Maintenance", "Cleaning", "Other"]);
+  const [properties, setProperties] = useState([]);
+  const [selectedProperty, setSelectedProperty] = useState("");
+  const [rooms, setRooms] = useState([]);
+  const [selectedRoom, setSelectedRoom] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("");
+  const [message, setMessage] = useState("");
 
-    // Fetch all properties
-    useEffect(() => {
-        const fetchProperties = async () => {
-            try {
-                const response = await axios.get("/properties", {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                setProperties(response.data.properties);
-            } catch (error) {
-                console.error("Failed to fetch properties:", error);
-            }
-        };
-        fetchProperties();
-    }, [token]);
-
-    // Fetch rooms for a selected property
-    const fetchRooms = async (propertyId) => {
-        try {
-            const response = await axios.get(`/properties/${propertyId}/rooms`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            setRooms(response.data.rooms);
-        } catch (error) {
-            console.error("Failed to fetch rooms:", error);
-        }
+  useEffect(() => {
+    const fetchProperties = async () => {
+      try {
+        const response = await axios.get("/properties", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setProperties(response.data.properties);
+      } catch (error) {
+        console.error(error);
+      }
     };
+    fetchProperties();
+  }, [token]);
 
-    const handlePropertyChange = (e) => {
-        const propertyId = e.target.value;
-        setSelectedProperty(propertyId);
-        setRooms([]); // Clear rooms when changing properties
-        if (propertyId) {
-            fetchRooms(propertyId);
-        }
-    };
+  const fetchRooms = async (propertyId) => {
+    try {
+      const response = await axios.get(`/properties/${propertyId}/rooms`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setRooms(response.data.rooms);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!selectedProperty || !selectedRoom || !title || !description || !priority) {
-            setMessage("Please fill in all fields.");
-            return;
-        }
-        try {
-            const response = await axios.post(
-                "/tickets",
-                {
-                    title,
-                    description,
-                    priority,
-                    category,
-                    property_id: selectedProperty,
-                    room_id: selectedRoom,
-                },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            setMessage("Ticket created successfully!");
-            setTitle("");
-            setDescription("");
-            setPriority("");
-            setSelectedProperty("");
-            setSelectedRoom("");
-            setRooms([]);
-        } catch (error) {
-            console.error("Failed to create ticket:", error);
-            setMessage("Failed to create ticket.");
-        }
-    };
+  const handlePropertyChange = (e) => {
+    setSelectedProperty(e.target.value);
+    fetchRooms(e.target.value);
+  };
 
-    return (
-        <div>
-            <h2>Create Ticket</h2>
-            <form onSubmit={handleSubmit}>
-                {/* Select Property */}
-                <div>
-                    <label>Property:</label>
-                    <select value={selectedProperty} onChange={handlePropertyChange}>
-                        <option value="">Select Property</option>
-                        {properties.map((property) => (
-                            <option key={property.property_id} value={property.property_id}>
-                                {property.name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(
+        "/tickets",
+        {
+          title,
+          description,
+          priority,
+          category: categories[0], // Example: use first category for now
+          property_id: selectedProperty,
+          room_id: selectedRoom,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setMessage("Ticket created successfully!");
+    } catch (error) {
+      console.error(error);
+      setMessage("Failed to create ticket.");
+    }
+  };
 
-                {/* Select Room */}
-                <div>
-                    <label>Room:</label>
-                    <select
-                        value={selectedRoom}
-                        onChange={(e) => setSelectedRoom(e.target.value)}
-                        disabled={!rooms.length}
-                    >
-                        <option value="">Select Room</option>
-                        {rooms.map((room) => (
-                            <option key={room.room_id} value={room.room_id}>
-                                {room.name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+  return (
+    <Box sx={{ maxWidth: 600, margin: "auto", padding: 3 }}>
+      <Typography variant="h4" gutterBottom>
+        Create Ticket
+      </Typography>
+      <form onSubmit={handleSubmit}>
+        <FormControl fullWidth margin="normal">
+          <InputLabel>Property</InputLabel>
+          <Select
+            value={selectedProperty}
+            onChange={handlePropertyChange}
+            required
+          >
+            {properties.map((property) => (
+              <MenuItem key={property.property_id} value={property.property_id}>
+                {property.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
-                {/* Ticket Title */}
-                <div>
-                    <label>Title:</label>
-                    <input
-                        type="text"
-                        placeholder="Ticket Title"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                    />
-                </div>
+        <FormControl fullWidth margin="normal">
+          <InputLabel>Room</InputLabel>
+          <Select
+            value={selectedRoom}
+            onChange={(e) => setSelectedRoom(e.target.value)}
+            required
+          >
+            {rooms.map((room) => (
+              <MenuItem key={room.room_id} value={room.room_id}>
+                {room.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
-                {/* Description */}
-                <div>
-                    <label>Description:</label>
-                    <textarea
-                        placeholder="Description"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                    />
-                </div>
+        <TextField
+          fullWidth
+          margin="normal"
+          label="Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+        />
 
-                {/* Priority */}
-                <div>
-                    <label>Priority:</label>
-                    <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-                        <option value="">Select Priority</option>
-                        <option value="Low">Low</option>
-                        <option value="Medium">Medium</option>
-                        <option value="High">High</option>
-                    </select>
-                </div>
+        <TextField
+          fullWidth
+          margin="normal"
+          label="Description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          multiline
+          rows={4}
+          required
+        />
 
-                {/* Category */}
-                <div>
-                    <label>Category:</label>
-                    <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                        {categories.map((cat, index) => (
-                            <option key={index} value={cat}>
-                                {cat}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+        <FormControl fullWidth margin="normal">
+          <InputLabel>Priority</InputLabel>
+          <Select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            required
+          >
+            <MenuItem value="Low">Low</MenuItem>
+            <MenuItem value="Medium">Medium</MenuItem>
+            <MenuItem value="High">High</MenuItem>
+          </Select>
+        </FormControl>
 
-                <button type="submit">Create Ticket</button>
-            </form>
-            {message && <p>{message}</p>}
-        </div>
-    );
+        <Button
+          type="submit"
+          variant="contained"
+          color="primary"
+          fullWidth
+          sx={{ mt: 2 }}
+        >
+          Create Ticket
+        </Button>
+      </form>
+
+      {message && (
+        <Snackbar
+          open={!!message}
+          autoHideDuration={6000}
+          onClose={() => setMessage("")}
+        >
+          <Alert severity="success" onClose={() => setMessage("")}>
+            {message}
+          </Alert>
+        </Snackbar>
+      )}
+    </Box>
+  );
 };
 
 export default CreateTicket;

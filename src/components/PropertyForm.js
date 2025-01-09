@@ -1,47 +1,85 @@
 import React, { useState } from "react";
 import axios from "axios";
+import {
+  Box,
+  Button,
+  TextField,
+  Typography,
+  Snackbar,
+  Alert,
+} from "@mui/material";
 
 const PropertyForm = ({ token }) => {
-    const [name, setName] = useState("");
-    const [address, setAddress] = useState("");
-    const [message, setMessage] = useState("");
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [message, setMessage] = useState("");
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            const response = await axios.post(
-                "/properties",
-                { name, address },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            setMessage("Property created successfully!");
-        } catch (error) {
-            console.error(error);
-            setMessage("Failed to create property.");
-        }
-    };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(
+        "/properties",
+        { name, address },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setMessage("Property added successfully!");
+      setName("");
+      setAddress("");
+    } catch (error) {
+      console.error("Failed to create property", error);
+      setMessage("Failed to add property.");
+    }
+  };
 
-    return (
-        <div>
-            <h2>Add Property</h2>
-            <form onSubmit={handleSubmit}>
-                <input
-                    type="text"
-                    placeholder="Property Name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                />
-                <input
-                    type="text"
-                    placeholder="Address"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                />
-                <button type="submit">Add Property</button>
-            </form>
-            {message && <p>{message}</p>}
-        </div>
-    );
+  return (
+    <Box sx={{ maxWidth: 600, margin: "auto", padding: 3 }}>
+      <Typography variant="h4" gutterBottom>
+        Add Property
+      </Typography>
+      <form onSubmit={handleSubmit}>
+        <TextField
+          fullWidth
+          margin="normal"
+          label="Property Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <TextField
+          fullWidth
+          margin="normal"
+          label="Address"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          required
+        />
+        <Button
+          type="submit"
+          variant="contained"
+          color="primary"
+          fullWidth
+          sx={{ mt: 2 }}
+        >
+          Add Property
+        </Button>
+      </form>
+
+      {message && (
+        <Snackbar
+          open={!!message}
+          autoHideDuration={6000}
+          onClose={() => setMessage("")}
+        >
+          <Alert
+            severity={message.includes("successfully") ? "success" : "error"}
+            onClose={() => setMessage("")}
+          >
+            {message}
+          </Alert>
+        </Snackbar>
+      )}
+    </Box>
+  );
 };
 
 export default PropertyForm;

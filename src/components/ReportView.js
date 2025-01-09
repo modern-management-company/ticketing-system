@@ -1,124 +1,99 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import {
+  Box,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Alert,
+} from "@mui/material";
 
 const ReportView = ({ token }) => {
-    const [users, setUsers] = useState([]);
-    const [properties, setProperties] = useState([]);
-    const [tasks, setTasks] = useState([]);
-    const [tickets, setTickets] = useState([]);
-    const [error, setError] = useState("");
+  const [users, setUsers] = useState([]);
+  const [properties, setProperties] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [error, setError] = useState("");
 
-    useEffect(() => {
-        const fetchReports = async () => {
-            try {
-                const [usersRes, propertiesRes, tasksRes, ticketsRes] = await Promise.all([
-                    axios.get("/reports/users", { headers: { Authorization: `Bearer ${token}` } }),
-                    axios.get("/reports/properties", { headers: { Authorization: `Bearer ${token}` } }),
-                    axios.get("/reports/tasks", { headers: { Authorization: `Bearer ${token}` } }),
-                    axios.get("/reports/tickets", { headers: { Authorization: `Bearer ${token}` } }),
-                ]);
+  useEffect(() => {
+    const fetchReports = async () => {
+      try {
+        const [usersRes, propertiesRes, tasksRes, ticketsRes] = await Promise.all([
+          axios.get("/reports/users", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("/reports/properties", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("/reports/tasks", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("/reports/tickets", { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
 
-                setUsers(usersRes.data.users);
-                setProperties(propertiesRes.data.properties);
-                setTasks(tasksRes.data.tasks);
-                setTickets(ticketsRes.data.tickets);
-            } catch (err) {
-                setError("Failed to fetch reports.");
-                console.error(err);
-            }
-        };
+        setUsers(usersRes.data.users);
+        setProperties(propertiesRes.data.properties);
+        setTasks(tasksRes.data.tasks);
+        setTickets(ticketsRes.data.tickets);
+      } catch (err) {
+        setError("Failed to fetch reports.");
+        console.error(err);
+      }
+    };
 
-        fetchReports();
-    }, [token]);
+    fetchReports();
+  }, [token]);
 
-    return (
-        <div>
-            <h2>Reports</h2>
-            {error && <p style={{ color: "red" }}>{error}</p>}
+  const renderTable = (columns, rows) => (
+    <TableContainer component={Paper} sx={{ marginTop: 2 }}>
+      <Table>
+        <TableHead>
+          <TableRow>
+            {columns.map((col) => (
+              <TableCell key={col}>{col}</TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((row, index) => (
+            <TableRow key={index}>
+              {columns.map((col) => (
+                <TableCell key={col}>{row[col.toLowerCase().replace(" ", "_")]}</TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
 
-            <h3>User Report</h3>
-            <table border="1">
-                <thead>
-                    <tr>
-                        <th>User ID</th>
-                        <th>Username</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {users.map((user) => (
-                        <tr key={user.user_id}>
-                            <td>{user.user_id}</td>
-                            <td>{user.username}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+  return (
+    <Box sx={{ padding: 4 }}>
+      <Typography variant="h4" gutterBottom>
+        Reports
+      </Typography>
+      {error && <Alert severity="error">{error}</Alert>}
 
-            <h3>Property Report</h3>
-            <table border="1">
-                <thead>
-                    <tr>
-                        <th>Property ID</th>
-                        <th>Name</th>
-                        <th>Address</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {properties.map((property) => (
-                        <tr key={property.property_id}>
-                            <td>{property.property_id}</td>
-                            <td>{property.name}</td>
-                            <td>{property.address}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+      <Typography variant="h5" gutterBottom>
+        User Report
+      </Typography>
+      {renderTable(["User ID", "Username"], users)}
 
-            <h3>Task Report</h3>
-            <table border="1">
-                <thead>
-                    <tr>
-                        <th>Task ID</th>
-                        <th>Ticket ID</th>
-                        <th>Assigned To</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {tasks.map((task) => (
-                        <tr key={task.task_id}>
-                            <td>{task.task_id}</td>
-                            <td>{task.ticket_id}</td>
-                            <td>{task.assigned_to_user_id}</td>
-                            <td>{task.status}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+      <Typography variant="h5" gutterBottom>
+        Property Report
+      </Typography>
+      {renderTable(["Property ID", "Name", "Address"], properties)}
 
-            <h3>Ticket Report</h3>
-            <table border="1">
-                <thead>
-                    <tr>
-                        <th>Ticket ID</th>
-                        <th>Title</th>
-                        <th>Status</th>
-                        <th>Priority</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {tickets.map((ticket) => (
-                        <tr key={ticket.ticket_id}>
-                            <td>{ticket.ticket_id}</td>
-                            <td>{ticket.title}</td>
-                            <td>{ticket.status}</td>
-                            <td>{ticket.priority}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
+      <Typography variant="h5" gutterBottom>
+        Task Report
+      </Typography>
+      {renderTable(["Task ID", "Ticket ID", "Assigned To", "Status"], tasks)}
+
+      <Typography variant="h5" gutterBottom>
+        Ticket Report
+      </Typography>
+      {renderTable(["Ticket ID", "Title", "Status", "Priority"], tickets)}
+    </Box>
+  );
 };
 
 export default ReportView;
