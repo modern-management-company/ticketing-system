@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import {
   Box,
-  Grid,
   Typography,
   Table,
   TableBody,
@@ -18,7 +17,7 @@ import {
 
 const ViewTasks = ({ token }) => {
   const [tasks, setTasks] = useState([]);
-  const [status, setStatus] = useState("");
+  const [users, setUsers] = useState([]);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -33,25 +32,64 @@ const ViewTasks = ({ token }) => {
       }
     };
 
+    const fetchUsers = async () => {
+      try {
+        const response = await axios.get("/users", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setUsers(response.data.users);
+      } catch (error) {
+        console.error("Failed to fetch users", error);
+      }
+    };
+
     fetchTasks();
+    fetchUsers();
   }, [token]);
 
-  const updateTaskStatus = async (taskId) => {
+  const updateTaskStatus = async (taskId, newStatus) => {
     try {
       const response = await axios.patch(
         `/tasks/${taskId}`,
-        { status },
+        { status: newStatus },
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
       setMessage(response.data.message);
-      const updatedTasks = tasks.map((task) =>
-        task.task_id === taskId ? { ...task, status } : task
+
+      // Update the local state for the task
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.task_id === taskId ? { ...task, status: newStatus } : task
+        )
       );
-      setTasks(updatedTasks);
     } catch (error) {
       console.error("Failed to update task status", error);
+    }
+  };
+
+  const updateTaskAssignee = async (taskId, newUserId) => {
+    try {
+      const response = await axios.patch(
+        `/tasks/${taskId}`,
+        { assigned_to_user_id: newUserId },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setMessage(response.data.message);
+
+      // Update the local state for the task
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.task_id === taskId
+            ? { ...task, assigned_to: users.find((u) => u.user_id === newUserId)?.username }
+            : task
+        )
+      );
+    } catch (error) {
+      console.error("Failed to update task assignee", error);
     }
   };
 
@@ -76,11 +114,28 @@ const ViewTasks = ({ token }) => {
               <TableRow key={task.task_id}>
                 <TableCell align="center">{task.task_id}</TableCell>
                 <TableCell align="center">{task.ticket_id}</TableCell>
-                <TableCell align="center">{task.assigned_to}</TableCell>
                 <TableCell align="center">
                   <Select
-                    value={task.status || status}
-                    onChange={(e) => setStatus(e.target.value)}
+                    value={users.find((user) => user.username === task.assigned_to)?.user_id || ""}
+                    onChange={(e) =>
+                      updateTaskAssignee(task.task_id, e.target.value)
+                    }
+                    displayEmpty
+                  >
+                    <MenuItem value="">Select User</MenuItem>
+                    {users.map((user) => (
+                      <MenuItem key={user.user_id} value={user.user_id}>
+                        {user.username}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </TableCell>
+                <TableCell align="center">
+                  <Select
+                    value={task.status}
+                    onChange={(e) =>
+                      updateTaskStatus(task.task_id, e.target.value)
+                    }
                     displayEmpty
                   >
                     <MenuItem value="Pending">Pending</MenuItem>
@@ -92,7 +147,9 @@ const ViewTasks = ({ token }) => {
                   <Button
                     variant="contained"
                     color="primary"
-                    onClick={() => updateTaskStatus(task.task_id)}
+                    onClick={() =>
+                      updateTaskStatus(task.task_id, task.status)
+                    }
                   >
                     Update
                   </Button>

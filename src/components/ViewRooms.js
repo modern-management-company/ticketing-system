@@ -21,6 +21,7 @@ const ViewRooms = ({ token }) => {
   const [selectedProperty, setSelectedProperty] = useState("");
   const [rooms, setRooms] = useState([]);
   const [editRoom, setEditRoom] = useState({});
+  const [newRoomName, setNewRoomName] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -80,12 +81,33 @@ const ViewRooms = ({ token }) => {
     }
   };
 
+  const handleAddRoom = async () => {
+    if (!newRoomName || !selectedProperty) {
+      setMessage("Please enter a room name and select a property.");
+      return;
+    }
+    try {
+      const response = await axios.post(
+        `/properties/${selectedProperty}/rooms`,
+        { name: newRoomName },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setMessage(response.data.message);
+      setNewRoomName("");
+      fetchRooms(selectedProperty); // Refresh the rooms list after adding
+    } catch (error) {
+      console.error("Failed to add room", error);
+      setMessage("Failed to add room.");
+    }
+  };
+
   return (
     <Box p={3}>
       <Typography variant="h4" gutterBottom>
-        View Rooms
+        View and Manage Rooms
       </Typography>
       <Select
+        fullWidth
         value={selectedProperty}
         onChange={(e) => {
           setSelectedProperty(e.target.value);
@@ -100,7 +122,23 @@ const ViewRooms = ({ token }) => {
           </MenuItem>
         ))}
       </Select>
-      <TableContainer component={Paper}>
+      <Box mt={2} display="flex" gap={2}>
+        <TextField
+          fullWidth
+          label="New Room Name"
+          value={newRoomName}
+          onChange={(e) => setNewRoomName(e.target.value)}
+        />
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleAddRoom}
+          disabled={!selectedProperty}
+        >
+          Add Room
+        </Button>
+      </Box>
+      <TableContainer component={Paper} sx={{ marginTop: 3 }}>
         <Table>
           <TableHead>
             <TableRow>

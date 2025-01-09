@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import {
   Box,
-  Grid,
   Typography,
   Table,
   TableBody,
@@ -14,12 +13,12 @@ import {
   Select,
   MenuItem,
   Button,
+  TextField,
 } from "@mui/material";
 
 const ViewTickets = ({ token }) => {
   const [tickets, setTickets] = useState([]);
   const [editTicket, setEditTicket] = useState({});
-  const [status, setStatus] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -37,18 +36,18 @@ const ViewTickets = ({ token }) => {
     fetchTickets();
   }, [token]);
 
-  const handleEdit = async (ticketId) => {
+  const handleEdit = async (ticketId, newStatus) => {
     try {
       const response = await axios.patch(
         `/tickets/${ticketId}`,
-        { title: editTicket.title, status },
+        { title: editTicket.title || null, status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setMessage(response.data.message);
       setTickets((prev) =>
         prev.map((ticket) =>
           ticket.id === ticketId
-            ? { ...ticket, title: editTicket.title, status }
+            ? { ...ticket, title: editTicket.title || ticket.title, status: newStatus }
             : ticket
         )
       );
@@ -91,8 +90,7 @@ const ViewTickets = ({ token }) => {
                 <TableCell align="center">{ticket.id}</TableCell>
                 <TableCell align="center">
                   {editTicket.id === ticket.id ? (
-                    <input
-                      type="text"
+                    <TextField
                       defaultValue={ticket.title}
                       onChange={(e) =>
                         setEditTicket({
@@ -107,8 +105,12 @@ const ViewTickets = ({ token }) => {
                 </TableCell>
                 <TableCell align="center">
                   <Select
-                    value={editTicket.id === ticket.id ? status : ticket.status}
-                    onChange={(e) => setStatus(e.target.value)}
+                    value={
+                      editTicket.id === ticket.id ? editTicket.status : ticket.status
+                    }
+                    onChange={(e) =>
+                      setEditTicket({ ...editTicket, status: e.target.value, id: ticket.id })
+                    }
                     displayEmpty
                   >
                     <MenuItem value="Pending">Pending</MenuItem>
@@ -121,7 +123,7 @@ const ViewTickets = ({ token }) => {
                     <Button
                       variant="contained"
                       color="primary"
-                      onClick={() => handleEdit(ticket.id)}
+                      onClick={() => handleEdit(ticket.id, editTicket.status)}
                     >
                       Save
                     </Button>

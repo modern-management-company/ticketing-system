@@ -23,7 +23,11 @@ const TaskAssignment = ({ token }) => {
         const response = await axios.get("/tickets", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setTickets(response.data.tickets);
+        // Filter tickets to exclude those with a "Completed" status
+        const activeTickets = response.data.tickets.filter(
+          (ticket) => ticket.status !== "Completed"
+        );
+        setTickets(activeTickets);
       } catch (error) {
         console.error("Failed to fetch tickets", error);
       }

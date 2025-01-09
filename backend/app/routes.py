@@ -135,18 +135,30 @@ def view_tasks():
     return jsonify({'tasks': task_list})
 @app.route('/tasks/<int:task_id>', methods=['PATCH'])
 @jwt_required()
-def update_task_status(task_id):
+def update_task(task_id):
     data = request.json
-    if not data or not data.get('status'):
+
+    if not data or ('status' not in data and 'assigned_to_user_id' not in data):
         return jsonify({'message': 'Invalid input'}), 400
 
     task = TaskAssignment.query.get(task_id)
     if not task:
         return jsonify({'message': 'Task not found'}), 404
 
-    task.status = data['status']
+    # Update status if provided
+    if 'status' in data:
+        task.status = data['status']
+
+    # Update assigned user if provided
+    if 'assigned_to_user_id' in data:
+        new_user_id = data['assigned_to_user_id']
+        user = User.query.get(new_user_id)
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+        task.assigned_to_user_id = new_user_id
+
     db.session.commit()
-    return jsonify({'message': 'Task status updated successfully!'})
+    return jsonify({'message': 'Task updated successfully!'})
 
 @app.route('/users', methods=['GET'])
 @jwt_required()
