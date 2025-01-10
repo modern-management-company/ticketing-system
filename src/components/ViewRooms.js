@@ -1,19 +1,15 @@
 import React, { useEffect, useState } from "react";
-import apiClient from "./apiClient"; 
+import apiClient from "./apiClient";
 import {
   Box,
   Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
+  Grid,
   Button,
   Select,
   MenuItem,
   TextField,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 
 const ViewRooms = ({ token }) => {
@@ -23,6 +19,7 @@ const ViewRooms = ({ token }) => {
   const [editRoom, setEditRoom] = useState({});
   const [newRoomName, setNewRoomName] = useState("");
   const [message, setMessage] = useState("");
+  const [snackbarType, setSnackbarType] = useState("success");
 
   useEffect(() => {
     const fetchProperties = async () => {
@@ -57,7 +54,8 @@ const ViewRooms = ({ token }) => {
         { name: editRoom.name },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setMessage(response.data.message);
+      setMessage("Room updated successfully!");
+      setSnackbarType("success");
       setRooms((prev) =>
         prev.map((room) =>
           room.room_id === roomId ? { ...room, name: editRoom.name } : room
@@ -65,25 +63,29 @@ const ViewRooms = ({ token }) => {
       );
       setEditRoom({});
     } catch (error) {
-      console.error("Failed to edit room", error);
+      setMessage("Failed to update room.");
+      setSnackbarType("error");
     }
   };
 
   const handleDelete = async (roomId) => {
     try {
-      const response = await apiClient.delete(`/rooms/${roomId}`, {
+      await apiClient.delete(`/rooms/${roomId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setMessage(response.data.message);
+      setMessage("Room deleted successfully!");
+      setSnackbarType("success");
       setRooms((prev) => prev.filter((room) => room.room_id !== roomId));
     } catch (error) {
-      console.error("Failed to delete room", error);
+      setMessage("Failed to delete room.");
+      setSnackbarType("error");
     }
   };
 
   const handleAddRoom = async () => {
     if (!newRoomName || !selectedProperty) {
       setMessage("Please enter a room name and select a property.");
+      setSnackbarType("error");
       return;
     }
     try {
@@ -92,12 +94,13 @@ const ViewRooms = ({ token }) => {
         { name: newRoomName },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setMessage(response.data.message);
+      setMessage("Room added successfully!");
+      setSnackbarType("success");
       setNewRoomName("");
       fetchRooms(selectedProperty); // Refresh the rooms list after adding
     } catch (error) {
-      console.error("Failed to add room", error);
       setMessage("Failed to add room.");
+      setSnackbarType("error");
     }
   };
 
@@ -122,6 +125,7 @@ const ViewRooms = ({ token }) => {
           </MenuItem>
         ))}
       </Select>
+
       <Box mt={2} display="flex" gap={2}>
         <TextField
           fullWidth
@@ -138,34 +142,36 @@ const ViewRooms = ({ token }) => {
           Add Room
         </Button>
       </Box>
-      <TableContainer component={Paper} sx={{ marginTop: 3 }}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell align="center">Room ID</TableCell>
-              <TableCell align="center">Name</TableCell>
-              <TableCell align="center">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rooms.map((room) => (
-              <TableRow key={room.room_id}>
-                <TableCell align="center">{room.room_id}</TableCell>
-                <TableCell align="center">
-                  {editRoom.room_id === room.room_id ? (
-                    <TextField
-                      defaultValue={room.name}
-                      onChange={(e) =>
-                        setEditRoom({ ...editRoom, name: e.target.value })
-                      }
-                    />
-                  ) : (
-                    room.name
-                  )}
-                </TableCell>
-                <TableCell align="center">
+
+      <Box mt={4}>
+        <Grid container spacing={2}>
+          {rooms.map((room) => (
+            <Grid item xs={6} sm={4} md={3} key={room.room_id}>
+              <Box
+                p={2}
+                border={1}
+                borderRadius={1}
+                borderColor="grey.300"
+                textAlign="center"
+                display="flex"
+                flexDirection="column"
+                justifyContent="space-between"
+              >
+                {editRoom.room_id === room.room_id ? (
+                  <TextField
+                    fullWidth
+                    defaultValue={room.name}
+                    onChange={(e) =>
+                      setEditRoom({ ...editRoom, name: e.target.value })
+                    }
+                  />
+                ) : (
+                  <Typography variant="h6">{room.name}</Typography>
+                )}
+                <Box mt={2} display="flex" gap={1}>
                   {editRoom.room_id === room.room_id ? (
                     <Button
+                      fullWidth
                       variant="contained"
                       color="primary"
                       onClick={() => handleEdit(room.room_id)}
@@ -174,6 +180,7 @@ const ViewRooms = ({ token }) => {
                     </Button>
                   ) : (
                     <Button
+                      fullWidth
                       variant="outlined"
                       onClick={() => setEditRoom(room)}
                     >
@@ -181,19 +188,32 @@ const ViewRooms = ({ token }) => {
                     </Button>
                   )}
                   <Button
+                    fullWidth
                     variant="contained"
                     color="secondary"
                     onClick={() => handleDelete(room.room_id)}
                   >
                     Delete
                   </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      {message && <Typography color="success.main">{message}</Typography>}
+                </Box>
+              </Box>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+
+      <Snackbar
+        open={!!message}
+        autoHideDuration={6000}
+        onClose={() => setMessage("")}
+      >
+        <Alert
+          severity={snackbarType}
+          onClose={() => setMessage("")}
+        >
+          {message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
