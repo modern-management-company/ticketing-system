@@ -1,7 +1,14 @@
 import React, { useState } from "react";
-import { TextField, Button, Typography, Container, Box } from "@mui/material";
-import { Link, useNavigate } from "react-router-dom";
-import apiClient from "./apiClient"; 
+import { useNavigate } from "react-router-dom";
+import apiClient from "./apiClient";
+import {
+  Box,
+  Button,
+  TextField,
+  Typography,
+  Container,
+  Alert,
+} from "@mui/material";
 
 const Login = ({ setToken }) => {
   const [username, setUsername] = useState("");
@@ -11,64 +18,78 @@ const Login = ({ setToken }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+
     try {
+      console.log('Attempting login with:', { username });
+      
       const response = await apiClient.post("/login", { username, password });
-      setToken(response.data.token, username);
-      navigate("/home"); // Redirect to home after login
+      const { token } = response.data;
+      
+      console.log('Login response:', {
+        success: !!token,
+        data: response.data
+      });
+
+      if (!token) {
+        throw new Error("No token received");
+      }
+
+      setToken(token, username);
+      navigate("/home");
     } catch (error) {
-      setError("Invalid username or password");
+      console.error("Login error:", {
+        message: error.message,
+        response: error.response?.data
+      });
+      
+      setError(
+        error.response?.data?.message || 
+        error.message || 
+        "Login failed"
+      );
     }
   };
 
   return (
     <Container maxWidth="sm">
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          marginTop: 8,
-        }}
-      >
-        <Typography variant="h4" gutterBottom>
+      <Box sx={{ mt: 8, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <Typography component="h1" variant="h5">
           Login
         </Typography>
-        <form onSubmit={handleSubmit} style={{ width: "100%" }}>
+        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
           <TextField
-            label="Username"
-            variant="outlined"
-            fullWidth
             margin="normal"
+            required
+            fullWidth
+            label="Username"
+            autoFocus
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
           <TextField
+            margin="normal"
+            required
+            fullWidth
             label="Password"
             type="password"
-            variant="outlined"
-            fullWidth
-            margin="normal"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
           {error && (
-            <Typography color="error" variant="body2">
+            <Alert severity="error" sx={{ mt: 2 }}>
               {error}
-            </Typography>
+            </Alert>
           )}
           <Button
             type="submit"
-            variant="contained"
-            color="primary"
             fullWidth
-            sx={{ marginTop: 2 }}
+            variant="contained"
+            sx={{ mt: 3, mb: 2 }}
           >
             Login
           </Button>
-        </form>
-        <Typography variant="body2" sx={{ marginTop: 2 }}>
-          Don't have an account? <Link to="/register">Register Here</Link>
-        </Typography>
+        </Box>
       </Box>
     </Container>
   );
