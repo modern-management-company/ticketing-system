@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { TextField, Button, Typography, Container, Box } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import apiClient from "./apiClient"; 
 
 const Login = ({ setToken }) => {
   const [username, setUsername] = useState("");
@@ -12,7 +12,7 @@ const Login = ({ setToken }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post("/login", { username, password });
+      const response = await apiClient.post("/login", { username, password });
       setToken(response.data.token, username);
       navigate("/home"); // Redirect to home after login
     } catch (error) {

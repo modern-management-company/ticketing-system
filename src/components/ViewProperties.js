@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import apiClient from "./apiClient"; 
 import {
   Box,
   Typography,
@@ -22,7 +22,7 @@ const ViewProperties = ({ token }) => {
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        const response = await axios.get("/properties", {
+        const response = await apiClient.get("/properties", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setProperties(response.data.properties);
@@ -36,7 +36,7 @@ const ViewProperties = ({ token }) => {
 
   const handleEdit = async (propertyId) => {
     try {
-      const response = await axios.patch(
+      const response = await apiClient.patch(
         `/properties/${propertyId}`,
         {
           name: editProperty.name,
@@ -60,7 +60,7 @@ const ViewProperties = ({ token }) => {
 
   const handleDelete = async (propertyId) => {
     try {
-      const response = await axios.delete(`/properties/${propertyId}`, {
+      const response = await apiClient.delete(`/properties/${propertyId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setMessage(response.data.message);

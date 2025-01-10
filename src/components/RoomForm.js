@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "./apiClient"; 
 import {
   TextField,
   Button,
@@ -22,7 +22,7 @@ const RoomForm = ({ token }) => {
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        const response = await axios.get("/properties", {
+        const response = await apiClient.get("/properties", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setProperties(response.data.properties);
@@ -36,7 +36,7 @@ const RoomForm = ({ token }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post(
+      const response = await apiClient.post(
         `/properties/${selectedProperty}/rooms`,
         { name: roomName },
         { headers: { Authorization: `Bearer ${token}` } }

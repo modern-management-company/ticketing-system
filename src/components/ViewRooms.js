@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import apiClient from "./apiClient"; 
 import {
   Box,
   Typography,
@@ -27,7 +27,7 @@ const ViewRooms = ({ token }) => {
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        const response = await axios.get("/properties", {
+        const response = await apiClient.get("/properties", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setProperties(response.data.properties);
@@ -41,7 +41,7 @@ const ViewRooms = ({ token }) => {
 
   const fetchRooms = async (propertyId) => {
     try {
-      const response = await axios.get(`/properties/${propertyId}/rooms`, {
+      const response = await apiClient.get(`/properties/${propertyId}/rooms`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setRooms(response.data.rooms);
@@ -52,7 +52,7 @@ const ViewRooms = ({ token }) => {
 
   const handleEdit = async (roomId) => {
     try {
-      const response = await axios.patch(
+      const response = await apiClient.patch(
         `/rooms/${roomId}`,
         { name: editRoom.name },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -71,7 +71,7 @@ const ViewRooms = ({ token }) => {
 
   const handleDelete = async (roomId) => {
     try {
-      const response = await axios.delete(`/rooms/${roomId}`, {
+      const response = await apiClient.delete(`/rooms/${roomId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setMessage(response.data.message);
@@ -87,7 +87,7 @@ const ViewRooms = ({ token }) => {
       return;
     }
     try {
-      const response = await axios.post(
+      const response = await apiClient.post(
         `/properties/${selectedProperty}/rooms`,
         { name: newRoomName },
         { headers: { Authorization: `Bearer ${token}` } }

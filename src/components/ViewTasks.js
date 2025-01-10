@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import apiClient from "./apiClient"; 
 import {
   Box,
   Typography,
@@ -23,7 +23,7 @@ const ViewTasks = ({ token }) => {
   useEffect(() => {
     const fetchTasks = async () => {
       try {
-        const response = await axios.get("/tasks", {
+        const response = await apiClient.get("/tasks", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setTasks(response.data.tasks);
@@ -34,7 +34,7 @@ const ViewTasks = ({ token }) => {
 
     const fetchUsers = async () => {
       try {
-        const response = await axios.get("/users", {
+        const response = await apiClient.get("/users", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setUsers(response.data.users);
@@ -49,7 +49,7 @@ const ViewTasks = ({ token }) => {
 
   const updateTaskStatus = async (taskId, newStatus) => {
     try {
-      const response = await axios.patch(
+      const response = await apiClient.patch(
         `/tasks/${taskId}`,
         { status: newStatus },
         {
@@ -71,7 +71,7 @@ const ViewTasks = ({ token }) => {
 
   const updateTaskAssignee = async (taskId, newUserId) => {
     try {
-      const response = await axios.patch(
+      const response = await apiClient.patch(
         `/tasks/${taskId}`,
         { assigned_to_user_id: newUserId },
         {

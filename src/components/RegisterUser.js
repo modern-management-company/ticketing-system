@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import axios from "axios";
 import {
   Box,
   Button,
@@ -8,6 +7,7 @@ import {
   Snackbar,
   Alert,
 } from "@mui/material";
+import apiClient from "./apiClient"; // Import the centralized API client
 
 const RegisterUser = () => {
   const [username, setUsername] = useState("");
@@ -17,7 +17,7 @@ const RegisterUser = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post("/register", { username, password });
+      await apiClient.post("/register", { username, password }); // Use apiClient here
       setMessage("User registered successfully!");
       setUsername("");
       setPassword("");

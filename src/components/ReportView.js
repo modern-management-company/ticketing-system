@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import apiClient from "./apiClient"; 
 import {
   Box,
   Typography,
@@ -24,10 +24,10 @@ const ReportView = ({ token }) => {
     const fetchReports = async () => {
       try {
         const [usersRes, propertiesRes, tasksRes, ticketsRes] = await Promise.all([
-          axios.get("/reports/users", { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get("/reports/properties", { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get("/reports/tasks", { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get("/reports/tickets", { headers: { Authorization: `Bearer ${token}` } }),
+          apiClient.get("/reports/users", { headers: { Authorization: `Bearer ${token}` } }),
+          apiClient.get("/reports/properties", { headers: { Authorization: `Bearer ${token}` } }),
+          apiClient.get("/reports/tasks", { headers: { Authorization: `Bearer ${token}` } }),
+          apiClient.get("/reports/tickets", { headers: { Authorization: `Bearer ${token}` } }),
         ]);
 
         setUsers(usersRes.data.users);

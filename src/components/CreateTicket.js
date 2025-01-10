@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "./apiClient"; 
 import {
   Box,
   Button,
@@ -27,7 +27,7 @@ const CreateTicket = ({ token }) => {
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        const response = await axios.get("/properties", {
+        const response = await apiClient.get("/properties", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setProperties(response.data.properties);
@@ -40,7 +40,7 @@ const CreateTicket = ({ token }) => {
 
   const fetchRooms = async (propertyId) => {
     try {
-      const response = await axios.get(`/properties/${propertyId}/rooms`, {
+      const response = await apiClient.get(`/properties/${propertyId}/rooms`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setRooms(response.data.rooms);
@@ -57,7 +57,7 @@ const CreateTicket = ({ token }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(
+      await apiClient.post(
         "/tickets",
         {
           title,

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
+import apiClient from "./apiClient"; 
 import {
   Box,
   Button,
@@ -17,7 +17,7 @@ const PropertyForm = ({ token }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(
+      await apiClient.post(
         "/properties",
         { name, address },
         { headers: { Authorization: `Bearer ${token}` } }

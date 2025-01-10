@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import apiClient from "./apiClient"; 
 import {
   Box,
   Typography,
@@ -22,7 +22,7 @@ const ViewUsers = ({ token }) => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await axios.get("/users", {
+        const response = await apiClient.get("/users", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setUsers(response.data.users);
@@ -36,7 +36,7 @@ const ViewUsers = ({ token }) => {
 
   const handleEdit = async (userId) => {
     try {
-      const response = await axios.patch(
+      const response = await apiClient.patch(
         `/users/${userId}`,
         { username: editUser.username },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -57,7 +57,7 @@ const ViewUsers = ({ token }) => {
 
   const handleDelete = async (userId) => {
     try {
-      const response = await axios.delete(`/users/${userId}`, {
+      const response = await apiClient.delete(`/users/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setMessage(response.data.message);

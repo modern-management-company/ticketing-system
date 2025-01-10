@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "./apiClient"; 
 import {
   Box,
   Button,
@@ -20,7 +20,7 @@ const TaskAssignment = ({ token }) => {
   useEffect(() => {
     const fetchTickets = async () => {
       try {
-        const response = await axios.get("/tickets", {
+        const response = await apiClient.get("/tickets", {
           headers: { Authorization: `Bearer ${token}` },
         });
         // Filter tickets to exclude those with a "Completed" status
@@ -35,7 +35,7 @@ const TaskAssignment = ({ token }) => {
 
     const fetchUsers = async () => {
       try {
-        const response = await axios.get("/users", {
+        const response = await apiClient.get("/users", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setUsers(response.data.users);
@@ -51,7 +51,7 @@ const TaskAssignment = ({ token }) => {
   const assignTask = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post(
+      const response = await apiClient.post(
         "/assign-task",
         { ticket_id: ticketId, user_id: userId },
         {
