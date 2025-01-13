@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Route, Routes, Link, Navigate } from "react-router-dom";
 import {
   AppBar,
   Toolbar,
@@ -7,7 +6,14 @@ import {
   Button,
   Box,
   Container,
+  IconButton,
+  Drawer,
+  List,
+  ListItem,
+  ListItemText,
 } from "@mui/material";
+import MenuIcon from "@mui/icons-material/Menu";
+import { BrowserRouter as Router, Route, Routes, Link, Navigate } from "react-router-dom";
 
 // Import your components here
 import HomeOverview from "./components/HomeOverview";
@@ -27,11 +33,11 @@ import ReportView from "./components/ReportView";
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [username, setUsername] = useState(localStorage.getItem("username"));
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     const storedToken = localStorage.getItem("token");
     const storedUsername = localStorage.getItem("username");
-    
     if (storedToken && storedUsername) {
       setToken(storedToken);
       setUsername(storedUsername);
@@ -55,17 +61,28 @@ function App() {
   };
 
   const authenticatedNavItems = [
-    { label: 'Home', path: '/home' },
-    { label: 'Create Ticket', path: '/ticket' },
-    { label: 'View Tickets', path: '/tickets' },
-    { label: 'Add Property', path: '/property' },
-    { label: 'View Properties', path: '/properties' },
-    { label: 'View Rooms', path: '/properties/rooms' },
-    { label: 'Assign Task', path: '/assign-task' },
-    { label: 'View Tasks', path: '/viewtasks' },
-    { label: 'View Users', path: '/users' },
-    { label: 'Reports', path: '/reports' },
+    { label: "Home", path: "/home" },
+    { label: "Create Ticket", path: "/ticket" },
+    { label: "View Tickets", path: "/tickets" },
+    { label: "Add Property", path: "/property" },
+    { label: "View Properties", path: "/properties" },
+    { label: "View Rooms", path: "/properties/rooms" },
+    { label: "Assign Task", path: "/assign-task" },
+    { label: "View Tasks", path: "/viewtasks" },
+    { label: "View Users", path: "/users" },
+    { label: "Reports", path: "/reports" },
   ];
+
+  const toggleDrawer = () => {
+    setDrawerOpen((prev) => !prev);
+  };
+
+  const renderNavItems = () =>
+    authenticatedNavItems.map((item) => (
+      <ListItem button key={item.path} component={Link} to={item.path}>
+        <ListItemText primary={item.label} />
+      </ListItem>
+    ));
 
   return (
     <Router basename="/ticketing-system">
@@ -77,30 +94,29 @@ function App() {
             </Typography>
             {token ? (
               <>
-                {authenticatedNavItems.map((item) => (
-                  <Button
-                    key={item.path}
-                    color="inherit"
-                    component={Link}
-                    to={item.path}
-                    sx={{ mx: 0.5 }}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-                <Box sx={{ ml: 2, display: 'flex', alignItems: 'center' }}>
-                  <Typography variant="subtitle1" sx={{ mr: 2 }}>
-                    {username}
-                  </Typography>
-                  <Button 
-                    color="inherit"
-                    onClick={handleLogout}
-                    variant="outlined"
-                    sx={{ ml: 1 }}
-                  >
+                <Box sx={{ display: { xs: "none", md: "block" } }}>
+                  {authenticatedNavItems.map((item) => (
+                    <Button
+                      key={item.path}
+                      color="inherit"
+                      component={Link}
+                      to={item.path}
+                      sx={{ mx: 0.5 }}
+                    >
+                      {item.label}
+                    </Button>
+                  ))}
+                  <Button color="inherit" onClick={handleLogout} sx={{ ml: 2 }}>
                     Logout
                   </Button>
                 </Box>
+                <IconButton
+                  sx={{ display: { xs: "block", md: "none" } }}
+                  color="inherit"
+                  onClick={toggleDrawer}
+                >
+                  <MenuIcon />
+                </IconButton>
               </>
             ) : (
               <Box>
@@ -112,11 +128,7 @@ function App() {
                 >
                   Login
                 </Button>
-                <Button
-                  color="inherit"
-                  component={Link}
-                  to="/register"
-                >
+                <Button color="inherit" component={Link} to="/register">
                   Register
                 </Button>
               </Box>
@@ -124,23 +136,29 @@ function App() {
           </Toolbar>
         </AppBar>
 
+        {/* Drawer for mobile navigation */}
+        <Drawer anchor="left" open={drawerOpen} onClose={toggleDrawer}>
+          <Box sx={{ width: 250 }} role="presentation" onClick={toggleDrawer}>
+            <List>
+              {renderNavItems()}
+              <ListItem button onClick={handleLogout}>
+                <ListItemText primary="Logout" />
+              </ListItem>
+            </List>
+          </Box>
+        </Drawer>
+
         <Container sx={{ mt: 4 }}>
           <Routes>
             <Route
               path="/login"
               element={
-                token ? (
-                  <Navigate to="/home" />
-                ) : (
-                  <Login setToken={handleSetToken} />
-                )
+                token ? <Navigate to="/home" /> : <Login setToken={handleSetToken} />
               }
             />
             <Route
               path="/register"
-              element={
-                token ? <Navigate to="/home" /> : <RegisterUser />
-              }
+              element={token ? <Navigate to="/home" /> : <RegisterUser />}
             />
             {token ? (
               <>
