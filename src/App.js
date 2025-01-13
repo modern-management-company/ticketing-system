@@ -32,11 +32,6 @@ function App() {
     const storedToken = localStorage.getItem("token");
     const storedUsername = localStorage.getItem("username");
     
-    console.log('Auth state check:', {
-      hasToken: !!storedToken,
-      hasUsername: !!storedUsername
-    });
-
     if (storedToken && storedUsername) {
       setToken(storedToken);
       setUsername(storedUsername);
@@ -49,7 +44,6 @@ function App() {
       localStorage.setItem("username", newUsername);
       setToken(newToken);
       setUsername(newUsername);
-      console.log('Token set:', { username: newUsername });
     }
   };
 
@@ -58,10 +52,8 @@ function App() {
     localStorage.removeItem("username");
     setToken(null);
     setUsername(null);
-    console.log('Logged out');
   };
 
-  // Navigation items when logged in
   const authenticatedNavItems = [
     { label: 'Home', path: '/home' },
     { label: 'Create Ticket', path: '/ticket' },
@@ -76,17 +68,15 @@ function App() {
   ];
 
   return (
-    <Router>
+    <Router basename="/ticketing-system">
       <Box>
         <AppBar position="static">
           <Toolbar>
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
               Ticketing System
             </Typography>
-            
             {token ? (
               <>
-                {/* Show navigation items when logged in */}
                 {authenticatedNavItems.map((item) => (
                   <Button
                     key={item.path}
@@ -98,8 +88,6 @@ function App() {
                     {item.label}
                   </Button>
                 ))}
-                
-                {/* User info and logout */}
                 <Box sx={{ ml: 2, display: 'flex', alignItems: 'center' }}>
                   <Typography variant="subtitle1" sx={{ mr: 2 }}>
                     {username}
@@ -115,7 +103,6 @@ function App() {
                 </Box>
               </>
             ) : (
-              // Show login/register when logged out
               <Box>
                 <Button
                   color="inherit"
@@ -139,7 +126,6 @@ function App() {
 
         <Container sx={{ mt: 4 }}>
           <Routes>
-            {/* Public routes */}
             <Route
               path="/login"
               element={
@@ -156,8 +142,6 @@ function App() {
                 token ? <Navigate to="/home" /> : <RegisterUser />
               }
             />
-
-            {/* Protected routes */}
             {token ? (
               <>
                 <Route path="/home" element={<HomeOverview token={token} />} />
