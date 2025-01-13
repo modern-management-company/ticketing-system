@@ -1,12 +1,10 @@
 from app import app, db
-from flask.cli import with_appcontext
-import click
 
-@click.command("init-db")
-@with_appcontext
-def init_db():
-    db.create_all()
-    print("Database initialized.")
+# Drop all tables and recreate them on startup
+# with app.app_context():
+#     db.drop_all()
+#     db.create_all()
+#     print("Database reset complete - all tables dropped and recreated")
 
-# Register the command
-app.cli.add_command(init_db)
+if __name__ == "__main__":
+    app.run()

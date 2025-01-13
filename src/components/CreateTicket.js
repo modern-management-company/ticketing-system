@@ -14,7 +14,7 @@ import {
 } from "@mui/material";
 
 const CreateTicket = ({ token }) => {
-  const [categories] = useState(["Maintenance", "Cleaning", "Other"]);
+  const [categories] = useState(["Maintenance", "Cleaning", "Upgrade", "Repair", "Other"]);
   const [properties, setProperties] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState("");
   const [rooms, setRooms] = useState([]);
@@ -22,6 +22,7 @@ const CreateTicket = ({ token }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("");
+  const [category, setCategory] = useState(""); // New state for category
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -63,7 +64,7 @@ const CreateTicket = ({ token }) => {
           title,
           description,
           priority,
-          category: categories[0], // Example: use first category for now
+          category, // Include the category in the form submission
           property_id: selectedProperty,
           room_id: selectedRoom,
         },
@@ -145,6 +146,21 @@ const CreateTicket = ({ token }) => {
           </Select>
         </FormControl>
 
+        <FormControl fullWidth margin="normal">
+          <InputLabel>Category</InputLabel>
+          <Select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            required
+          >
+            {categories.map((cat) => (
+              <MenuItem key={cat} value={cat}>
+                {cat}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
         <Button
           type="submit"
           variant="contained"
@@ -162,7 +178,10 @@ const CreateTicket = ({ token }) => {
           autoHideDuration={6000}
           onClose={() => setMessage("")}
         >
-          <Alert severity="success" onClose={() => setMessage("")}>
+          <Alert
+            severity={message.includes("successfully") ? "success" : "error"}
+            onClose={() => setMessage("")}
+          >
             {message}
           </Alert>
         </Snackbar>

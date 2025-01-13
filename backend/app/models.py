@@ -11,6 +11,7 @@ class Ticket(db.Model):
     description = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(50), default='Open')
     priority = db.Column(db.String(50), nullable=False)
+    category = db.Column(db.String(50), nullable=True, default='General')
     user_id = db.Column(db.Integer, db.ForeignKey('user.user_id'))
 
 class Property(db.Model):
