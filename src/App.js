@@ -85,7 +85,7 @@ function App() {
     ));
 
   return (
-    <Router basename="/ticketing-system">
+    <Router basename="/">
       <Box>
         <AppBar position="static">
           <Toolbar>
