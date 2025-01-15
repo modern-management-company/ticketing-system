@@ -19,7 +19,7 @@
     "react-scripts": "5.0.1",
     "web-vitals": "^4.2.4"
   },
-  "homepage": "https://modern-management-company.github.io/ticketing-system",
+  "homepage": "https://modernhotels.management/",
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
