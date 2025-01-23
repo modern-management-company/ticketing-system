@@ -11,183 +11,188 @@ import {
   InputLabel,
   Snackbar,
   Alert,
+  Grid,
+  CircularProgress,
 } from "@mui/material";
+import { useAuth } from "../context/AuthContext";
 
-const CreateTicket = ({ token }) => {
-  const [categories] = useState(["Maintenance", "Cleaning", "Upgrade", "Repair", "Other"]);
-  const [properties, setProperties] = useState([]);
-  const [selectedProperty, setSelectedProperty] = useState("");
+const CreateTicket = () => {
+  const { auth } = useAuth();
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    priority: '',
+    category: '',
+    room_id: ''
+  });
   const [rooms, setRooms] = useState([]);
-  const [selectedRoom, setSelectedRoom] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState("");
-  const [category, setCategory] = useState(""); // New state for category
-  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const categories = ['Maintenance', 'Cleaning', 'Security', 'IT Support', 'Other'];
+  const priorities = ['Low', 'Medium', 'High', 'Critical'];
 
   useEffect(() => {
-    const fetchProperties = async () => {
+    const fetchRooms = async () => {
       try {
-        const response = await apiClient.get("/properties", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setProperties(response.data.properties);
+        const propertyId = auth.role === 'manager' ? 
+          auth.managedPropertyId : auth.assignedPropertyId;
+        
+        const response = await apiClient.get(`/properties/${propertyId}/rooms`);
+        setRooms(response.data.rooms);
       } catch (error) {
-        console.error(error);
+        console.error('Failed to fetch rooms:', error);
+        setError('Failed to load rooms');
       }
     };
-    fetchProperties();
-  }, [token]);
 
-  const fetchRooms = async (propertyId) => {
-    try {
-      const response = await apiClient.get(`/properties/${propertyId}/rooms`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setRooms(response.data.rooms);
-    } catch (error) {
-      console.error(error);
+    if (auth.managedPropertyId || auth.assignedPropertyId) {
+      fetchRooms();
     }
-  };
+  }, [auth]);
 
-  const handlePropertyChange = (e) => {
-    setSelectedProperty(e.target.value);
-    fetchRooms(e.target.value);
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
+    setMessage('');
+
     try {
-      await apiClient.post(
-        "/tickets",
-        {
-          title,
-          description,
-          priority,
-          category, // Include the category in the form submission
-          property_id: selectedProperty,
-          room_id: selectedRoom,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMessage("Ticket created successfully!");
+      const propertyId = auth.role === 'manager' ? 
+        auth.managedPropertyId : auth.assignedPropertyId;
+
+      const response = await apiClient.post('/tickets', {
+        ...formData,
+        property_id: propertyId
+      });
+
+      setMessage('Ticket created successfully!');
+      setFormData({
+        title: '',
+        description: '',
+        priority: '',
+        category: '',
+        room_id: ''
+      });
     } catch (error) {
-      console.error(error);
-      setMessage("Failed to create ticket.");
+      console.error('Failed to create ticket:', error);
+      setError('Failed to create ticket. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <Box sx={{ maxWidth: 600, margin: "auto", padding: 3 }}>
+    <Box p={3}>
       <Typography variant="h4" gutterBottom>
-        Create Ticket
+        Create New Ticket
       </Typography>
+
+      {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
       <form onSubmit={handleSubmit}>
-        <FormControl fullWidth margin="normal">
-          <InputLabel>Property</InputLabel>
-          <Select
-            value={selectedProperty}
-            onChange={handlePropertyChange}
-            required
-          >
-            {properties.map((property) => (
-              <MenuItem key={property.property_id} value={property.property_id}>
-                {property.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <TextField
+              name="title"
+              label="Title"
+              value={formData.title}
+              onChange={handleChange}
+              fullWidth
+              required
+            />
+          </Grid>
+          
+          <Grid item xs={12}>
+            <TextField
+              name="description"
+              label="Description"
+              value={formData.description}
+              onChange={handleChange}
+              multiline
+              rows={4}
+              fullWidth
+              required
+            />
+          </Grid>
 
-        <FormControl fullWidth margin="normal">
-          <InputLabel>Room</InputLabel>
-          <Select
-            value={selectedRoom}
-            onChange={(e) => setSelectedRoom(e.target.value)}
-            required
-          >
-            {rooms.map((room) => (
-              <MenuItem key={room.room_id} value={room.room_id}>
-                {room.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth required>
+              <InputLabel>Priority</InputLabel>
+              <Select
+                name="priority"
+                value={formData.priority}
+                onChange={handleChange}
+              >
+                {priorities.map(priority => (
+                  <MenuItem key={priority} value={priority}>
+                    {priority}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
 
-        <TextField
-          fullWidth
-          margin="normal"
-          label="Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-        />
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth required>
+              <InputLabel>Category</InputLabel>
+              <Select
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+              >
+                {categories.map(category => (
+                  <MenuItem key={category} value={category}>
+                    {category}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
 
-        <TextField
-          fullWidth
-          margin="normal"
-          label="Description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          multiline
-          rows={4}
-          required
-        />
+          <Grid item xs={12}>
+            <FormControl fullWidth required>
+              <InputLabel>Room</InputLabel>
+              <Select
+                name="room_id"
+                value={formData.room_id}
+                onChange={handleChange}
+              >
+                {rooms.map(room => (
+                  <MenuItem key={room.room_id} value={room.room_id}>
+                    {room.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
 
-        <FormControl fullWidth margin="normal">
-          <InputLabel>Priority</InputLabel>
-          <Select
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
-            required
-          >
-            <MenuItem value="Low">Low</MenuItem>
-            <MenuItem value="Medium">Medium</MenuItem>
-            <MenuItem value="High">High</MenuItem>
-          </Select>
-        </FormControl>
-
-        <FormControl fullWidth margin="normal">
-          <InputLabel>Category</InputLabel>
-          <Select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            required
-          >
-            {categories.map((cat) => (
-              <MenuItem key={cat} value={cat}>
-                {cat}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <Button
-          type="submit"
-          variant="contained"
-          color="primary"
-          fullWidth
-          sx={{ mt: 2 }}
-        >
-          Create Ticket
-        </Button>
+          <Grid item xs={12}>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              fullWidth
+              disabled={loading}
+            >
+              {loading ? <CircularProgress size={24} /> : 'Create Ticket'}
+            </Button>
+          </Grid>
+        </Grid>
       </form>
-
-      {message && (
-        <Snackbar
-          open={!!message}
-          autoHideDuration={6000}
-          onClose={() => setMessage("")}
-        >
-          <Alert
-            severity={message.includes("successfully") ? "success" : "error"}
-            onClose={() => setMessage("")}
-          >
-            {message}
-          </Alert>
-        </Snackbar>
-      )}
     </Box>
   );
 };
 
 export default CreateTicket;
+

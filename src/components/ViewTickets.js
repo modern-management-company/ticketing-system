@@ -14,252 +14,194 @@ import {
   MenuItem,
   Button,
   TextField,
+  CircularProgress,
+  Alert,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
+import { useAuth } from '../context/AuthContext';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 
-const ViewTickets = ({ token }) => {
+const ViewTickets = () => {
+  const { auth } = useAuth();
   const [tickets, setTickets] = useState([]);
-  const [editTicket, setEditTicket] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [message, setMessage] = useState("");
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingTicket, setEditingTicket] = useState(null);
+  const [ticketForm, setTicketForm] = useState({
+    title: '',
+    description: '',
+    priority: 'Low',
+    category: 'General'
+  });
 
-  // Fetch tickets on component mount
+  const priorities = ['Low', 'Medium', 'High', 'Critical'];
+  const categories = ['General', 'Maintenance', 'Security', 'Cleaning', 'Other'];
+
   useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        const response = await apiClient.get("/tickets", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setTickets(response.data.tickets);
-      } catch (error) {
-        console.error("Failed to fetch tickets", error);
-        setMessage("Failed to fetch tickets");
-      }
-    };
-
     fetchTickets();
-  }, [token]);
+  }, [auth]);
 
-  // Handle edit ticket
-  const handleEdit = async (ticketId) => {
+  const fetchTickets = async () => {
     try {
-      const currentTicket = tickets.find(t => t.id === ticketId);
+      let endpoint = '/tickets';
+      if (auth.role === 'manager') {
+        endpoint = `/properties/${auth.managedPropertyId}/tickets`;
+      } else if (auth.role === 'user') {
+        endpoint = `/properties/${auth.assignedPropertyId}/tickets`;
+      }
       
-      // Create payload with current values
-      const payload = {
-        title: editTicket.title !== undefined ? editTicket.title : currentTicket.title,
-        description: editTicket.description !== undefined ? editTicket.description : currentTicket.description,
-        priority: editTicket.priority !== undefined ? editTicket.priority : currentTicket.priority,
-        category: editTicket.category !== undefined ? editTicket.category : currentTicket.category,
-        status: editTicket.status !== undefined ? editTicket.status : currentTicket.status
-      };
-
-      console.log("Sending update with payload:", payload);
-
-      const response = await apiClient.patch(
-        `/tickets/${ticketId}`,
-        payload,
-        { 
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          } 
-        }
-      );
-
-      // Update local state after successful server update
-      setTickets(prevTickets =>
-        prevTickets.map(ticket =>
-          ticket.id === ticketId 
-            ? { ...ticket, ...payload }
-            : ticket
-        )
-      );
-
-      setMessage(response.data.message);
-      setEditTicket({});
+      const response = await apiClient.get(endpoint);
+      setTickets(response.data.tickets);
     } catch (error) {
-      console.error("Update failed:", error);
-      setMessage(error.response?.data?.message || "Failed to update ticket");
+      setError('Failed to fetch tickets');
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Handle delete ticket
-  const handleDelete = async (ticketId) => {
+  const handleCreateOrEdit = async () => {
     try {
-      const response = await apiClient.delete(`/tickets/${ticketId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setMessage(response.data.message);
-      setTickets((prev) => prev.filter((ticket) => ticket.id !== ticketId));
+      if (editingTicket) {
+        await apiClient.patch(`/tickets/${editingTicket.ticket_id}`, ticketForm);
+        setMessage('Ticket updated successfully');
+      } else {
+        await apiClient.post('/tickets', ticketForm);
+        setMessage('Ticket created successfully');
+      }
+      fetchTickets();
+      handleCloseDialog();
     } catch (error) {
-      console.error("Failed to delete ticket", error);
-      setMessage("Failed to delete ticket");
+      setError('Failed to save ticket');
+      console.error(error);
     }
   };
+
+  const handleOpenDialog = (ticket = null) => {
+    if (ticket) {
+      setEditingTicket(ticket);
+      setTicketForm({
+        title: ticket.title,
+        description: ticket.description,
+        priority: ticket.priority,
+        category: ticket.category
+      });
+    } else {
+      setEditingTicket(null);
+      setTicketForm({
+        title: '',
+        description: '',
+        priority: 'Low',
+        category: 'General'
+      });
+    }
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setEditingTicket(null);
+    setTicketForm({
+      title: '',
+      description: '',
+      priority: 'Low',
+      category: 'General'
+    });
+  };
+
+  const handleStatusChange = async (ticketId, newStatus) => {
+    try {
+      await apiClient.patch(`/tickets/${ticketId}`, { status: newStatus });
+      setTickets(tickets.map(ticket => 
+        ticket.ticket_id === ticketId ? { ...ticket, status: newStatus } : ticket
+      ));
+    } catch (error) {
+      console.error('Failed to update ticket status:', error);
+    }
+  };
+
+  if (loading) return <CircularProgress />;
+  if (error) return <Alert severity="error">{error}</Alert>;
 
   return (
     <Box p={3}>
-      <Typography variant="h4" gutterBottom>
-        View Tickets
-      </Typography>
-      {message && (
-        <Typography 
-          color={message.includes("Failed") ? "error" : "success"} 
-          sx={{ mb: 2 }}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h4">Tickets</Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog()}
         >
+          Create Ticket
+        </Button>
+      </Box>
+
+      {message && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setMessage('')}>
           {message}
-        </Typography>
+        </Alert>
       )}
+      
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell align="center">Ticket ID</TableCell>
-              <TableCell align="center">Title</TableCell>
-              <TableCell align="center">Description</TableCell>
-              <TableCell align="center">Priority</TableCell>
-              <TableCell align="center">Category</TableCell>
-              <TableCell align="center">Status</TableCell>
-              <TableCell align="center">Actions</TableCell>
+              <TableCell>ID</TableCell>
+              <TableCell>Title</TableCell>
+              <TableCell>Description</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Priority</TableCell>
+              <TableCell>Category</TableCell>
+              <TableCell>Created By</TableCell>
+              <TableCell>Assigned To</TableCell>
+              <TableCell>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {tickets.map((ticket) => (
-              <TableRow key={ticket.id}>
-                <TableCell align="center">{ticket.id}</TableCell>
-                <TableCell align="center">
-                  {editTicket.id === ticket.id ? (
-                    <TextField
-                      fullWidth
-                      value={editTicket.title !== undefined ? editTicket.title : ticket.title}
-                      onChange={(e) => {
-                        setEditTicket({
-                          ...editTicket,
-                          id: ticket.id,
-                          title: e.target.value,
-                        });
-                      }}
-                    />
-                  ) : (
-                    ticket.title
-                  )}
+              <TableRow key={ticket.ticket_id}>
+                <TableCell>{ticket.ticket_id}</TableCell>
+                <TableCell>{ticket.title}</TableCell>
+                <TableCell>{ticket.description}</TableCell>
+                <TableCell>
+                  <Chip 
+                    label={ticket.status}
+                    color={
+                      ticket.status === 'Open' ? 'error' :
+                      ticket.status === 'In Progress' ? 'warning' :
+                      'success'
+                    }
+                  />
                 </TableCell>
-                <TableCell align="center">
-                  {editTicket.id === ticket.id ? (
-                    <TextField
-                      fullWidth
-                      multiline
-                      value={editTicket.description !== undefined ? editTicket.description : ticket.description}
-                      onChange={(e) => {
-                        setEditTicket({
-                          ...editTicket,
-                          id: ticket.id,
-                          description: e.target.value,
-                        });
-                      }}
-                    />
-                  ) : (
-                    ticket.description
-                  )}
+                <TableCell>
+                  <Chip 
+                    label={ticket.priority}
+                    color={
+                      ticket.priority === 'Critical' ? 'error' :
+                      ticket.priority === 'High' ? 'warning' :
+                      ticket.priority === 'Medium' ? 'info' :
+                      'success'
+                    }
+                  />
                 </TableCell>
-                <TableCell align="center">
-                  {editTicket.id === ticket.id ? (
-                    <Select
-                      fullWidth
-                      value={editTicket.priority !== undefined ? editTicket.priority : ticket.priority}
-                      onChange={(e) => {
-                        setEditTicket({
-                          ...editTicket,
-                          id: ticket.id,
-                          priority: e.target.value,
-                        });
-                      }}
-                    >
-                      <MenuItem value="Low">Low</MenuItem>
-                      <MenuItem value="Medium">Medium</MenuItem>
-                      <MenuItem value="High">High</MenuItem>
-                    </Select>
-                  ) : (
-                    ticket.priority
-                  )}
-                </TableCell>
-                <TableCell align="center">
-                  {editTicket.id === ticket.id ? (
-                    <Select
-                      fullWidth
-                      value={editTicket.category !== undefined ? editTicket.category : ticket.category}
-                      onChange={(e) => {
-                        setEditTicket({
-                          ...editTicket,
-                          id: ticket.id,
-                          category: e.target.value,
-                        });
-                      }}
-                    >
-                      <MenuItem value="Maintenance">Maintenance</MenuItem>
-                      <MenuItem value="Cleaning">Cleaning</MenuItem>
-                      <MenuItem value="Upgrade">Upgrade</MenuItem>
-                      <MenuItem value="Repair">Repair</MenuItem>
-                      <MenuItem value="Other">Other</MenuItem>
-                    </Select>
-                  ) : (
-                    ticket.category
-                  )}
-                </TableCell>
-                <TableCell align="center">
-                  {editTicket.id === ticket.id ? (
-                    <Select
-                      fullWidth
-                      value={editTicket.status !== undefined ? editTicket.status : ticket.status}
-                      onChange={(e) => {
-                        setEditTicket({
-                          ...editTicket,
-                          id: ticket.id,
-                          status: e.target.value,
-                        });
-                      }}
-                    >
-                      <MenuItem value="Pending">Pending</MenuItem>
-                      <MenuItem value="In Progress">In Progress</MenuItem>
-                      <MenuItem value="Completed">Completed</MenuItem>
-                    </Select>
-                  ) : (
-                    ticket.status
-                  )}
-                </TableCell>
-                <TableCell align="center">
-                  {editTicket.id === ticket.id ? (
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={() => handleEdit(ticket.id)}
-                      sx={{ mr: 1 }}
-                    >
-                      Save
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outlined"
-                      onClick={() =>
-                        setEditTicket({
-                          id: ticket.id,
-                          title: ticket.title,
-                          description: ticket.description,
-                          priority: ticket.priority,
-                          category: ticket.category,
-                          status: ticket.status,
-                        })
-                      }
-                      sx={{ mr: 1 }}
-                    >
-                      Edit
-                    </Button>
-                  )}
+                <TableCell>{ticket.category}</TableCell>
+                <TableCell>{ticket.created_by_username}</TableCell>
+                <TableCell>{ticket.assigned_to_username}</TableCell>
+                <TableCell>
                   <Button
-                    variant="contained"
-                    color="error"
-                    onClick={() => handleDelete(ticket.id)}
+                    startIcon={<EditIcon />}
+                    onClick={() => handleOpenDialog(ticket)}
+                    size="small"
                   >
-                    Delete
+                    Edit
                   </Button>
                 </TableCell>
               </TableRow>
@@ -267,6 +209,58 @@ const ViewTickets = ({ token }) => {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {editingTicket ? 'Edit Ticket' : 'Create New Ticket'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+            <TextField
+              label="Title"
+              value={ticketForm.title}
+              onChange={(e) => setTicketForm({ ...ticketForm, title: e.target.value })}
+              fullWidth
+              required
+            />
+            <TextField
+              label="Description"
+              value={ticketForm.description}
+              onChange={(e) => setTicketForm({ ...ticketForm, description: e.target.value })}
+              multiline
+              rows={4}
+              fullWidth
+              required
+            />
+            <Select
+              value={ticketForm.priority}
+              onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
+              fullWidth
+              label="Priority"
+            >
+              {priorities.map((priority) => (
+                <MenuItem key={priority} value={priority}>{priority}</MenuItem>
+              ))}
+            </Select>
+            <Select
+              value={ticketForm.category}
+              onChange={(e) => setTicketForm({ ...ticketForm, category: e.target.value })}
+              fullWidth
+              label="Category"
+            >
+              {categories.map((category) => (
+                <MenuItem key={category} value={category}>{category}</MenuItem>
+              ))}
+            </Select>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleCreateOrEdit} variant="contained" color="primary">
+            {editingTicket ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

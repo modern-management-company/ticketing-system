@@ -1,19 +1,26 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
-from flask_cors import CORS  # Import Flask-CORS
-import os
+from flask_cors import CORS
+from config import Config
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
+app.config.from_object(Config)
 
-# Enable CORS for the entire application
-CORS(app, resources={r"/*": {"origins": "*"}})
-
+# Initialize extensions
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 jwt = JWTManager(app)
 
-# Import routes and models to register them with the app
+# Configure CORS
+app.config['CORS_HEADERS'] = 'Content-Type'
+CORS(app, 
+    origins=["http://localhost:3000"],
+    allow_credentials=True,
+    supports_credentials=True,
+    expose_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
+
+# Import routes and models after initializing extensions
 from app import routes, models

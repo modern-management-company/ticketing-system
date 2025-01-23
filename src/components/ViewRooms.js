@@ -10,9 +10,20 @@ import {
   TextField,
   Snackbar,
   Alert,
+  TableContainer,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Paper,
+  FormControl,
+  InputLabel,
 } from "@mui/material";
+import { useAuth } from '../context/AuthContext';
 
-const ViewRooms = ({ token }) => {
+const ViewRooms = () => {
+  const { auth } = useAuth();
   const [properties, setProperties] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState("");
   const [rooms, setRooms] = useState([]);
@@ -20,39 +31,51 @@ const ViewRooms = ({ token }) => {
   const [newRoomName, setNewRoomName] = useState("");
   const [message, setMessage] = useState("");
   const [snackbarType, setSnackbarType] = useState("success");
+  const [newRoom, setNewRoom] = useState({
+    name: '',
+    type: '',
+    floor: '',
+    status: 'Available'
+  });
 
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        const response = await apiClient.get("/properties", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await apiClient.get("/properties");
         setProperties(response.data.properties);
+        if (response.data.properties.length > 0) {
+          setSelectedProperty(response.data.properties[0].property_id);
+        }
       } catch (error) {
         console.error("Failed to fetch properties", error);
       }
     };
 
     fetchProperties();
-  }, [token]);
+  }, [auth]);
 
   const fetchRooms = async (propertyId) => {
+    if (!propertyId) return;
     try {
-      const response = await apiClient.get(`/properties/${propertyId}/rooms`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await apiClient.get(`/properties/${propertyId}/rooms`);
       setRooms(response.data.rooms);
     } catch (error) {
       console.error("Failed to fetch rooms", error);
     }
   };
 
+  useEffect(() => {
+    if (selectedProperty) {
+      fetchRooms(selectedProperty);
+    }
+  }, [selectedProperty]);
+
   const handleEdit = async (roomId) => {
     try {
       const response = await apiClient.patch(
         `/rooms/${roomId}`,
         { name: editRoom.name },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${auth.token}` } }
       );
       setMessage("Room updated successfully!");
       setSnackbarType("success");
@@ -71,7 +94,7 @@ const ViewRooms = ({ token }) => {
   const handleDelete = async (roomId) => {
     try {
       await apiClient.delete(`/rooms/${roomId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${auth.token}` },
       });
       setMessage("Room deleted successfully!");
       setSnackbarType("success");
@@ -82,24 +105,22 @@ const ViewRooms = ({ token }) => {
     }
   };
 
-  const handleAddRoom = async () => {
-    if (!newRoomName || !selectedProperty) {
-      setMessage("Please enter a room name and select a property.");
+  const handleAddRoom = async (e) => {
+    e.preventDefault();
+    if (!selectedProperty) {
+      setMessage("Please select a property");
       setSnackbarType("error");
       return;
     }
+
     try {
-      const response = await apiClient.post(
-        `/properties/${selectedProperty}/rooms`,
-        { name: newRoomName },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMessage("Room added successfully!");
+      await apiClient.post(`/properties/${selectedProperty}/rooms`, newRoom);
+      setMessage("Room created successfully!");
       setSnackbarType("success");
-      setNewRoomName("");
-      fetchRooms(selectedProperty); // Refresh the rooms list after adding
+      setNewRoom({ name: '', type: '', floor: '', status: 'Available' });
+      fetchRooms(selectedProperty);
     } catch (error) {
-      setMessage("Failed to add room.");
+      setMessage("Failed to create room");
       setSnackbarType("error");
     }
   };
@@ -107,41 +128,72 @@ const ViewRooms = ({ token }) => {
   return (
     <Box p={3}>
       <Typography variant="h4" gutterBottom>
-        View and Manage Rooms
+        View Rooms
       </Typography>
-      <Select
-        fullWidth
-        value={selectedProperty}
-        onChange={(e) => {
-          setSelectedProperty(e.target.value);
-          fetchRooms(e.target.value);
-        }}
-        displayEmpty
-      >
-        <MenuItem value="">Select Property</MenuItem>
-        {properties.map((property) => (
-          <MenuItem key={property.property_id} value={property.property_id}>
-            {property.name}
-          </MenuItem>
-        ))}
-      </Select>
-
-      <Box mt={2} display="flex" gap={2}>
-        <TextField
-          fullWidth
-          label="New Room Name"
-          value={newRoomName}
-          onChange={(e) => setNewRoomName(e.target.value)}
-        />
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleAddRoom}
-          disabled={!selectedProperty}
-        >
-          Add Room
-        </Button>
-      </Box>
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Add New Room
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              label="Room Name"
+              value={newRoom.name}
+              onChange={(e) => setNewRoom(prev => ({ ...prev, name: e.target.value }))}
+            />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth>
+              <InputLabel>Type</InputLabel>
+              <Select
+                value={newRoom.type}
+                onChange={(e) => setNewRoom(prev => ({ ...prev, type: e.target.value }))}
+              >
+                {['Single', 'Double', 'Suite', 'Conference'].map(type => (
+                  <MenuItem key={type} value={type}>{type}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              label="Floor"
+              value={newRoom.floor}
+              onChange={(e) => setNewRoom(prev => ({ ...prev, floor: e.target.value }))}
+            />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={handleAddRoom}
+              disabled={!newRoom.name || !newRoom.type}
+            >
+              Add Room
+            </Button>
+          </Grid>
+        </Grid>
+      </Paper>
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell align="center">Room ID</TableCell>
+              <TableCell align="center">Name</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rooms.map((room) => (
+              <TableRow key={room.room_id}>
+                <TableCell align="center">{room.room_id}</TableCell>
+                <TableCell align="center">{room.name}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       <Box mt={4}>
         <Grid container spacing={2}>

@@ -1,12 +1,14 @@
 import axios from 'axios';
 
 const apiClient = axios.create({
-  baseURL: "https://ticketing-system-93gf.onrender.com/",
+  baseURL: "http://localhost:5000",
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true
 });
-// Add a request interceptor to include Authorization header
+
+// Add request interceptor
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
@@ -16,6 +18,19 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for better error handling
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('auth');
+      window.location.href = '/login';
+    }
     return Promise.reject(error);
   }
 );
