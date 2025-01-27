@@ -44,10 +44,19 @@ const Login = () => {
     setError(null);
 
     try {
-      await login(formData.username, formData.password);
-      navigate('/dashboard');
+      if (!formData.username || !formData.password) {
+        throw new Error('Please enter both username and password');
+      }
+      
+      const response = await login(formData.username, formData.password);
+      if (response && response.token) {
+        navigate('/dashboard');
+      } else {
+        throw new Error('Invalid login response');
+      }
     } catch (error) {
-      setError(error.response?.data?.message || 'Invalid credentials');
+      console.error('Login error:', error);
+      setError(error.message || 'Failed to connect to the server. Please try again.');
     } finally {
       setLoading(false);
     }

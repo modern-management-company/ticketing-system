@@ -1,11 +1,12 @@
 from flask import request, jsonify
 from app import app, db
-from app.models import User, Ticket, Property, TaskAssignment, Room, Activity
+from app.models import User, Ticket, Property, TaskAssignment, Room, Activity, UserProperty
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from collections import defaultdict
 from app.middleware import handle_errors
+from app.decorators import handle_errors
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -29,7 +30,8 @@ def register():
     new_user = User(
         username=data['username'],
         password=generate_password_hash(data['password']),
-        role=role
+        role=role,
+        created_at=datetime.utcnow()
     )
     
     db.session.add(new_user)
@@ -53,9 +55,7 @@ def login():
         'token': access_token,
         'userId': user.user_id,
         'username': user.username,
-        'role': user.role,
-        'managedPropertyId': user.managed_property_id,
-        'assignedPropertyId': user.assigned_property_id
+        'role': user.role
     })
     return response
 
@@ -123,7 +123,6 @@ def get_properties():
     try:
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
-        
         if not user:
             return jsonify({'message': 'User not found'}), 404
 
@@ -132,24 +131,20 @@ def get_properties():
             properties = Property.query.all()
         # Manager can only see their managed property
         elif user.role == 'manager':
-            properties = Property.query.filter_by(property_id=user.managed_property_id).all()
+            properties = [user.managed_property] if user.managed_property else []
         # Regular users can see all their assigned properties
         else:
-            properties = user.assigned_properties.all()
+            properties = user.assigned_properties
 
         properties_data = [{
             'property_id': prop.property_id,
             'name': prop.name,
-            'address': prop.address,
-            'type': prop.type,
-            'status': prop.status,
-            'manager_id': prop.manager_id
-        } for prop in properties]
-
+            'address': prop.address
+        } for prop in properties if prop]  # Add if prop to handle None values
+        
         return jsonify({'properties': properties_data})
-
     except Exception as e:
-        print(f"Error in get_properties: {str(e)}")
+        app.logger.error(f"Error in get_properties: {str(e)}")
         return jsonify({'message': 'Internal server error'}), 500
 
 @app.route('/properties', methods=['POST'])
@@ -608,23 +603,30 @@ def assign_property():
     if current_user['role'] not in ['super_admin', 'manager']:
         return jsonify({'message': 'Unauthorized'}), 403
 
-    data = request.json
+    data = request.get_json()
     user_id = data.get('user_id')
-    property_ids = data.get('property_ids')  # Now accepts an array of property IDs
+    property_ids = data.get('property_ids', [])
 
     user = User.query.get(user_id)
     if not user:
         return jsonify({'message': 'User not found'}), 404
 
-    # Clear existing assignments and add new ones
-    user.assigned_properties = []
+    # Clear existing property assignments
+    UserProperty.query.filter_by(user_id=user_id).delete()
+
+    # Add new property assignments
     for property_id in property_ids:
         property = Property.query.get(property_id)
         if property:
-            user.assigned_properties.append(property)
-    
-    db.session.commit()
-    return jsonify({'message': 'User property assignments updated successfully'})
+            user_property = UserProperty(user_id=user_id, property_id=property_id)
+            db.session.add(user_property)
+
+    try:
+        db.session.commit()
+        return jsonify({'message': 'Property assignments updated successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Error updating property assignments: {str(e)}'}), 500
 
 @app.route('/remove-property-assignment', methods=['POST'])
 @jwt_required()
@@ -633,9 +635,12 @@ def remove_property_assignment():
     if current_user['role'] not in ['super_admin', 'manager']:
         return jsonify({'message': 'Unauthorized'}), 403
 
-    data = request.json
+    data = request.get_json()
     user_id = data.get('user_id')
     property_id = data.get('property_id')
+
+    if not user_id or not property_id:
+        return jsonify({'message': 'Missing required fields'}), 400
 
     user = User.query.get(user_id)
     property = Property.query.get(property_id)
@@ -643,11 +648,17 @@ def remove_property_assignment():
     if not user or not property:
         return jsonify({'message': 'User or property not found'}), 404
 
-    if property in user.assigned_properties:
-        user.assigned_properties.remove(property)
-        db.session.commit()
+    user_property = UserProperty.query.filter_by(
+        user_id=user_id,
+        property_id=property_id
+    ).first()
 
-    return jsonify({'message': 'Property assignment removed successfully'})
+    if user_property:
+        db.session.delete(user_property)
+        db.session.commit()
+        return jsonify({'message': 'Property assignment removed successfully'})
+    else:
+        return jsonify({'message': 'Property assignment not found'}), 404
 
 @app.route('/users/<int:user_id>/properties', methods=['GET'])
 @jwt_required()
@@ -659,9 +670,7 @@ def get_user_properties(user_id):
     properties = [{
         'property_id': prop.property_id,
         'name': prop.name,
-        'address': prop.address,
-        'type': prop.type,
-        'status': prop.status
+        'address': prop.address
     } for prop in user.assigned_properties]
 
     return jsonify({'properties': properties})
@@ -677,7 +686,11 @@ def get_managed_properties(user_id):
     if not user or user.role != 'manager':
         return jsonify({'message': 'User not found or not a manager'}), 404
 
-    properties = Property.query.filter_by(property_id=user.managed_property_id).all()
+    if user.managed_property:
+        properties = [user.managed_property]
+    else:
+        properties = []
+
     return jsonify({
         'properties': [{'property_id': p.property_id, 'name': p.name} for p in properties]
     })
@@ -693,9 +706,11 @@ def get_assigned_properties(user_id):
     if not user:
         return jsonify({'message': 'User not found'}), 404
 
-    properties = Property.query.filter_by(property_id=user.assigned_property_id).all()
     return jsonify({
-        'properties': [{'property_id': p.property_id, 'name': p.name} for p in properties]
+        'properties': [{
+            'property_id': p.property_id,
+            'name': p.name
+        } for p in user.assigned_properties]
     })
 
 @app.route('/properties/<int:property_id>/users', methods=['GET'])
@@ -984,6 +999,10 @@ def get_recent_activities():
 
 @app.route('/users/check-first', methods=['GET'])
 def check_first_user():
-    # Check if any user exists
-    user_count = User.query.count()
-    return jsonify({'isFirstUser': user_count == 0})
+    try:
+        # Check if any user exists
+        user_count = User.query.count()
+        return jsonify({'isFirstUser': user_count == 0})
+    except Exception as e:
+        app.logger.error(f"Error checking first user: {e}")
+        return jsonify({'error': 'Internal server error'}), 500

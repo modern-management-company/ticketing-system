@@ -1,19 +1,26 @@
 import axios from 'axios';
 
 const apiClient = axios.create({
-  baseURL: "http://localhost:5000",
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
   headers: {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
   },
-  withCredentials: true
 });
 
-// Add request interceptor
+// Add request interceptor to include auth token
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const authData = localStorage.getItem('auth');
+    if (authData) {
+      try {
+        const { token } = JSON.parse(authData);
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      } catch (error) {
+        console.error('Error parsing auth data:', error);
+        localStorage.removeItem('auth');
+      }
     }
     return config;
   },
@@ -22,15 +29,22 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Add response interceptor for better error handling
+// Add response interceptor for error handling
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+    
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
       localStorage.removeItem('auth');
       window.location.href = '/login';
     }
+    
+    if (error.response?.status === 422) {
+      console.error('Validation error:', error.response.data);
+      return Promise.reject(new Error(error.response.data.message || 'Validation failed'));
+    }
+    
     return Promise.reject(error);
   }
 );

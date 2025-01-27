@@ -2,12 +2,19 @@ from app import app, db
 from app.models import User, Property, Ticket, TaskAssignment, Room
 from werkzeug.security import generate_password_hash
 from datetime import datetime
+from sqlalchemy import text
 
 def clear_database():
     with app.app_context():
-        # Drop all tables
-        print("Dropping all tables...")
-        db.drop_all()
+        # Drop all tables with CASCADE to handle dependencies
+        db.session.execute(text('DROP TABLE IF EXISTS activities CASCADE'))
+        db.session.execute(text('DROP TABLE IF EXISTS task_assignments CASCADE'))
+        db.session.execute(text('DROP TABLE IF EXISTS tickets CASCADE'))
+        db.session.execute(text('DROP TABLE IF EXISTS rooms CASCADE'))
+        db.session.execute(text('DROP TABLE IF EXISTS user_properties CASCADE'))
+        db.session.execute(text('DROP TABLE IF EXISTS properties CASCADE'))
+        db.session.execute(text('DROP TABLE IF EXISTS users CASCADE'))
+        db.session.commit()
         
         # Recreate all tables
         print("Creating fresh tables...")
@@ -23,11 +30,13 @@ def setup_database():
         # Create Properties
         residence_inn = Property(
             name='Residence Inn',
-            address='123 Main St'
+            address='123 Main St',
+            type='Hotel'
         )
         fairfield_inn = Property(
             name='Fairfield Inn',
-            address='456 Oak Ave'
+            address='456 Oak Ave',
+            type='Hotel'
         )
         db.session.add_all([residence_inn, fairfield_inn])
         db.session.commit()
@@ -50,11 +59,23 @@ def setup_database():
             User(username='admin', password=generate_password_hash('admin123'), role='super_admin'),
             User(username='mrinn', password=generate_password_hash('mrinn123'), role='manager', managed_property_id=residence_inn.property_id),
             User(username='mff', password=generate_password_hash('mff123'), role='manager', managed_property_id=fairfield_inn.property_id),
-            User(username='urinn', password=generate_password_hash('urinn123'), role='user', assigned_property_id=residence_inn.property_id),
-            User(username='uff', password=generate_password_hash('uff123'), role='user', assigned_property_id=fairfield_inn.property_id),
-            User(username='user', password=generate_password_hash('user123'), role='user', assigned_property_id=residence_inn.property_id)
+            User(username='urinn', password=generate_password_hash('urinn123'), role='user'),
+            User(username='uff', password=generate_password_hash('uff123'), role='user'),
+            User(username='user', password=generate_password_hash('user123'), role='user')
         ]
         db.session.add_all(users)
+        db.session.commit()
+
+        # Assign properties to users
+        urinn = users[3]  # urinn
+        uff = users[4]    # uff
+        user = users[5]   # user
+
+        # Create property assignments
+        urinn.assigned_properties.append(residence_inn)
+        uff.assigned_properties.append(fairfield_inn)
+        user.assigned_properties.append(residence_inn)
+        
         db.session.commit()
 
         # Create Tickets

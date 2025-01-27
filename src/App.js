@@ -9,7 +9,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import {
   Box,
-  Container,
   CssBaseline,
   ThemeProvider,
   createTheme,
@@ -51,36 +50,34 @@ const App = () => {
       <CssBaseline />
       <AuthProvider>
         <Router>
-          <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<RegisterUser />} />
-              <Route path="/" element={
-                <PrivateRoute>
-                  <Layout />
-                </PrivateRoute>
-              }>
-                <Route index element={<Navigate to="/dashboard" />} />
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="tickets">
-                  <Route index element={<ViewTickets />} />
-                  <Route path="create" element={<CreateTicket />} />
-                </Route>
-                <Route path="tasks" element={<ViewTasks />} />
-                <Route path="rooms" element={<ViewRooms />} />
-                <Route path="users" element={
-                  <ManagerRoute>
-                    <ManageUsers />
-                  </ManagerRoute>
-                } />
-                <Route path="properties" element={
-                  <ManagerRoute>
-                    <ManageProperties />
-                  </ManagerRoute>
-                } />
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<RegisterUser />} />
+            <Route path="/" element={
+              <PrivateRoute>
+                <Layout />
+              </PrivateRoute>
+            }>
+              <Route index element={<Navigate to="/dashboard" />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="tickets">
+                <Route index element={<ViewTickets />} />
+                <Route path="create" element={<CreateTicket />} />
               </Route>
-            </Routes>
-          </Box>
+              <Route path="tasks" element={<ViewTasks />} />
+              <Route path="rooms" element={<ViewRooms />} />
+              <Route path="users" element={
+                <ManagerRoute>
+                  <ManageUsers />
+                </ManagerRoute>
+              } />
+              <Route path="properties" element={
+                <ManagerRoute>
+                  <ManageProperties />
+                </ManagerRoute>
+              } />
+            </Route>
+          </Routes>
         </Router>
       </AuthProvider>
     </ThemeProvider>

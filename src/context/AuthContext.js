@@ -12,12 +12,21 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password) => {
     try {
       const response = await apiClient.post('/login', { username, password });
-      const authData = response.data;
+      const authData = {
+        token: response.data.token,
+        userId: response.data.userId,
+        username: response.data.username,
+        role: response.data.role
+      };
       setAuth(authData);
       localStorage.setItem('auth', JSON.stringify(authData));
       return authData;
     } catch (error) {
-      throw error;
+      console.error('Login error:', error);
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error('Failed to connect to the server');
     }
   };
 

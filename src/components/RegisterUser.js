@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
@@ -9,36 +10,41 @@ import {
 } from "@mui/material";
 import apiClient from "./apiClient"; // Import the centralized API client
 
-const RegisterUser = () => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+const RegisterUser = ({ isAdminRegistration = false }) => {
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    username: "",
+    password: "",
+  });
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await apiClient.post("/register", { username, password }); // Use apiClient here
-      setMessage("User registered successfully!");
-      setUsername("");
-      setPassword("");
+      await apiClient.post("/register", {
+        ...formData,
+        isAdminRegistration,
+      });
+      setMessage("Registration successful!");
+      setTimeout(() => navigate("/login"), 2000);
     } catch (error) {
-      console.error("Failed to register user", error);
-      setMessage("Failed to register user.");
+      setError(error.response?.data?.message || "Registration failed");
     }
   };
 
   return (
-    <Box sx={{ maxWidth: 600, margin: "auto", padding: 3 }}>
+    <Box sx={{ maxWidth: 400, mx: "auto", mt: 4, p: 2 }}>
       <Typography variant="h4" gutterBottom>
-        Register User
+        {isAdminRegistration ? "Create Admin Account" : "Register User"}
       </Typography>
       <form onSubmit={handleSubmit}>
         <TextField
           fullWidth
           margin="normal"
           label="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          value={formData.username}
+          onChange={(e) => setFormData({ ...formData, username: e.target.value })}
           required
         />
         <TextField
@@ -46,14 +52,13 @@ const RegisterUser = () => {
           margin="normal"
           label="Password"
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          value={formData.password}
+          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
           required
         />
         <Button
           type="submit"
           variant="contained"
-          color="primary"
           fullWidth
           sx={{ mt: 2 }}
         >
@@ -61,20 +66,24 @@ const RegisterUser = () => {
         </Button>
       </form>
 
-      {message && (
-        <Snackbar
-          open={!!message}
-          autoHideDuration={6000}
-          onClose={() => setMessage("")}
+      <Snackbar
+        open={!!message || !!error}
+        autoHideDuration={6000}
+        onClose={() => {
+          setMessage("");
+          setError("");
+        }}
+      >
+        <Alert
+          severity={message ? "success" : "error"}
+          onClose={() => {
+            setMessage("");
+            setError("");
+          }}
         >
-          <Alert
-            severity={message.includes("successfully") ? "success" : "error"}
-            onClose={() => setMessage("")}
-          >
-            {message}
-          </Alert>
-        </Snackbar>
-      )}
+          {message || error}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

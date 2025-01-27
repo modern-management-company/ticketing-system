@@ -13,7 +13,8 @@ import {
   ListItemText,
   Toolbar,
   Typography,
-  Button
+  Button,
+  ListItemButton,
 } from '@mui/material';
 
 // Import specific icons instead of the entire library
@@ -58,9 +59,9 @@ const Layout = () => {
         {menuItems.map((item) => (
           item.roles.includes(auth?.role) && (
             <ListItem 
-              button 
               key={item.text} 
               onClick={() => navigate(item.path)}
+              sx={{ cursor: 'pointer' }}
             >
               <ListItemIcon>
                 {item.icon}

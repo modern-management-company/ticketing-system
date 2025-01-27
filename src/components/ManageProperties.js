@@ -46,34 +46,53 @@ const ManageProperties = () => {
   const fetchProperties = async () => {
     try {
       let endpoint = '/properties';
-      if (auth.role === 'manager') {
+      if (auth?.role === 'manager' && auth?.managedPropertyId) {
         endpoint = `/properties/${auth.managedPropertyId}`;
       }
-      
+
       const response = await apiClient.get(endpoint);
-      setProperties(auth.role === 'manager' ? [response.data] : response.data.properties);
+      
+      if (response.data?.properties) {
+        setProperties(response.data.properties);
+      } else if (response.data && Array.isArray(response.data)) {
+        setProperties(response.data);
+      } else {
+        setProperties([]);
+      }
+      
       setLoading(false);
+      setError(null);
     } catch (error) {
-      setError('Failed to fetch properties');
-      console.error(error);
+      console.error('Error fetching properties:', error);
+      setError(error.message || 'Failed to fetch properties');
+      setProperties([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleError = (error) => {
+    const errorMessage = error?.response?.data?.msg 
+      || error?.message 
+      || 'An unexpected error occurred';
+    setError(errorMessage);
+    console.error('Operation failed:', error);
   };
 
   const handleEdit = async (propertyId) => {
     if (!editProperty) return;
     
     try {
-      await apiClient.patch(`/properties/${propertyId}`, editProperty);
-      setProperties(properties.map(prop => 
-        prop.property_id === propertyId ? { ...prop, ...editProperty } : prop
-      ));
-      setEditProperty(null);
-      setMessage('Property updated successfully');
+      const response = await apiClient.patch(`/properties/${propertyId}`, editProperty);
+      if (response.data?.property) {
+        setProperties(properties.map(prop => 
+          prop.property_id === propertyId ? response.data.property : prop
+        ));
+        setEditProperty(null);
+        setMessage('Property updated successfully');
+      }
     } catch (error) {
-      setError('Failed to update property');
-      console.error(error);
+      handleError(error);
     }
   };
 
@@ -86,16 +105,18 @@ const ManageProperties = () => {
 
     try {
       const response = await apiClient.post('/properties', newProperty);
-      setProperties([...properties, response.data.property]);
-      setNewProperty({
-        name: '',
-        address: '',
-        type: '',
-        status: 'active'
-      });
-      setMessage('Property created successfully');
+      if (response.data?.property) {
+        setProperties([...properties, response.data.property]);
+        setNewProperty({
+          name: '',
+          address: '',
+          type: '',
+          status: 'active'
+        });
+        setMessage('Property created successfully');
+      }
     } catch (error) {
-      setError('Failed to create property');
+      handleError(error);
     }
   };
 

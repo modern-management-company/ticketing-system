@@ -12,12 +12,15 @@ const PropertySwitcher = () => {
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        let endpoint = '/properties';
-        const response = await apiClient.get(endpoint);
-        setProperties(response.data.properties);
+        const response = await apiClient.get('/properties');
+        if (response.data && Array.isArray(response.data.properties)) {
+          setProperties(response.data.properties);
+        } else {
+          throw new Error('Invalid properties data format');
+        }
       } catch (error) {
         console.error('Failed to fetch properties:', error);
-        setError('Failed to load properties');
+        setError(error.message || 'Failed to load properties');
       } finally {
         setLoading(false);
       }

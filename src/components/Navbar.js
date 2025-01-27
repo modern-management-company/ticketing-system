@@ -10,10 +10,19 @@ import {
   IconButton,
   Menu,
   MenuItem,
-  Chip
+  Chip,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import { 
+  Home, 
+  Menu as MenuIcon, 
+  AccountCircle as AccountCircleIcon,
+  People as PeopleIcon,
+  Business as BusinessIcon,
+  ConfirmationNumber as ConfirmationNumberIcon,
+  Assignment as AssignmentIcon
+} from '@mui/icons-material';
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -34,24 +43,56 @@ const Navbar = () => {
   };
 
   const renderMenuItems = () => {
-    const items = [];
+    const items = [
+      <MenuItem key="home" onClick={() => handleMenuClick('/')} sx={{ minWidth: '200px' }}>
+        <ListItemIcon>
+          <Home />
+        </ListItemIcon>
+        <ListItemText primary="Home" />
+      </MenuItem>
+    ];
 
     if (auth.role === 'super_admin') {
       items.push(
-        <MenuItem key="users" onClick={() => handleMenuClick('/users')}>Manage Users</MenuItem>,
-        <MenuItem key="properties" onClick={() => handleMenuClick('/properties')}>Manage Properties</MenuItem>
+        <MenuItem key="users" onClick={() => handleMenuClick('/users')}>
+          <ListItemIcon>
+            <PeopleIcon />
+          </ListItemIcon>
+          <ListItemText>Manage Users</ListItemText>
+        </MenuItem>,
+        <MenuItem key="properties" onClick={() => handleMenuClick('/properties')}>
+          <ListItemIcon>
+            <BusinessIcon />
+          </ListItemIcon>
+          <ListItemText>Manage Properties</ListItemText>
+        </MenuItem>
       );
     }
 
     if (auth.role === 'manager') {
       items.push(
-        <MenuItem key="properties" onClick={() => handleMenuClick('/properties')}>Manage Property</MenuItem>
+        <MenuItem key="properties" onClick={() => handleMenuClick('/properties')}>
+          <ListItemIcon>
+            <BusinessIcon />
+          </ListItemIcon>
+          <ListItemText>Manage Property</ListItemText>
+        </MenuItem>
       );
     }
 
     items.push(
-      <MenuItem key="tickets" onClick={() => handleMenuClick('/tickets')}>Tickets</MenuItem>,
-      <MenuItem key="tasks" onClick={() => handleMenuClick('/tasks')}>Tasks</MenuItem>
+      <MenuItem key="tickets" onClick={() => handleMenuClick('/tickets')}>
+        <ListItemIcon>
+          <ConfirmationNumberIcon />
+        </ListItemIcon>
+        <ListItemText>Tickets</ListItemText>
+      </MenuItem>,
+      <MenuItem key="tasks" onClick={() => handleMenuClick('/tasks')}>
+        <ListItemIcon>
+          <AssignmentIcon />
+        </ListItemIcon>
+        <ListItemText>Tasks</ListItemText>
+      </MenuItem>
     );
 
     return items;
