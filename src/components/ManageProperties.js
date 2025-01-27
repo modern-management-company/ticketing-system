@@ -52,6 +52,8 @@ const ManageProperties = () => {
 
       const response = await apiClient.get(endpoint);
       
+      console.log('Fetched properties:', response.data);  // Add logging here
+      
       if (response.data?.properties) {
         setProperties(response.data.properties);
       } else if (response.data && Array.isArray(response.data)) {

@@ -45,3 +45,4 @@ dist/
 Thumbs.db
 package-lock.json
 backend/serviceAccountKey.json
+.qodo/history.sqlite

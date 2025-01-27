@@ -44,7 +44,7 @@ const Navbar = () => {
 
   const renderMenuItems = () => {
     const items = [
-      <MenuItem key="home" onClick={() => handleMenuClick('/')} sx={{ minWidth: '200px' }}>
+      <MenuItem key="home" onClick={() => handleMenuClick('/home')} sx={{ minWidth: '200px' }}>
         <ListItemIcon>
           <Home />
         </ListItemIcon>
@@ -145,4 +145,4 @@ const Navbar = () => {
   );
 };
 
-export default Navbar; 
+export default Navbar;

@@ -139,8 +139,12 @@ def get_properties():
         properties_data = [{
             'property_id': prop.property_id,
             'name': prop.name,
-            'address': prop.address
+            'address': prop.address,
+            'type': prop.type,
+            'status': prop.status
         } for prop in properties if prop]  # Add if prop to handle None values
+        
+        app.logger.info(f"Properties data: {properties_data}")  # Add logging here
         
         return jsonify({'properties': properties_data})
     except Exception as e:

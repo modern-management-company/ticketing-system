@@ -50,7 +50,7 @@ const Login = () => {
       
       const response = await login(formData.username, formData.password);
       if (response && response.token) {
-        navigate('/dashboard');
+        navigate('/home');
       } else {
         throw new Error('Invalid login response');
       }

@@ -5,14 +5,14 @@ import {
   Route,
   Navigate
 } from "react-router-dom";
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
 import Layout from './components/Layout';
 import {
-  Box,
   CssBaseline,
   ThemeProvider,
   createTheme,
 } from '@mui/material';
+import Navbar from './components/Navbar';
 
 // Import your components
 import Login from "./components/Login";
@@ -24,41 +24,22 @@ import ViewRooms from './components/ViewRooms';
 import ViewTasks from './components/ViewTasks';
 import CreateTicket from './components/CreateTicket';
 import ViewTickets from './components/ViewTickets';
-import UnauthorizedPage from "./components/UnauthorizedPage";
+import HomeOverview from './components/HomeOverview';
 
 const theme = createTheme();
 
-const PrivateRoute = ({ children }) => {
-  const { auth } = useAuth();
-  return auth ? children : <Navigate to="/login" />;
-};
-
-const AdminRoute = ({ children }) => {
-  const { auth } = useAuth();
-  return auth?.role === 'super_admin' ? children : <Navigate to="/dashboard" />;
-};
-
-const ManagerRoute = ({ children }) => {
-  const { auth } = useAuth();
-  return auth?.role === 'manager' || auth?.role === 'super_admin' ? 
-    children : <Navigate to="/dashboard" />;
-};
-
 const App = () => {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <AuthProvider>
+    <AuthProvider>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
         <Router>
+          <Navbar />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<RegisterUser />} />
-            <Route path="/" element={
-              <PrivateRoute>
-                <Layout />
-              </PrivateRoute>
-            }>
-              <Route index element={<Navigate to="/dashboard" />} />
+            <Route path="/" element={<Layout />}>
+              <Route index element={<HomeOverview />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="tickets">
                 <Route index element={<ViewTickets />} />
@@ -66,21 +47,13 @@ const App = () => {
               </Route>
               <Route path="tasks" element={<ViewTasks />} />
               <Route path="rooms" element={<ViewRooms />} />
-              <Route path="users" element={
-                <ManagerRoute>
-                  <ManageUsers />
-                </ManagerRoute>
-              } />
-              <Route path="properties" element={
-                <ManagerRoute>
-                  <ManageProperties />
-                </ManagerRoute>
-              } />
+              <Route path="users" element={<ManageUsers />} />
+              <Route path="properties" element={<ManageProperties />} />
             </Route>
           </Routes>
         </Router>
-      </AuthProvider>
-    </ThemeProvider>
+      </ThemeProvider>
+    </AuthProvider>
   );
 };
 

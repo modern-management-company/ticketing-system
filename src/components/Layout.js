@@ -26,6 +26,7 @@ import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 import PeopleIcon from '@mui/icons-material/People';
 import BusinessIcon from '@mui/icons-material/Business';
 import LogoutIcon from '@mui/icons-material/Logout';
+import HomeIcon from '@mui/icons-material/Home';
 
 const drawerWidth = 240;
 
@@ -44,11 +45,12 @@ const Layout = () => {
   };
 
   const menuItems = [
+    { text: 'Home', icon: <HomeIcon />, path: '/home', roles: ['user', 'manager', 'super_admin'] },
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', roles: ['user', 'manager', 'super_admin'] },
     { text: 'Tickets', icon: <ConfirmationNumberIcon />, path: '/tickets', roles: ['user', 'manager', 'super_admin'] },
     { text: 'Tasks', icon: <AssignmentIcon />, path: '/tasks', roles: ['user', 'manager', 'super_admin'] },
     { text: 'Rooms', icon: <MeetingRoomIcon />, path: '/rooms', roles: ['manager', 'super_admin'] },
-    { text: 'Users', icon: <PeopleIcon />, path: '/users', roles: ['manager', 'super_admin'] },
+    { text: 'Users', icon: <PeopleIcon />, path: '/users', roles: ['super_admin'] },
     { text: 'Properties', icon: <BusinessIcon />, path: '/properties', roles: ['super_admin'] }
   ];
 
@@ -146,4 +148,4 @@ const Layout = () => {
   );
 };
 
-export default Layout; 
+export default Layout;
