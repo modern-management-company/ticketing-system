@@ -1,9 +1,18 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Typography, Container, Box } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const HomeOverview = () => {
   const { auth } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // If someone tries to access /home, redirect them to /
+    if (window.location.pathname === '/home') {
+      navigate('/', { replace: true });
+    }
+  }, [navigate]);
 
   const getRoleSpecificContent = () => {
     switch (auth?.role) {

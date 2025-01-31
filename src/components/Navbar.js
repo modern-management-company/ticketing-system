@@ -1,18 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import apiClient from './apiClient';
 import {
   AppBar,
   Box,
   Toolbar,
   Typography,
-  Button,
   IconButton,
   Menu,
   MenuItem,
   Chip,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  Select,
+  FormControl,
+  Tooltip,
+  Divider,
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import { 
   Home, 
@@ -21,124 +27,256 @@ import {
   People as PeopleIcon,
   Business as BusinessIcon,
   ConfirmationNumber as ConfirmationNumberIcon,
-  Assignment as AssignmentIcon
+  Assignment as AssignmentIcon,
+  Settings as SettingsIcon,
+  ArrowDropDown as ArrowDropDownIcon,
+  Palette as PaletteIcon
 } from '@mui/icons-material';
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const { auth, logout } = useAuth();
+  const { auth } = useAuth();
   const [anchorEl, setAnchorEl] = useState(null);
+  const [settingsAnchorEl, setSettingsAnchorEl] = useState(null);
+  const [properties, setProperties] = useState([]);
+  const [selectedProperty, setSelectedProperty] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (auth && (auth.role === 'manager' || auth.role === 'super_admin')) {
+      fetchProperties();
+    }
+  }, [auth]);
+
+  const fetchProperties = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.get('/properties');
+      setProperties(response.data.properties);
+      if (response.data.properties.length > 0) {
+        setSelectedProperty(response.data.properties[0].property_id);
+      }
+    } catch (error) {
+      setError('Failed to fetch properties');
+      console.error('Failed to fetch properties:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePropertyChange = async (event) => {
+    const propertyId = event.target.value;
+    setSelectedProperty(propertyId);
+    try {
+      await apiClient.post('/settings/current-property', { property_id: propertyId });
+      // Optionally refresh the page or update necessary components
+      window.location.reload();
+    } catch (error) {
+      setError('Failed to switch property');
+      console.error('Failed to switch property:', error);
+    }
+  };
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
+  };
+
+  const handleSettingsMenu = (event) => {
+    setSettingsAnchorEl(event.currentTarget);
   };
 
   const handleClose = () => {
     setAnchorEl(null);
   };
 
+  const handleSettingsClose = () => {
+    setSettingsAnchorEl(null);
+  };
+
   const handleMenuClick = (path) => {
     navigate(path);
     handleClose();
+    handleSettingsClose();
   };
 
   const renderMenuItems = () => {
     const items = [
-      <MenuItem key="home" onClick={() => handleMenuClick('/home')} sx={{ minWidth: '200px' }}>
-        <ListItemIcon>
-          <Home />
-        </ListItemIcon>
-        <ListItemText primary="Home" />
-      </MenuItem>
+      {
+        key: 'dashboard',
+        path: '/dashboard',
+        icon: <Home />,
+        text: 'Dashboard',
+        roles: ['user', 'manager', 'super_admin']
+      },
+      {
+        key: 'tickets',
+        path: '/tickets',
+        icon: <ConfirmationNumberIcon />,
+        text: 'Tickets',
+        roles: ['user', 'manager', 'super_admin']
+      },
+      {
+        key: 'tasks',
+        path: '/tasks',
+        icon: <AssignmentIcon />,
+        text: 'Tasks',
+        roles: ['user', 'manager', 'super_admin']
+      }
     ];
 
     if (auth.role === 'super_admin') {
       items.push(
-        <MenuItem key="users" onClick={() => handleMenuClick('/users')}>
-          <ListItemIcon>
-            <PeopleIcon />
-          </ListItemIcon>
-          <ListItemText>Manage Users</ListItemText>
-        </MenuItem>,
-        <MenuItem key="properties" onClick={() => handleMenuClick('/properties')}>
-          <ListItemIcon>
-            <BusinessIcon />
-          </ListItemIcon>
-          <ListItemText>Manage Properties</ListItemText>
-        </MenuItem>
+        {
+          key: 'admin-properties',
+          path: '/admin/properties',
+          icon: <BusinessIcon />,
+          text: 'Manage Properties',
+          roles: ['super_admin']
+        },
+        {
+          key: 'admin-users',
+          path: '/admin/users',
+          icon: <PeopleIcon />,
+          text: 'Manage Users',
+          roles: ['super_admin']
+        }
       );
     }
 
-    if (auth.role === 'manager') {
-      items.push(
-        <MenuItem key="properties" onClick={() => handleMenuClick('/properties')}>
+    return items
+      .filter(item => item.roles.includes(auth?.role))
+      .map(item => (
+        <MenuItem 
+          key={item.key} 
+          onClick={() => handleMenuClick(item.path)}
+          sx={{ 
+            minWidth: '200px',
+            '&:hover': {
+              backgroundColor: 'primary.light',
+              '& .MuiListItemIcon-root': {
+                color: 'primary.main',
+              },
+            },
+          }}
+        >
           <ListItemIcon>
-            <BusinessIcon />
+            {item.icon}
           </ListItemIcon>
-          <ListItemText>Manage Property</ListItemText>
+          <ListItemText primary={item.text} />
         </MenuItem>
-      );
-    }
-
-    items.push(
-      <MenuItem key="tickets" onClick={() => handleMenuClick('/tickets')}>
-        <ListItemIcon>
-          <ConfirmationNumberIcon />
-        </ListItemIcon>
-        <ListItemText>Tickets</ListItemText>
-      </MenuItem>,
-      <MenuItem key="tasks" onClick={() => handleMenuClick('/tasks')}>
-        <ListItemIcon>
-          <AssignmentIcon />
-        </ListItemIcon>
-        <ListItemText>Tasks</ListItemText>
-      </MenuItem>
-    );
-
-    return items;
+      ));
   };
 
-  // Add a check for auth
-  if (!auth) return null;
+  const renderSettingsMenu = () => {
+    const settingsItems = [
+      {
+        key: 'property-settings',
+        path: '/settings/property',
+        icon: <PaletteIcon />,
+        text: 'Property Settings',
+        roles: ['manager', 'super_admin']
+      },
+      {
+        key: 'system-settings',
+        path: '/settings/system',
+        icon: <SettingsIcon />,
+        text: 'System Settings',
+        roles: ['super_admin']
+      }
+    ];
+
+    return settingsItems
+      .filter(item => item.roles.includes(auth?.role))
+      .map(item => (
+        <MenuItem 
+          key={item.key} 
+          onClick={() => handleMenuClick(item.path)}
+          sx={{ 
+            minWidth: '200px',
+            '&:hover': {
+              backgroundColor: 'primary.light',
+              '& .MuiListItemIcon-root': {
+                color: 'primary.main',
+              },
+            },
+          }}
+        >
+          <ListItemIcon>
+            {item.icon}
+          </ListItemIcon>
+          <ListItemText primary={item.text} />
+        </MenuItem>
+      ));
+  };
+
+  if (!auth || (auth.role !== 'manager' && auth.role !== 'super_admin')) {
+    return null;
+  }
 
   return (
-    <AppBar position="static">
-      <Toolbar>
-        <IconButton
-          edge="start"
-          color="inherit"
-          aria-label="menu"
-          onClick={handleMenu}
-          sx={{ mr: 2 }}
-        >
-          <MenuIcon />
-        </IconButton>
-        
-        <Menu
-          anchorEl={anchorEl}
-          open={Boolean(anchorEl)}
-          onClose={handleClose}
-        >
-          {renderMenuItems()}
-        </Menu>
-
-        <Typography variant="h6" sx={{ flexGrow: 1 }}>
-          Property Management System
-        </Typography>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Chip
-            icon={<AccountCircleIcon />}
-            label={`${auth.username || 'User'} (${auth.role})`}
-            color="secondary"
-            variant="outlined"
-            sx={{ 
-              color: 'white',
-              borderColor: 'white',
-              '& .MuiSvgIcon-root': { color: 'white' }
-            }}
-          />
-          <Button color="inherit" onClick={logout}>Logout</Button>
+    <AppBar 
+      position="fixed" 
+      color="default" 
+      elevation={0}
+      sx={{ 
+        top: 64, // Below main AppBar
+        backgroundColor: 'background.paper',
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+        zIndex: (theme) => theme.zIndex.drawer - 1
+      }}
+    >
+      <Toolbar variant="dense">
+        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+          <Typography variant="body1" color="textSecondary" sx={{ mr: 2 }}>
+            Current Property:
+          </Typography>
+          
+          {loading ? (
+            <CircularProgress size={24} sx={{ ml: 2 }} />
+          ) : error ? (
+            <Alert severity="error" sx={{ ml: 2 }}>
+              {error}
+            </Alert>
+          ) : (
+            <FormControl 
+              size="small" 
+              sx={{ 
+                minWidth: 200,
+                '& .MuiOutlinedInput-root': {
+                  backgroundColor: 'background.paper',
+                }
+              }}
+            >
+              <Select
+                value={selectedProperty}
+                onChange={handlePropertyChange}
+                displayEmpty
+                renderValue={(selected) => {
+                  if (!selected) {
+                    return <Typography color="textSecondary">Select a property</Typography>;
+                  }
+                  const property = properties.find(p => p.property_id === selected);
+                  return (
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Chip 
+                        label={property?.name || 'Unknown Property'} 
+                        size="small"
+                        color="primary"
+                      />
+                    </Box>
+                  );
+                }}
+              >
+                {properties.map((property) => (
+                  <MenuItem key={property.property_id} value={property.property_id}>
+                    {property.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
         </Box>
       </Toolbar>
     </AppBar>

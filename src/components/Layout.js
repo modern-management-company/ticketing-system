@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   AppBar,
@@ -8,32 +8,45 @@ import {
   Drawer,
   IconButton,
   List,
-  ListItem,
   ListItemIcon,
   ListItemText,
   Toolbar,
   Typography,
   Button,
   ListItemButton,
+  Divider,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 
 // Import specific icons instead of the entire library
 import MenuIcon from '@mui/icons-material/Menu';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
-import AssignmentIcon from '@mui/icons-material/Assignment';
-import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
-import PeopleIcon from '@mui/icons-material/People';
-import BusinessIcon from '@mui/icons-material/Business';
-import LogoutIcon from '@mui/icons-material/Logout';
-import HomeIcon from '@mui/icons-material/Home';
+import { 
+  Dashboard as DashboardIcon,
+  ConfirmationNumber as ConfirmationNumberIcon,
+  Assignment as AssignmentIcon,
+  Business as BusinessIcon,
+  MeetingRoom as MeetingRoomIcon,
+  People as PeopleIcon,
+  Logout as LogoutIcon,
+  Settings as SettingsIcon,
+  Palette as PaletteIcon
+} from '@mui/icons-material';
 
 const drawerWidth = 240;
 
 const Layout = () => {
   const { auth, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  if (!auth) {
+    navigate('/login');
+    return null;
+  }
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -44,36 +57,275 @@ const Layout = () => {
     navigate('/login');
   };
 
-  const menuItems = [
-    { text: 'Home', icon: <HomeIcon />, path: '/home', roles: ['user', 'manager', 'super_admin'] },
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', roles: ['user', 'manager', 'super_admin'] },
-    { text: 'Tickets', icon: <ConfirmationNumberIcon />, path: '/tickets', roles: ['user', 'manager', 'super_admin'] },
-    { text: 'Tasks', icon: <AssignmentIcon />, path: '/tasks', roles: ['user', 'manager', 'super_admin'] },
-    { text: 'Rooms', icon: <MeetingRoomIcon />, path: '/rooms', roles: ['manager', 'super_admin'] },
-    { text: 'Users', icon: <PeopleIcon />, path: '/users', roles: ['super_admin'] },
-    { text: 'Properties', icon: <BusinessIcon />, path: '/properties', roles: ['super_admin'] }
+  // Organize menu items by sections
+  const mainMenuItems = [
+    { 
+      text: 'Dashboard', 
+      icon: <DashboardIcon />, 
+      path: '/dashboard', 
+      roles: ['user', 'manager', 'super_admin'],
+      description: 'View system overview'
+    },
+    { 
+      text: 'Tickets', 
+      icon: <ConfirmationNumberIcon />, 
+      path: '/tickets', 
+      roles: ['user', 'manager', 'super_admin'],
+      description: 'Manage support tickets'
+    },
+    { 
+      text: 'Tasks', 
+      icon: <AssignmentIcon />, 
+      path: '/tasks', 
+      roles: ['user', 'manager', 'super_admin'],
+      description: 'View and manage tasks'
+    }
+  ];
+
+  const propertyMenuItems = [
+    { 
+      text: 'Rooms', 
+      icon: <MeetingRoomIcon />, 
+      path: '/rooms', 
+      roles: ['manager', 'super_admin'],
+      description: 'Manage property rooms'
+    }
+  ];
+
+  const settingsMenuItems = [
+    { 
+      text: 'Property Theme', 
+      icon: <PaletteIcon />, 
+      path: '/settings/property', 
+      roles: ['manager', 'super_admin'],
+      description: 'Customize property theme'
+    },
+    { 
+      text: 'System Settings', 
+      icon: <SettingsIcon />, 
+      path: '/settings/system', 
+      roles: ['super_admin'],
+      description: 'Manage system settings'
+    }
+  ];
+
+  const adminMenuItems = [
+    { 
+      text: 'Properties', 
+      icon: <BusinessIcon />, 
+      path: '/admin/properties', 
+      roles: ['super_admin'],
+      description: 'Manage all properties'
+    },
+    { 
+      text: 'Users', 
+      icon: <PeopleIcon />, 
+      path: '/admin/users', 
+      roles: ['super_admin'],
+      description: 'Manage system users'
+    }
   ];
 
   const drawer = (
-    <div>
-      <Toolbar />
-      <List>
-        {menuItems.map((item) => (
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Toolbar>
+        <Typography variant="h6" noWrap component="div">
+          {auth.role === 'super_admin' ? 'Admin Panel' : 'User Panel'}
+        </Typography>
+      </Toolbar>
+      <List sx={{ flexGrow: 1 }}>
+        {/* Main Menu Section */}
+        {mainMenuItems.map((item) => (
           item.roles.includes(auth?.role) && (
-            <ListItem 
-              key={item.text} 
-              onClick={() => navigate(item.path)}
-              sx={{ cursor: 'pointer' }}
+            <ListItemButton
+              key={item.text}
+              onClick={() => {
+                navigate(item.path);
+                if (isMobile) setMobileOpen(false);
+              }}
+              selected={location.pathname === item.path}
+              sx={{
+                '&.Mui-selected': {
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: 'primary.dark',
+                  },
+                  '& .MuiListItemIcon-root': {
+                    color: 'white',
+                  },
+                },
+              }}
             >
-              <ListItemIcon>
+              <ListItemIcon sx={{ color: location.pathname === item.path ? 'white' : 'inherit' }}>
                 {item.icon}
               </ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItem>
+              <ListItemText 
+                primary={item.text} 
+                secondary={auth.role === 'super_admin' ? item.description : null}
+                secondaryTypographyProps={{
+                  sx: { color: location.pathname === item.path ? 'rgba(255,255,255,0.7)' : 'inherit' }
+                }}
+              />
+            </ListItemButton>
           )
         ))}
+
+        {/* Property Management Section */}
+        {propertyMenuItems.some(item => item.roles.includes(auth?.role)) && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle2" color="textSecondary" sx={{ px: 3, py: 1 }}>
+              Property Management
+            </Typography>
+            {propertyMenuItems.map((item) => (
+              item.roles.includes(auth?.role) && (
+                <ListItemButton
+                  key={item.text}
+                  onClick={() => {
+                    navigate(item.path);
+                    if (isMobile) setMobileOpen(false);
+                  }}
+                  selected={location.pathname === item.path}
+                  sx={{
+                    '&.Mui-selected': {
+                      backgroundColor: 'primary.main',
+                      color: 'white',
+                      '&:hover': {
+                        backgroundColor: 'primary.dark',
+                      },
+                      '& .MuiListItemIcon-root': {
+                        color: 'white',
+                      },
+                    },
+                  }}
+                >
+                  <ListItemIcon sx={{ color: location.pathname === item.path ? 'white' : 'inherit' }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={item.text} 
+                    secondary={auth.role === 'super_admin' ? item.description : null}
+                    secondaryTypographyProps={{
+                      sx: { color: location.pathname === item.path ? 'rgba(255,255,255,0.7)' : 'inherit' }
+                    }}
+                  />
+                </ListItemButton>
+              )
+            ))}
+          </>
+        )}
+
+        {/* Settings Section */}
+        {settingsMenuItems.some(item => item.roles.includes(auth?.role)) && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle2" color="textSecondary" sx={{ px: 3, py: 1 }}>
+              Settings
+            </Typography>
+            {settingsMenuItems.map((item) => (
+              item.roles.includes(auth?.role) && (
+                <ListItemButton
+                  key={item.text}
+                  onClick={() => {
+                    navigate(item.path);
+                    if (isMobile) setMobileOpen(false);
+                  }}
+                  selected={location.pathname === item.path}
+                  sx={{
+                    '&.Mui-selected': {
+                      backgroundColor: 'primary.main',
+                      color: 'white',
+                      '&:hover': {
+                        backgroundColor: 'primary.dark',
+                      },
+                      '& .MuiListItemIcon-root': {
+                        color: 'white',
+                      },
+                    },
+                  }}
+                >
+                  <ListItemIcon sx={{ color: location.pathname === item.path ? 'white' : 'inherit' }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={item.text} 
+                    secondary={auth.role === 'super_admin' ? item.description : null}
+                    secondaryTypographyProps={{
+                      sx: { color: location.pathname === item.path ? 'rgba(255,255,255,0.7)' : 'inherit' }
+                    }}
+                  />
+                </ListItemButton>
+              )
+            ))}
+          </>
+        )}
+
+        {/* Admin Section */}
+        {auth.role === 'super_admin' && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle2" color="textSecondary" sx={{ px: 3, py: 1 }}>
+              Administration
+            </Typography>
+            {adminMenuItems.map((item) => (
+              <ListItemButton
+                key={item.text}
+                onClick={() => {
+                  navigate(item.path);
+                  if (isMobile) setMobileOpen(false);
+                }}
+                selected={location.pathname === item.path}
+                sx={{
+                  '&.Mui-selected': {
+                    backgroundColor: 'primary.main',
+                    color: 'white',
+                    '&:hover': {
+                      backgroundColor: 'primary.dark',
+                    },
+                    '& .MuiListItemIcon-root': {
+                      color: 'white',
+                    },
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ color: location.pathname === item.path ? 'white' : 'inherit' }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={item.text} 
+                  secondary={item.description}
+                  secondaryTypographyProps={{
+                    sx: { color: location.pathname === item.path ? 'rgba(255,255,255,0.7)' : 'inherit' }
+                  }}
+                />
+              </ListItemButton>
+            ))}
+          </>
+        )}
       </List>
-    </div>
+
+      <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+          Logged in as:
+        </Typography>
+        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+          {auth.username}
+        </Typography>
+        <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 2 }}>
+          Role: {auth.role}
+        </Typography>
+        <Button
+          fullWidth
+          variant="outlined"
+          color="primary"
+          startIcon={<LogoutIcon />}
+          onClick={handleLogout}
+        >
+          Logout
+        </Button>
+      </Box>
+    </Box>
   );
 
   return (
@@ -82,8 +334,8 @@ const Layout = () => {
       <AppBar
         position="fixed"
         sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
+          width: { md: `calc(100% - ${drawerWidth}px)` },
+          ml: { md: `${drawerWidth}px` },
         }}
       >
         <Toolbar>
@@ -92,21 +344,26 @@ const Layout = () => {
             aria-label="open drawer"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
+            sx={{ mr: 2, display: { md: 'none' } }}
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Ticketing System
+          <Typography variant="h6" noWrap component="div">
+            {location.pathname === '/dashboard' ? 'Dashboard' :
+             location.pathname === '/tickets' ? 'Tickets' :
+             location.pathname === '/tasks' ? 'Tasks' :
+             location.pathname === '/rooms' ? 'Rooms' :
+             location.pathname === '/admin/properties' ? 'Manage Properties' :
+             location.pathname === '/admin/users' ? 'Manage Users' :
+             location.pathname === '/settings/property' ? 'Property Theme' :
+             location.pathname === '/settings/system' ? 'System Settings' :
+             'Property Management System'}
           </Typography>
-          <Button color="inherit" onClick={handleLogout} startIcon={<LogoutIcon />}>
-            Logout
-          </Button>
         </Toolbar>
       </AppBar>
       <Box
         component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+        sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
       >
         <Drawer
           variant="temporary"
@@ -116,7 +373,7 @@ const Layout = () => {
             keepMounted: true, // Better open performance on mobile.
           }}
           sx={{
-            display: { xs: 'block', sm: 'none' },
+            display: { xs: 'block', md: 'none' },
             '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
           }}
         >
@@ -125,7 +382,7 @@ const Layout = () => {
         <Drawer
           variant="permanent"
           sx={{
-            display: { xs: 'none', sm: 'block' },
+            display: { xs: 'none', md: 'block' },
             '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
           }}
           open
@@ -138,8 +395,8 @@ const Layout = () => {
         sx={{
           flexGrow: 1,
           p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: 8
+          width: { md: `calc(100% - ${drawerWidth}px)` },
+          mt: '64px', // Height of AppBar
         }}
       >
         <Outlet />

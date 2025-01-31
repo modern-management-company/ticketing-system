@@ -1,187 +1,264 @@
-from flask import request, jsonify
+from flask import request, jsonify, current_app
 from app import app, db
-from app.models import User, Ticket, Property, TaskAssignment, Room, Activity, UserProperty
+from app.models import User, Ticket, Property, TaskAssignment, Room, Activity, UserProperty, PropertyTheme, SystemSettings
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from collections import defaultdict
 from app.middleware import handle_errors
 from app.decorators import handle_errors
+import logging
+
+def get_user_from_jwt():
+    """Helper function to get user from JWT identity"""
+    identity = get_jwt_identity()
+    if not identity or 'user_id' not in identity:
+        return None
+    return User.query.get(identity['user_id'])
 
 @app.route('/register', methods=['POST'])
 def register():
-    data = request.json
-    is_admin_registration = data.get('isAdminRegistration', False)
-    
-    # Check if this is the first user (for super_admin creation)
-    if is_admin_registration:
-        super_admin = User.query.filter_by(role='super_admin').first()
-        if super_admin:
-            return jsonify({'message': 'Super admin already exists'}), 403
-        role = 'super_admin'
-    else:
-        role = 'user'  # Default role for normal registration
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"msg": "No input data provided"}), 400
 
-    # Check if username already exists
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({'message': 'Username already exists'}), 400
+        # Validate required fields
+        required_fields = ['username', 'email', 'password']
+        if not all(field in data for field in required_fields):
+            return jsonify({"msg": "Missing required fields"}), 400
 
-    # Create new user
-    new_user = User(
-        username=data['username'],
-        password=generate_password_hash(data['password']),
-        role=role,
-        created_at=datetime.utcnow()
-    )
-    
-    db.session.add(new_user)
-    db.session.commit()
+        # Check if username or email already exists
+        if User.query.filter_by(username=data['username']).first():
+            return jsonify({"msg": "Username already exists"}), 400
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({"msg": "Email already exists"}), 400
 
-    return jsonify({'message': 'User registered successfully'}), 201
+        # Check if this is the first user (for super_admin creation)
+        is_first_user = User.query.count() == 0
+        role = 'super_admin' if is_first_user else data.get('role', 'user')
+
+        # Create new user
+        new_user = User(
+            username=data['username'],
+            email=data['email'],
+            password=data['password'],
+            role=role,
+            manager_id=data.get('manager_id')
+        )
+        
+        db.session.add(new_user)
+        db.session.commit()
+
+        # Generate token
+        access_token = new_user.get_token()
+
+        app.logger.info(f"User registered successfully: {new_user.username}")
+        return jsonify({
+            "msg": "User registered successfully",
+            "token": access_token,
+            "user": new_user.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Registration error: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    if not data or not data.get('username') or not data.get('password'):
-        return jsonify({'message': 'Missing username or password'}), 400
+    try:
+        data = request.get_json()
+        if not data:
+            app.logger.warning("Login attempt with no data")
+            return jsonify({"msg": "No input data provided"}), 400
 
-    user = User.query.filter_by(username=data['username']).first()
-    if not user or not check_password_hash(user.password, data['password']):
-        return jsonify({'message': 'Invalid username or password'}), 401
+        # Check for required fields
+        if not data.get('username') or not data.get('password'):
+            app.logger.warning("Login attempt with missing credentials")
+            return jsonify({"msg": "Missing username or password"}), 400
 
-    access_token = create_access_token(identity=user.user_id)
-    
-    response = jsonify({
-        'token': access_token,
-        'userId': user.user_id,
-        'username': user.username,
-        'role': user.role
-    })
-    return response
+        # Find user by username
+        user = User.query.filter_by(username=data['username']).first()
+        if not user:
+            app.logger.warning(f"Login attempt with non-existent username: {data['username']}")
+            return jsonify({"msg": "Invalid username or password"}), 401
+
+        if not user.check_password(data['password']):
+            app.logger.warning(f"Failed login attempt for username: {data['username']} - Invalid password")
+            return jsonify({"msg": "Invalid username or password"}), 401
+
+        if not user.is_active:
+            app.logger.warning(f"Login attempt for inactive user: {data['username']}")
+            return jsonify({"msg": "Account is inactive"}), 401
+
+        # Update last login
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+
+        # Generate token
+        access_token = user.get_token()
+        
+        app.logger.info(f"Successful login for user: {user.username}")
+        return jsonify({
+            "msg": "Login successful",
+            "token": access_token,
+            "user": user.to_dict()
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Login error: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/tickets', methods=['POST'])
 @jwt_required()
 def create_ticket():
-    data = request.json
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
 
-    if not data or not data.get('title') or not data.get('description') or not data.get('priority'):
-        return jsonify({'message': 'Invalid input'}), 400
+        data = request.json
+        if not data or not data.get('title') or not data.get('description') or not data.get('priority'):
+            return jsonify({'msg': 'Invalid input'}), 400
 
-    user_id = get_jwt_identity()  # Get the logged-in user's ID
-    category = data.get('category', 'General')  # Default category to 'General' if not provided
+        ticket = Ticket(
+            title=data['title'],
+            description=data['description'],
+            priority=data['priority'],
+            category=data.get('category', 'General'),
+            user_id=current_user.user_id,
+            property_id=data.get('property_id')
+        )
+        db.session.add(ticket)
+        db.session.commit()
 
-    ticket = Ticket(
-        title=data['title'],
-        description=data['description'],
-        priority=data['priority'],
-        category=category,
-        user_id=user_id
-    )
-    db.session.add(ticket)
-    db.session.commit()
-    return jsonify({'message': 'Ticket created successfully!'})
+        app.logger.info(f"Ticket created by user {current_user.username}: {ticket.ticket_id}")
+        return jsonify({'msg': 'Ticket created successfully', 'ticket': ticket.ticket_id}), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error creating ticket: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/tickets', methods=['GET'])
 @jwt_required()
 def get_tickets():
-    current_user = get_jwt_identity()
-    
-    # Build query based on role
-    if current_user['role'] == 'super_admin':
-        tickets = Ticket.query.all()
-    elif current_user['role'] == 'manager':
-        tickets = Ticket.query.filter_by(property_id=current_user['managed_property_id']).all()
-    else:
-        tickets = Ticket.query.filter_by(property_id=current_user['assigned_property_id']).all()
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            app.logger.error("User not found from JWT")
+            return jsonify({"msg": "User not found"}), 404
+            
+        app.logger.info(f"Getting tickets for user {current_user.username} with role {current_user.role}")
+        
+        if current_user.role == 'super_admin':
+            tickets = Ticket.query.all()
+            app.logger.info(f"Super admin: Found {len(tickets)} tickets")
+        elif current_user.role == 'manager':
+            # Managers can see tickets from their properties
+            properties = Property.query.filter_by(manager_id=current_user.user_id).all()
+            property_ids = [p.property_id for p in properties]
+            tickets = Ticket.query.filter(Ticket.property_id.in_(property_ids)).all()
+            app.logger.info(f"Manager: Found {len(tickets)} tickets")
+        else:
+            # Regular users can see tickets from their assigned properties
+            property_ids = [prop.property_id for prop in current_user.assigned_properties]
+            tickets = Ticket.query.filter(Ticket.property_id.in_(property_ids)).all()
+            app.logger.info(f"User: Found {len(tickets)} tickets")
 
-    ticket_data = []
-    for ticket in tickets:
-        creator = User.query.get(ticket.user_id)
-        assigned_task = TaskAssignment.query.filter_by(ticket_id=ticket.ticket_id).first()
-        assigned_user = None
-        if assigned_task:
-            assigned_user = User.query.get(assigned_task.assigned_to_user_id)
+        ticket_data = []
+        for ticket in tickets:
+            creator = User.query.get(ticket.user_id)
+            assigned_task = TaskAssignment.query.filter_by(ticket_id=ticket.ticket_id).first()
+            assigned_user = None
+            if assigned_task:
+                assigned_user = User.query.get(assigned_task.assigned_to_user_id)
 
-        ticket_data.append({
-            'ticket_id': ticket.ticket_id,
-            'title': ticket.title,
-            'description': ticket.description,
-            'status': ticket.status,
-            'priority': ticket.priority,
-            'category': ticket.category,
-            'created_by_id': ticket.user_id,
-            'created_by_username': creator.username if creator else 'Unknown',
-            'assigned_to_username': assigned_user.username if assigned_user else 'Unassigned',
-            'created_at': ticket.created_at.strftime('%Y-%m-%d %H:%M:%S') if ticket.created_at else None
-        })
+            ticket_data.append({
+                'ticket_id': ticket.ticket_id,
+                'title': ticket.title,
+                'description': ticket.description,
+                'status': ticket.status,
+                'priority': ticket.priority,
+                'category': ticket.category,
+                'created_by_id': ticket.user_id,
+                'created_by_username': creator.username if creator else 'Unknown',
+                'assigned_to_username': assigned_user.username if assigned_user else 'Unassigned',
+                'created_at': ticket.created_at.strftime('%Y-%m-%d %H:%M:%S') if ticket.created_at else None,
+                'property_id': ticket.property_id
+            })
 
-    return jsonify({'tickets': ticket_data})
+        return jsonify({'tickets': ticket_data})
+    except Exception as e:
+        app.logger.error(f"Error in get_tickets: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/properties', methods=['GET'])
 @jwt_required()
 def get_properties():
     try:
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
-        if not user:
-            return jsonify({'message': 'User not found'}), 404
-
-        # Super admin can see all properties
-        if user.role == 'super_admin':
+        current_user = get_user_from_jwt()
+        if not current_user:
+            app.logger.error("User not found from JWT")
+            return jsonify({"msg": "User not found"}), 404
+            
+        app.logger.info(f"Getting properties for user {current_user.username} with role {current_user.role}")
+        
+        if current_user.role == 'super_admin':
             properties = Property.query.all()
-        # Manager can only see their managed property
-        elif user.role == 'manager':
-            properties = [user.managed_property] if user.managed_property else []
-        # Regular users can see all their assigned properties
+            app.logger.info(f"Super admin: Found {len(properties)} properties")
+        elif current_user.role == 'manager':
+            # Managers can see properties they manage
+            properties = Property.query.filter_by(manager_id=current_user.user_id).all()
+            app.logger.info(f"Manager: Found {len(properties)} properties")
         else:
-            properties = user.assigned_properties
-
-        properties_data = [{
-            'property_id': prop.property_id,
-            'name': prop.name,
-            'address': prop.address,
-            'type': prop.type,
-            'status': prop.status
-        } for prop in properties if prop]  # Add if prop to handle None values
+            # Regular users can see properties they're assigned to
+            properties = current_user.assigned_properties
+            app.logger.info(f"User: Found {len(properties)} properties")
+            
+        return jsonify([prop.to_dict() for prop in properties]), 200
         
-        app.logger.info(f"Properties data: {properties_data}")  # Add logging here
-        
-        return jsonify({'properties': properties_data})
     except Exception as e:
         app.logger.error(f"Error in get_properties: {str(e)}")
-        return jsonify({'message': 'Internal server error'}), 500
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/properties', methods=['POST'])
 @jwt_required()
 def create_property():
-    current_user = get_jwt_identity()
-    if current_user['role'] != 'super_admin':
-        return jsonify({'message': 'Unauthorized'}), 403
-
-    data = request.json
-    if not data or not all(k in data for k in ['name', 'address', 'type']):
-        return jsonify({'message': 'Missing required fields'}), 400
-
-    property = Property(
-        name=data['name'],
-        address=data['address'],
-        type=data['type'],
-        status=data.get('status', 'active')
-    )
-    
-    db.session.add(property)
-    db.session.commit()
-
-    return jsonify({
-        'message': 'Property created successfully',
-        'property': {
-            'property_id': property.property_id,
-            'name': property.name,
-            'address': property.address,
-            'type': property.type,
-            'status': property.status
-        }
-    })
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        
+        if not current_user or current_user.role not in ['super_admin', 'manager']:
+            app.logger.warning(f"Unauthorized property creation attempt by user {current_user_id}")
+            return jsonify({"msg": "Unauthorized"}), 403
+            
+        data = request.get_json()
+        if not data:
+            return jsonify({"msg": "No input data provided"}), 400
+            
+        # Validate required fields
+        required_fields = ['name', 'address']
+        if not all(field in data for field in required_fields):
+            return jsonify({"msg": "Missing required fields"}), 400
+            
+        property = Property(
+            name=data['name'],
+            address=data['address'],
+            manager_id=current_user_id if current_user.role == 'manager' else data.get('manager_id')
+        )
+        
+        db.session.add(property)
+        db.session.commit()
+        
+        app.logger.info(f"Property created: {property.id} by user {current_user_id}")
+        return jsonify(property.to_dict()), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error in create_property: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/properties/<int:property_id>/rooms', methods=['POST'])
 @jwt_required()
@@ -225,18 +302,31 @@ def assign_task():
 @app.route('/tasks', methods=['GET'])
 @jwt_required()
 def get_tasks():
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
 
-    if user.role == 'super_admin':
-        tasks = TaskAssignment.query.all()
-    elif user.role == 'manager':
-        tasks = TaskAssignment.query.join(Ticket).filter(Ticket.property_id == user.managed_property_id).all()
-    else:
-        tasks = TaskAssignment.query.join(Ticket).filter(Ticket.user_id == user.user_id).all()
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
 
-    task_list = [{'task_id': task.task_id, 'ticket_id': task.ticket_id, 'status': task.status} for task in tasks]
-    return jsonify({'tasks': task_list}), 200
+        if user.role == 'super_admin':
+            tasks = TaskAssignment.query.all()
+        elif user.role == 'manager':
+            tasks = TaskAssignment.query.join(Ticket).filter(Ticket.property_id == user.managed_property_id).all()
+        else:
+            tasks = TaskAssignment.query.filter_by(assigned_to_user_id=user_id).all()
+
+        task_list = [{
+            'task_id': task.task_id,
+            'ticket_id': task.ticket_id,
+            'status': task.status,
+            'assigned_to_user_id': task.assigned_to_user_id
+        } for task in tasks]
+        
+        return jsonify({'tasks': task_list}), 200
+    except Exception as e:
+        app.logger.error(f"Error in get_tasks: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
 
 @app.route('/tasks/<int:task_id>', methods=['PATCH'])
 @jwt_required()
@@ -268,69 +358,77 @@ def update_task(task_id):
 @app.route('/users', methods=['GET'])
 @jwt_required()
 def get_users():
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
-    
-    if current_user.role == 'super_admin':
-        users = User.query.all()
-    elif current_user.role == 'manager':
-        users = User.query.filter(User.assigned_properties.any(property_id=current_user.managed_property_id)).all()
-    else:
-        return jsonify({'message': 'Unauthorized'}), 403
-
-    user_data = [{
-        'user_id': user.user_id,
-        'username': user.username,
-        'role': user.role,
-        'managed_property_id': user.managed_property_id,
-        'assigned_properties': [{
-            'property_id': prop.property_id,
-            'name': prop.name
-        } for prop in user.assigned_properties]
-    } for user in users]
-    
-    return jsonify({'users': user_data})
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            app.logger.error("User not found from JWT")
+            return jsonify({"msg": "User not found"}), 404
+            
+        app.logger.info(f"Getting users list for user {current_user.username} with role {current_user.role}")
+        
+        if current_user.role == 'super_admin':
+            users = User.query.all()
+        elif current_user.role == 'manager':
+            # Managers can see their team members
+            users = current_user.team_members
+        else:
+            # Regular users can only see themselves
+            users = [current_user]
+            
+        return jsonify([user.to_dict() for user in users]), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error in get_users: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/users/<int:user_id>', methods=['GET', 'PUT', 'DELETE'])
 @jwt_required()
 def manage_user(user_id):
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
-    
-    if current_user.role not in ['super_admin', 'manager']:
-        return jsonify({'message': 'Unauthorized'}), 403
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
 
-    target_user = User.query.get_or_404(user_id)
+        if current_user.role not in ['super_admin', 'manager']:
+            return jsonify({'msg': 'Unauthorized'}), 403
 
-    if request.method == 'GET':
-        return jsonify({
-            'user_id': target_user.user_id,
-            'username': target_user.username,
-            'role': target_user.role,
-            'managed_property_id': target_user.managed_property_id,
-            'assigned_property_id': target_user.assigned_property_id
-        })
+        target_user = User.query.get_or_404(user_id)
 
-    elif request.method == 'PUT':
-        data = request.get_json()
-        if current_user.role == 'super_admin':
-            if 'role' in data:
+        if request.method == 'GET':
+            return jsonify(target_user.to_dict())
+
+        elif request.method == 'PUT':
+            data = request.get_json()
+            
+            # Only super_admin can change roles
+            if current_user.role == 'super_admin' and 'role' in data:
                 target_user.role = data['role']
-            if 'managed_property_id' in data:
-                target_user.managed_property_id = data['managed_property_id']
-        
-        if 'assigned_property_id' in data:
-            target_user.assigned_property_id = data['assigned_property_id']
-        
-        db.session.commit()
-        return jsonify({'message': 'User updated successfully'})
+            
+            # Update other fields
+            if 'email' in data:
+                target_user.email = data['email']
+            if 'is_active' in data:
+                target_user.is_active = data['is_active']
+            if 'manager_id' in data and current_user.role == 'super_admin':
+                target_user.manager_id = data['manager_id']
+            
+            db.session.commit()
+            app.logger.info(f"User {target_user.username} updated by {current_user.username}")
+            return jsonify({'msg': 'User updated successfully'})
 
-    elif request.method == 'DELETE':
-        if current_user.role != 'super_admin':
-            return jsonify({'message': 'Unauthorized'}), 403
-        db.session.delete(target_user)
-        db.session.commit()
-        return jsonify({'message': 'User deleted successfully'})
+        elif request.method == 'DELETE':
+            if current_user.role != 'super_admin':
+                return jsonify({'msg': 'Unauthorized'}), 403
+                
+            db.session.delete(target_user)
+            db.session.commit()
+            app.logger.info(f"User {target_user.username} deleted by {current_user.username}")
+            return jsonify({'msg': 'User deleted successfully'})
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error in manage_user: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/properties', methods=['GET', 'POST'])
 @jwt_required()
@@ -1009,4 +1107,160 @@ def check_first_user():
         return jsonify({'isFirstUser': user_count == 0})
     except Exception as e:
         app.logger.error(f"Error checking first user: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/ping', methods=['GET'])
+def health_check():
+    app.logger.info("Health check endpoint called")
+    return jsonify({"status": "healthy", "message": "Server is running"}), 200
+
+# Error handlers
+@app.errorhandler(404)
+def not_found_error(error):
+    app.logger.warning(f"404 error: {request.url}")
+    return jsonify({"msg": "Resource not found"}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    app.logger.error(f"500 error: {str(error)}")
+    return jsonify({"msg": "Internal server error"}), 500
+
+# Property Theme Settings Routes
+@app.route('/api/settings/property/theme', methods=['GET'])
+@jwt_required()
+def get_property_theme():
+    try:
+        current_user = get_user_from_jwt()
+        
+        # Get the property ID from query params or use the first property for the user
+        property_id = request.args.get('property_id', type=int)
+        if not property_id:
+            if current_user.role == 'super_admin':
+                property = Property.query.first()
+            else:
+                property = Property.query.filter_by(manager_id=current_user.id).first()
+            
+            if not property:
+                return jsonify({'error': 'No property found'}), 404
+            property_id = property.id
+
+        # Check if user has access to this property
+        if not current_user.role == 'super_admin':
+            property = Property.query.filter_by(id=property_id, manager_id=current_user.id).first()
+            if not property:
+                return jsonify({'error': 'Access denied'}), 403
+
+        theme = PropertyTheme.query.filter_by(property_id=property_id).first()
+        if not theme:
+            # Create default theme if it doesn't exist
+            theme = PropertyTheme(property_id=property_id)
+            db.session.add(theme)
+            db.session.commit()
+
+        return jsonify(theme.to_dict()), 200
+
+    except Exception as e:
+        app.logger.error(f'Error in get_property_theme: {str(e)}')
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/settings/property/theme', methods=['POST'])
+@jwt_required()
+def update_property_theme():
+    try:
+        current_user = get_user_from_jwt()
+        data = request.get_json()
+
+        if not data or 'colors' not in data:
+            return jsonify({'error': 'Invalid request data'}), 400
+
+        property_id = request.args.get('property_id', type=int)
+        if not property_id:
+            if current_user.role == 'super_admin':
+                property = Property.query.first()
+            else:
+                property = Property.query.filter_by(manager_id=current_user.id).first()
+            
+            if not property:
+                return jsonify({'error': 'No property found'}), 404
+            property_id = property.id
+
+        # Check if user has access to this property
+        if not current_user.role == 'super_admin':
+            property = Property.query.filter_by(id=property_id, manager_id=current_user.id).first()
+            if not property:
+                return jsonify({'error': 'Access denied'}), 403
+
+        theme = PropertyTheme.query.filter_by(property_id=property_id).first()
+        if not theme:
+            theme = PropertyTheme(property_id=property_id)
+            db.session.add(theme)
+
+        colors = data['colors']
+        theme.primary_color = colors.get('primary', theme.primary_color)
+        theme.secondary_color = colors.get('secondary', theme.secondary_color)
+        theme.background_color = colors.get('background', theme.background_color)
+        theme.accent_color = colors.get('accent', theme.accent_color)
+
+        db.session.commit()
+        return jsonify(theme.to_dict()), 200
+
+    except Exception as e:
+        app.logger.error(f'Error in update_property_theme: {str(e)}')
+        return jsonify({'error': 'Internal server error'}), 500
+
+# System Settings Routes
+@app.route('/api/settings/system', methods=['GET'])
+@jwt_required()
+def get_system_settings():
+    try:
+        current_user = get_user_from_jwt()
+        if current_user.role != 'super_admin':
+            return jsonify({'error': 'Access denied'}), 403
+
+        settings = SystemSettings.query.first()
+        if not settings:
+            # Create default settings if they don't exist
+            settings = SystemSettings()
+            db.session.add(settings)
+            db.session.commit()
+
+        return jsonify(settings.to_dict()), 200
+
+    except Exception as e:
+        app.logger.error(f'Error in get_system_settings: {str(e)}')
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/settings/system', methods=['POST'])
+@jwt_required()
+def update_system_settings():
+    try:
+        current_user = get_user_from_jwt()
+        if current_user.role != 'super_admin':
+            return jsonify({'error': 'Access denied'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid request data'}), 400
+
+        settings = SystemSettings.query.first()
+        if not settings:
+            settings = SystemSettings()
+            db.session.add(settings)
+
+        # Update settings with provided values
+        settings.site_name = data.get('siteName', settings.site_name)
+        settings.maintenance_mode = data.get('maintenanceMode', settings.maintenance_mode)
+        settings.user_registration = data.get('userRegistration', settings.user_registration)
+        settings.max_file_size = data.get('maxFileSize', settings.max_file_size)
+        settings.session_timeout = data.get('sessionTimeout', settings.session_timeout)
+        settings.default_language = data.get('defaultLanguage', settings.default_language)
+        settings.email_notifications = data.get('emailNotifications', settings.email_notifications)
+        settings.backup_frequency = data.get('backupFrequency', settings.backup_frequency)
+
+        db.session.commit()
+        return jsonify(settings.to_dict()), 200
+
+    except Exception as e:
+        app.logger.error(f'Error in update_system_settings: {str(e)}')
         return jsonify({'error': 'Internal server error'}), 500

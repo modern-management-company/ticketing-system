@@ -1,288 +1,225 @@
-import React, { useEffect, useState } from "react";
-import apiClient from "./apiClient"; 
+import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Button,
-  TextField,
-  CircularProgress,
-  Alert,
+  Card,
+  CardContent,
   Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-} from "@mui/material";
-import { useAuth } from "../context/AuthContext";
+  Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  IconButton,
+  Alert,
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import apiClient from './apiClient';
 
 const ManageProperties = () => {
-  const { auth } = useAuth();
   const [properties, setProperties] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [editProperty, setEditProperty] = useState(null);
-  const [message, setMessage] = useState('');
-  const [newProperty, setNewProperty] = useState({
+  const [open, setOpen] = useState(false);
+  const [editingProperty, setEditingProperty] = useState(null);
+  const [formData, setFormData] = useState({
     name: '',
     address: '',
     type: '',
     status: 'active'
   });
-
-  const propertyTypes = ['Hotel', 'Apartment', 'Office', 'Retail'];
-  const propertyStatuses = ['active', 'inactive', 'maintenance'];
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     fetchProperties();
-  }, [auth]);
+  }, []);
 
   const fetchProperties = async () => {
     try {
-      let endpoint = '/properties';
-      if (auth?.role === 'manager' && auth?.managedPropertyId) {
-        endpoint = `/properties/${auth.managedPropertyId}`;
-      }
-
-      const response = await apiClient.get(endpoint);
-      
-      console.log('Fetched properties:', response.data);  // Add logging here
-      
-      if (response.data?.properties) {
-        setProperties(response.data.properties);
-      } else if (response.data && Array.isArray(response.data)) {
-        setProperties(response.data);
-      } else {
-        setProperties([]);
-      }
-      
-      setLoading(false);
-      setError(null);
+      const response = await apiClient.get('/properties');
+      setProperties(response.data.properties);
     } catch (error) {
-      console.error('Error fetching properties:', error);
-      setError(error.message || 'Failed to fetch properties');
-      setProperties([]);
-    } finally {
-      setLoading(false);
+      setError('Failed to fetch properties');
     }
   };
 
-  const handleError = (error) => {
-    const errorMessage = error?.response?.data?.msg 
-      || error?.message 
-      || 'An unexpected error occurred';
-    setError(errorMessage);
-    console.error('Operation failed:', error);
-  };
-
-  const handleEdit = async (propertyId) => {
-    if (!editProperty) return;
-    
-    try {
-      const response = await apiClient.patch(`/properties/${propertyId}`, editProperty);
-      if (response.data?.property) {
-        setProperties(properties.map(prop => 
-          prop.property_id === propertyId ? response.data.property : prop
-        ));
-        setEditProperty(null);
-        setMessage('Property updated successfully');
-      }
-    } catch (error) {
-      handleError(error);
+  const handleOpen = (property = null) => {
+    if (property) {
+      setEditingProperty(property);
+      setFormData({
+        name: property.name,
+        address: property.address,
+        type: property.type,
+        status: property.status
+      });
+    } else {
+      setEditingProperty(null);
+      setFormData({
+        name: '',
+        address: '',
+        type: '',
+        status: 'active'
+      });
     }
+    setOpen(true);
   };
 
-  const handleAddProperty = async (e) => {
+  const handleClose = () => {
+    setOpen(false);
+    setEditingProperty(null);
+    setFormData({
+      name: '',
+      address: '',
+      type: '',
+      status: 'active'
+    });
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!newProperty.name || !newProperty.address || !newProperty.type) {
-      setError('Please fill in all required fields');
-      return;
-    }
-
     try {
-      const response = await apiClient.post('/properties', newProperty);
-      if (response.data?.property) {
-        setProperties([...properties, response.data.property]);
-        setNewProperty({
-          name: '',
-          address: '',
-          type: '',
-          status: 'active'
-        });
-        setMessage('Property created successfully');
+      if (editingProperty) {
+        await apiClient.put(`/properties/${editingProperty.property_id}`, formData);
+        setSuccess('Property updated successfully');
+      } else {
+        await apiClient.post('/properties', formData);
+        setSuccess('Property created successfully');
       }
+      fetchProperties();
+      handleClose();
     } catch (error) {
-      handleError(error);
+      setError(error.response?.data?.message || 'Failed to save property');
     }
   };
 
-  if (loading) return <CircularProgress />;
-  if (error) return <Alert severity="error">{error}</Alert>;
+  const handleDelete = async (propertyId) => {
+    if (window.confirm('Are you sure you want to delete this property?')) {
+      try {
+        await apiClient.delete(`/properties/${propertyId}`);
+        setSuccess('Property deleted successfully');
+        fetchProperties();
+      } catch (error) {
+        setError(error.response?.data?.message || 'Failed to delete property');
+      }
+    }
+  };
 
   return (
-    <Box p={3}>
-      <Typography variant="h4" gutterBottom>
-        Manage Properties
-      </Typography>
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <Typography variant="h4">Manage Properties</Typography>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpen()}
+        >
+          Add Property
+        </Button>
+      </Box>
 
-      {message && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setMessage('')}>
-          {message}
-        </Alert>
-      )}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
           {error}
         </Alert>
       )}
-
-      {/* Add Property Form */}
-      {auth.role === 'super_admin' && (
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Add New Property
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
-              <TextField
-                fullWidth
-                label="Property Name"
-                value={newProperty.name}
-                onChange={(e) => setNewProperty(prev => ({ ...prev, name: e.target.value }))}
-              />
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <TextField
-                fullWidth
-                label="Address"
-                value={newProperty.address}
-                onChange={(e) => setNewProperty(prev => ({ ...prev, address: e.target.value }))}
-              />
-            </Grid>
-            <Grid item xs={12} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Type</InputLabel>
-                <Select
-                  value={newProperty.type}
-                  onChange={(e) => setNewProperty(prev => ({ ...prev, type: e.target.value }))}
-                >
-                  {propertyTypes.map(type => (
-                    <MenuItem key={type} value={type}>{type}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={newProperty.status}
-                  onChange={(e) => setNewProperty(prev => ({ ...prev, status: e.target.value }))}
-                >
-                  {propertyStatuses.map(status => (
-                    <MenuItem key={status} value={status}>{status}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={2}>
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={handleAddProperty}
-                disabled={!newProperty.name || !newProperty.address || !newProperty.type}
-              >
-                Add Property
-              </Button>
-            </Grid>
-          </Grid>
-        </Paper>
+      
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
+          {success}
+        </Alert>
       )}
 
-      {/* Properties List */}
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Address</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {properties.map((property) => (
-              <TableRow key={property.property_id}>
-                <TableCell>
-                  {editProperty?.property_id === property.property_id ? (
-                    <TextField
-                      value={editProperty.name}
-                      onChange={(e) => setEditProperty(prev => ({ ...prev, name: e.target.value }))}
-                    />
-                  ) : (
-                    property.name
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editProperty?.property_id === property.property_id ? (
-                    <TextField
-                      value={editProperty.address}
-                      onChange={(e) => setEditProperty(prev => ({ ...prev, address: e.target.value }))}
-                    />
-                  ) : (
-                    property.address
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editProperty?.property_id === property.property_id ? (
-                    <Select
-                      value={editProperty.type}
-                      onChange={(e) => setEditProperty(prev => ({ ...prev, type: e.target.value }))}
-                    >
-                      {propertyTypes.map(type => (
-                        <MenuItem key={type} value={type}>{type}</MenuItem>
-                      ))}
-                    </Select>
-                  ) : (
-                    property.type
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editProperty?.property_id === property.property_id ? (
-                    <Select
-                      value={editProperty.status}
-                      onChange={(e) => setEditProperty(prev => ({ ...prev, status: e.target.value }))}
-                    >
-                      {propertyStatuses.map(status => (
-                        <MenuItem key={status} value={status}>{status}</MenuItem>
-                      ))}
-                    </Select>
-                  ) : (
-                    property.status
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editProperty?.property_id === property.property_id ? (
-                    <>
-                      <Button onClick={() => handleEdit(property.property_id)}>Save</Button>
-                      <Button onClick={() => setEditProperty(null)}>Cancel</Button>
-                    </>
-                  ) : (
-                    <Button onClick={() => setEditProperty(property)}>Edit</Button>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Grid container spacing={3}>
+        {properties.map((property) => (
+          <Grid item xs={12} sm={6} md={4} key={property.property_id}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6">{property.name}</Typography>
+                <Typography color="textSecondary">{property.address}</Typography>
+                <Typography>Type: {property.type}</Typography>
+                <Typography>Status: {property.status}</Typography>
+                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                  <IconButton onClick={() => handleOpen(property)} color="primary">
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton onClick={() => handleDelete(property.property_id)} color="error">
+                    <DeleteIcon />
+                  </IconButton>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      <Dialog open={open} onClose={handleClose}>
+        <DialogTitle>
+          {editingProperty ? 'Edit Property' : 'Add New Property'}
+        </DialogTitle>
+        <DialogContent>
+          <Box component="form" sx={{ mt: 2 }}>
+            <TextField
+              fullWidth
+              label="Property Name"
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
+              margin="normal"
+              required
+            />
+            <TextField
+              fullWidth
+              label="Address"
+              name="address"
+              value={formData.address}
+              onChange={handleInputChange}
+              margin="normal"
+              required
+            />
+            <TextField
+              fullWidth
+              label="Type"
+              name="type"
+              value={formData.type}
+              onChange={handleInputChange}
+              margin="normal"
+              required
+            />
+            <TextField
+              fullWidth
+              label="Status"
+              name="status"
+              value={formData.status}
+              onChange={handleInputChange}
+              margin="normal"
+              select
+              SelectProps={{
+                native: true,
+              }}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="maintenance">Maintenance</option>
+            </TextField>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose}>Cancel</Button>
+          <Button onClick={handleSubmit} variant="contained" color="primary">
+            {editingProperty ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
