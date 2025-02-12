@@ -1,159 +1,91 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const apiClient = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
-// Logger function
-const logger = {
-  info: (message, data = null) => {
-    const logMessage = data ? `[INFO] ${message} | Data: ${JSON.stringify(data)}` : `[INFO] ${message}`;
-    console.log(logMessage);
-  },
-  error: (message, error = null) => {
-    const logMessage = error ? `[ERROR] ${message} | Error: ${JSON.stringify(error)}` : `[ERROR] ${message}`;
-    console.error(logMessage);
-  },
-  warn: (message, data = null) => {
-    const logMessage = data ? `[WARN] ${message} | Data: ${JSON.stringify(data)}` : `[WARN] ${message}`;
-    console.warn(logMessage);
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+const getStoredAuth = () => {
+  try {
+    const auth = localStorage.getItem('auth');
+    return auth ? JSON.parse(auth) : null;
+  } catch (error) {
+    console.error('Error parsing stored auth:', error);
+    localStorage.removeItem('auth');
+    return null;
   }
 };
 
-// Create axios instance with default config
-const apiClient = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  // Add withCredentials for CORS
-  withCredentials: true,
-  // Increase timeout for slower connections
-  timeout: 30000, // 30 seconds
-  // Add retry configuration
-  retry: 3,
-  retryDelay: 1000,
-});
-
-// Add request interceptor to include auth token
 apiClient.interceptors.request.use(
   (config) => {
-    const requestId = Math.random().toString(36).substring(7);
-    config.requestId = requestId;
-
-    logger.info(`[${requestId}] Making ${config.method.toUpperCase()} request to ${config.url}`, {
-      method: config.method,
-      url: config.url,
-      data: config.data,
-      params: config.params,
-      headers: config.headers
-    });
-    
-    const authData = localStorage.getItem('auth');
-    if (authData) {
-      try {
-        const { token } = JSON.parse(authData);
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-          logger.info(`[${requestId}] Added authorization token to request`);
-        }
-      } catch (error) {
-        logger.error(`[${requestId}] Error parsing auth data`, error);
-        localStorage.removeItem('auth');
-        window.location.href = '/login';
-      }
-    } else {
-      logger.warn(`[${requestId}] No auth data found in localStorage`);
+    const auth = getStoredAuth();
+    if (auth?.token) {
+      // Ensure token is always properly formatted with Bearer prefix
+      const token = auth.token.startsWith('Bearer ') ? auth.token : `Bearer ${auth.token}`;
+      config.headers.Authorization = token;
     }
     return config;
   },
   (error) => {
-    logger.error('Request configuration error', error);
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
-// Add response interceptor for error handling
 apiClient.interceptors.response.use(
-  (response) => {
-    const requestId = response.config.requestId;
-    logger.info(`[${requestId}] Successful response from ${response.config.url}`, {
-      status: response.status,
-      data: response.data,
-      headers: response.headers
-    });
-    return response;
-  },
+  (response) => response,
   async (error) => {
-    const { config, response } = error;
-    const requestId = config?.requestId;
-
-    // If the error is a timeout
-    if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
-      logger.warn(`[${requestId}] Request timed out`, {
-        url: config.url,
-        timeout: config.timeout
-      });
-      
-      const shouldRetry = config.retry > 0;
-      
-      if (shouldRetry) {
-        config.retry -= 1;
-        logger.info(`[${requestId}] Retrying request. Attempts remaining: ${config.retry}`);
-        await new Promise(resolve => setTimeout(resolve, config.retryDelay));
-        return apiClient(config);
-      }
+    const originalRequest = error.config;
+    
+    // Handle connection errors
+    if (error.code === 'ECONNABORTED') {
+      console.error('Request timed out');
+      return Promise.reject(new Error('Request timed out. Please try again.'));
     }
 
-    logger.error(`[${requestId}] Request failed`, {
-      url: config?.url,
-      method: config?.method,
-      status: response?.status,
-      data: response?.data,
-      error: error.message,
-      stack: error.stack
-    });
+    if (!error.response) {
+      console.error('Network error:', error);
+      return Promise.reject(new Error('Network error. Please check your connection.'));
+    }
 
-    // Handle specific error cases
-    if (response?.status === 401) {
-      logger.warn(`[${requestId}] Authentication failed - clearing auth data`);
+    const status = error.response.status;
+    const errorMessage = error.response.data?.msg || error.message;
+    
+    // Handle authentication errors
+    if (status === 401 || status === 422) {
+      console.warn('Authentication error:', status, errorMessage);
+      
+      // Clear invalid auth data
       localStorage.removeItem('auth');
-      window.location.href = '/login';
-      return Promise.reject(new Error('Session expired. Please login again.'));
-    }
-    
-    if (response?.status === 422) {
-      logger.error(`[${requestId}] Validation error`, response.data);
-      return Promise.reject(new Error(response.data.message || 'Validation failed'));
-    }
-    
-    if (response?.status >= 500) {
-      logger.error(`[${requestId}] Server error`, response.data);
-      return Promise.reject(new Error('An unexpected error occurred. Please try again later.'));
-    }
-    
-    if (!response) {
-      if (error.code === 'ECONNABORTED') {
-        logger.error(`[${requestId}] Request timeout`, error);
-        return Promise.reject(new Error('Request timed out. Please try again.'));
+      delete apiClient.defaults.headers.common['Authorization'];
+      
+      // Don't redirect if already on login page or handling a retry
+      if (!window.location.pathname.includes('/login') && !originalRequest._retry) {
+        window.location.href = '/login';
       }
-      logger.error(`[${requestId}] Network error`, error);
-      return Promise.reject(new Error('Unable to connect to the server. Please check your internet connection.'));
+      return Promise.reject(new Error(errorMessage || 'Authentication required'));
     }
-    
+
+    // Implement retry logic for 5xx errors
+    if (status >= 500 && !originalRequest._retry && originalRequest.retryCount < MAX_RETRIES) {
+      originalRequest._retry = true;
+      originalRequest.retryCount = (originalRequest.retryCount || 0) + 1;
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * originalRequest.retryCount));
+      
+      return apiClient(originalRequest);
+    }
+
     return Promise.reject(error);
   }
 );
-
-// Add a ping method to check server connectivity
-apiClient.ping = async () => {
-  try {
-    logger.info('Checking server connectivity...');
-    const response = await apiClient.get('/ping', { timeout: 5000 });
-    logger.info('Server is reachable', response.data);
-    return true;
-  } catch (error) {
-    logger.error('Server is not reachable', error);
-    return false;
-  }
-};
 
 export default apiClient;

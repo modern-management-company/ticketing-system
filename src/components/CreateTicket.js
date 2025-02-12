@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import apiClient from "./apiClient"; 
 import {
   Box,
@@ -15,42 +15,50 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const CreateTicket = () => {
   const { auth } = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    priority: '',
-    category: '',
+    priority: 'Low',
+    category: 'General',
     room_id: ''
   });
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
   const categories = ['Maintenance', 'Cleaning', 'Security', 'IT Support', 'Other'];
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
 
-  useEffect(() => {
-    const fetchRooms = async () => {
-      try {
-        const propertyId = auth.role === 'manager' ? 
-          auth.managedPropertyId : auth.assignedPropertyId;
-        
-        const response = await apiClient.get(`/properties/${propertyId}/rooms`);
-        setRooms(response.data.rooms);
-      } catch (error) {
-        console.error('Failed to fetch rooms:', error);
-        setError('Failed to load rooms');
-      }
-    };
-
-    if (auth.managedPropertyId || auth.assignedPropertyId) {
-      fetchRooms();
+  const fetchRooms = useCallback(async () => {
+    if (!auth?.token) {
+      setError('Authentication required');
+      return;
     }
-  }, [auth]);
+
+    try {
+      const propertyId = auth.user.managedPropertyId || auth.user.assignedPropertyId;
+      if (!propertyId) {
+        setError('No property assigned');
+        return;
+      }
+
+      const response = await apiClient.get(`/properties/${propertyId}/rooms`);
+      setRooms(response.data.rooms || []);
+    } catch (error) {
+      console.error('Failed to fetch rooms:', error);
+      setError('Failed to load rooms');
+    }
+  }, [auth?.token, auth?.user?.managedPropertyId, auth?.user?.assignedPropertyId]);
+
+  useEffect(() => {
+    fetchRooms();
+  }, [fetchRooms]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -62,30 +70,19 @@ const CreateTicket = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-    setMessage('');
+    if (!auth?.token) {
+      setError('Authentication required');
+      return;
+    }
 
     try {
-      const propertyId = auth.role === 'manager' ? 
-        auth.managedPropertyId : auth.assignedPropertyId;
-
-      const response = await apiClient.post('/tickets', {
-        ...formData,
-        property_id: propertyId
-      });
-
-      setMessage('Ticket created successfully!');
-      setFormData({
-        title: '',
-        description: '',
-        priority: '',
-        category: '',
-        room_id: ''
-      });
+      setLoading(true);
+      await apiClient.post('/tickets', formData);
+      setSuccess(true);
+      navigate('/tickets');
     } catch (error) {
       console.error('Failed to create ticket:', error);
-      setError('Failed to create ticket. Please try again.');
+      setError(error.response?.data?.message || 'Failed to create ticket');
     } finally {
       setLoading(false);
     }
@@ -97,7 +94,7 @@ const CreateTicket = () => {
         Create New Ticket
       </Typography>
 
-      {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>Ticket created successfully!</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <form onSubmit={handleSubmit}>

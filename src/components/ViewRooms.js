@@ -37,30 +37,51 @@ const ViewRooms = () => {
     floor: '',
     status: 'Available'
   });
+  const [loading, setLoading] = useState(false);
+
+  const fetchProperties = async () => {
+    try {
+      if (!auth?.token) {
+        throw new Error('Authentication required');
+      }
+
+      setLoading(true);
+      const response = await apiClient.get("/properties");
+      
+      if (!response.data?.properties) {
+        throw new Error('Invalid response format');
+      }
+      
+      setProperties(response.data.properties);
+      if (response.data.properties.length > 0) {
+        setSelectedProperty(response.data.properties[0].property_id);
+      }
+    } catch (error) {
+      console.error("Failed to fetch properties", error);
+      setMessage(error.message || "Failed to fetch properties");
+      setSnackbarType("error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchProperties = async () => {
-      try {
-        const response = await apiClient.get("/properties");
-        setProperties(response.data.properties);
-        if (response.data.properties.length > 0) {
-          setSelectedProperty(response.data.properties[0].property_id);
-        }
-      } catch (error) {
-        console.error("Failed to fetch properties", error);
-      }
-    };
-
     fetchProperties();
   }, [auth]);
 
   const fetchRooms = async (propertyId) => {
-    if (!propertyId) return;
+    if (!propertyId || !auth?.token) return;
+    
     try {
       const response = await apiClient.get(`/properties/${propertyId}/rooms`);
+      if (!response.data?.rooms) {
+        throw new Error('Invalid response format');
+      }
       setRooms(response.data.rooms);
     } catch (error) {
       console.error("Failed to fetch rooms", error);
+      setMessage(error.message || "Failed to fetch rooms");
+      setSnackbarType("error");
     }
   };
 

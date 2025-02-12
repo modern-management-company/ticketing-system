@@ -12,10 +12,10 @@ import ProtectedRoute from './components/ProtectedRoute';
 import {
   CssBaseline,
   ThemeProvider,
-  createTheme,
 } from '@mui/material';
+import theme from './theme';
 
-// Import your components
+// Import components
 import Login from "./components/Login";
 import RegisterUser from "./components/RegisterUser";
 import Dashboard from "./components/Dashboard";
@@ -28,10 +28,11 @@ import ViewTickets from './components/ViewTickets';
 import HomeOverview from './components/HomeOverview';
 import PropertySettings from './components/settings/PropertySettings';
 import SystemSettings from './components/settings/SystemSettings';
+import Unauthorized from './components/Unauthorized';
+import UserProfile from './components/UserProfile';
+import TicketDetails from './components/TicketDetails';
+import PropertyManagement from './components/PropertyManagement';
 
-const theme = createTheme();
-
-// Admin Layout component
 const AdminLayout = () => {
   return (
     <ProtectedRoute allowedRoles={['super_admin']}>
@@ -40,79 +41,95 @@ const AdminLayout = () => {
   );
 };
 
-// Settings Layout component
-const SettingsLayout = () => {
-  return (
-    <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
-      <Outlet />
-    </ProtectedRoute>
-  );
-};
-
 const App = () => {
   return (
-    <AuthProvider>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
         <Router>
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<RegisterUser />} />
+            <Route path="/unauthorized" element={<Unauthorized />} />
             
             {/* Protected routes */}
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }>
-              <Route index element={<HomeOverview />} />
-              <Route path="dashboard" element={<Dashboard />} />
+            <Route element={<Layout />}>
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
               
-              {/* Ticket routes */}
-              <Route path="tickets">
-                <Route index element={<ViewTickets />} />
-                <Route path="create" element={<CreateTicket />} />
-              </Route>
+              <Route path="/tickets" element={
+                <ProtectedRoute>
+                  <ViewTickets />
+                </ProtectedRoute>
+              } />
+              <Route path="/tickets/create" element={
+                <ProtectedRoute>
+                  <CreateTicket />
+                </ProtectedRoute>
+              } />
+              <Route path="/tickets/:ticketId" element={
+                <ProtectedRoute>
+                  <TicketDetails />
+                </ProtectedRoute>
+              } />
               
-              {/* Task routes */}
-              <Route path="tasks" element={<ViewTasks />} />
+              <Route path="/tasks" element={
+                <ProtectedRoute>
+                  <ViewTasks />
+                </ProtectedRoute>
+              } />
               
-              {/* Manager and Admin only routes */}
-              <Route path="rooms" element={
+              <Route path="/rooms" element={
                 <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
                   <ViewRooms />
                 </ProtectedRoute>
               } />
               
-              {/* Admin routes */}
-              <Route path="admin" element={<AdminLayout />}>
-                <Route index element={<Navigate to="properties" replace />} />
-                <Route path="users" element={<ManageUsers />} />
-                <Route path="properties" element={<ManageProperties />} />
-              </Route>
-
-              {/* Settings routes */}
-              <Route path="settings" element={<SettingsLayout />}>
-                <Route index element={<Navigate to="property" replace />} />
-                <Route path="property" element={<PropertySettings />} />
-                <Route 
-                  path="system" 
-                  element={
-                    <ProtectedRoute allowedRoles={['super_admin']}>
-                      <SystemSettings />
-                    </ProtectedRoute>
-                  } 
-                />
+              <Route path="/admin">
+                <Route path="properties" element={
+                  <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
+                    <PropertyManagement />
+                  </ProtectedRoute>
+                } />
+                <Route path="users" element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <ManageUsers />
+                  </ProtectedRoute>
+                } />
               </Route>
               
-              {/* Catch all route */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="/settings">
+                <Route path="property" element={
+                  <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
+                    <PropertySettings />
+                  </ProtectedRoute>
+                } />
+                <Route path="system" element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <SystemSettings />
+                  </ProtectedRoute>
+                } />
+              </Route>
+              
+              <Route path="/profile" element={
+                <ProtectedRoute>
+                  <UserProfile />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Route>
+            
+            {/* Default route */}
+            <Route path="*" element={<Unauthorized />} />
           </Routes>
         </Router>
-      </ThemeProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

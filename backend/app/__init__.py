@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from flask_jwt_extended import JWTManager, get_jwt_identity
+from flask_jwt_extended import JWTManager, get_jwt_identity, jwt_required
 from flask_cors import CORS
 from config import Config
 from datetime import timedelta
@@ -44,16 +44,28 @@ CORS(app, resources={
     r"/*": {
         "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
-        "supports_credentials": True,
+        "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
         "expose_headers": ["Content-Type", "Authorization"],
-        "max_age": 600  # Cache preflight requests for 10 minutes
+        "supports_credentials": True,
+        "max_age": 600
     }
 })
 
 # Initialize extensions
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+
+# Configure JWT settings
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-this')
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
+app.config['JWT_ERROR_MESSAGE_KEY'] = 'message'
+app.config['JWT_TOKEN_LOCATION'] = ['headers']
+app.config['JWT_HEADER_NAME'] = 'Authorization'
+app.config['JWT_HEADER_TYPE'] = 'Bearer'
+app.config['JWT_IDENTITY_CLAIM'] = 'identity'
+app.config['JWT_BLACKLIST_ENABLED'] = False
+
 jwt = JWTManager(app)
 
 # JWT error handlers

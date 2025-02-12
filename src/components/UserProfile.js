@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { apiClient } from '.apiClient';
-import { Box, Typography, Grid, Paper, List, ListItem, ListItemText, Alert, TextField, Button } from '@mui/material';
-import { CircularProgress } from '@mui/material';
+import apiClient from '../components/apiClient';
+import { Box, Typography, Grid, Paper, List, ListItem, ListItemText, Alert, TextField, Button, CircularProgress } from '@mui/material';
 
 const UserProfile = () => {
   const { auth } = useAuth();
@@ -16,30 +15,42 @@ const UserProfile = () => {
     confirmPassword: ''
   });
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const response = await apiClient.get(`/users/${auth.userId}/profile`);
-        setProfile(response.data);
-      } catch (error) {
-        setError('Failed to load profile');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchProfile = useCallback(async () => {
+    if (!auth?.token || !auth?.user?.id) {
+      setError('Authentication required');
+      setLoading(false);
+      return;
+    }
 
+    try {
+      const response = await apiClient.get(`/users/${auth.user.id}/profile`);
+      setProfile(response.data);
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+      setError('Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
+  }, [auth?.token, auth?.user?.id]);
+
+  useEffect(() => {
     fetchProfile();
-  }, [auth.userId]);
+  }, [fetchProfile]);
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
+    if (!auth?.token) {
+      setError('Authentication required');
+      return;
+    }
+
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       setError('New passwords do not match');
       return;
     }
 
     try {
-      await apiClient.post(`/users/${auth.userId}/change-password`, {
+      await apiClient.post(`/users/${auth.user.id}/change-password`, {
         current_password: passwordData.currentPassword,
         new_password: passwordData.newPassword
       });
@@ -49,12 +60,20 @@ const UserProfile = () => {
         newPassword: '',
         confirmPassword: ''
       });
+      setError(null);
     } catch (error) {
-      setError('Failed to update password');
+      console.error('Failed to update password:', error);
+      setError(error.response?.data?.message || 'Failed to update password');
     }
   };
 
-  if (loading) return <CircularProgress />;
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box p={3}>

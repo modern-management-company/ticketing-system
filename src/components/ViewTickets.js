@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
+import { useAuth } from '../context/AuthContext';
 import apiClient from "./apiClient";
 import {
   Box,
@@ -21,8 +22,11 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Container,
+  List,
+  ListItem,
+  ListItemText,
 } from "@mui/material";
-import { useAuth } from '../context/AuthContext';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 
@@ -44,28 +48,33 @@ const ViewTickets = () => {
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Cleaning', 'Other'];
 
-  useEffect(() => {
-    fetchTickets();
-  }, [auth]);
-
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     try {
-      let endpoint = '/tickets';
-      if (auth.role === 'manager') {
-        endpoint = `/properties/${auth.managedPropertyId}/tickets`;
-      } else if (auth.role === 'user') {
-        endpoint = `/properties/${auth.assignedPropertyId}/tickets`;
+      if (!auth?.token) {
+        throw new Error('No auth token found');
       }
-      
-      const response = await apiClient.get(endpoint);
-      setTickets(response.data.tickets);
+      setLoading(true);
+      const response = await apiClient.get('/tickets');
+      if (response.data?.tickets) {
+        setTickets(response.data.tickets);
+      } else {
+        setTickets([]);
+      }
     } catch (error) {
-      setError('Failed to fetch tickets');
-      console.error(error);
+      console.error('Failed to fetch tickets:', error);
+      if (error.response?.status === 422) {
+        setError('Session expired. Please login again.');
+      } else {
+        setError(error.message || 'Failed to fetch tickets');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [auth?.token]);
+
+  useEffect(() => {
+    fetchTickets();
+  }, [fetchTickets]);
 
   const handleCreateOrEdit = async () => {
     try {
@@ -127,11 +136,40 @@ const ViewTickets = () => {
     }
   };
 
-  if (loading) return <CircularProgress />;
-  if (error) return <Alert severity="error">{error}</Alert>;
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert severity="error" sx={{ mt: 2 }}>
+        {error}
+      </Alert>
+    );
+  }
 
   return (
-    <Box p={3}>
+    <Container maxWidth="md">
+      <Typography variant="h4" component="h1" gutterBottom sx={{ mt: 4 }}>
+        Tickets
+      </Typography>
+      <List>
+        {tickets.map((ticket) => (
+          <Paper key={ticket.ticket_id} sx={{ mb: 2 }}>
+            <ListItem>
+              <ListItemText
+                primary={ticket.title}
+                secondary={`Status: ${ticket.status} | Created: ${new Date(ticket.created_at).toLocaleDateString()}`}
+              />
+            </ListItem>
+          </Paper>
+        ))}
+      </List>
+
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Tickets</Typography>
         <Button
@@ -261,7 +299,7 @@ const ViewTickets = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Container>
   );
 };
 

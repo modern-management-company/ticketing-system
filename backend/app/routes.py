@@ -16,6 +16,46 @@ def get_user_from_jwt():
         return None
     return User.query.get(identity['user_id'])
 
+# Authentication and verification routes
+@app.route('/check-first-user', methods=['GET'])
+def check_first_user():
+    """Check if this is the first user being created (for super admin setup)"""
+    try:
+        is_first = User.query.count() == 0
+        return jsonify({"isFirstUser": is_first}), 200
+    except Exception as e:
+        app.logger.error(f"Error checking first user: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/verify-token', methods=['GET'])
+@jwt_required()
+def verify_token():
+    """Verify if the current token is valid and return user info"""
+    try:
+        identity = get_jwt_identity()
+        if not identity or 'user_id' not in identity:
+            return jsonify({"valid": False, "msg": "Invalid token format"}), 401
+            
+        current_user = User.query.get(identity['user_id'])
+        if not current_user:
+            return jsonify({"valid": False, "msg": "User not found"}), 401
+            
+        if not current_user.is_active:
+            return jsonify({"valid": False, "msg": "User account is inactive"}), 401
+            
+        return jsonify({
+            "valid": True,
+            "user": current_user.to_dict()
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error verifying token: {str(e)}")
+        return jsonify({"valid": False, "msg": "Invalid token"}), 401
+
+@app.route('/ping', methods=['GET'])
+def health_check():
+    app.logger.info("Health check endpoint called")
+    return jsonify({"status": "healthy", "message": "Server is running"}), 200
+
 @app.route('/register', methods=['POST'])
 def register():
     try:
@@ -67,6 +107,7 @@ def register():
 
 @app.route('/login', methods=['POST'])
 def login():
+    """Handle user login and token generation"""
     try:
         data = request.get_json()
         if not data:
@@ -96,14 +137,15 @@ def login():
         user.last_login = datetime.utcnow()
         db.session.commit()
 
-        # Generate token
+        # Generate token with user data
+        user_data = user.to_dict()
         access_token = user.get_token()
         
         app.logger.info(f"Successful login for user: {user.username}")
         return jsonify({
             "msg": "Login successful",
             "token": access_token,
-            "user": user.to_dict()
+            "user": user_data
         }), 200
 
     except Exception as e:
@@ -301,27 +343,39 @@ def assign_task():
 
 @app.route('/tasks', methods=['GET'])
 @jwt_required()
+@handle_errors
 def get_tasks():
     try:
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
-
-        if not user:
+        current_user = get_user_from_jwt()
+        if not current_user:
             return jsonify({'message': 'User not found'}), 404
 
-        if user.role == 'super_admin':
+        # Get tasks based on user role
+        if current_user.role == 'super_admin':
             tasks = TaskAssignment.query.all()
-        elif user.role == 'manager':
-            tasks = TaskAssignment.query.join(Ticket).filter(Ticket.property_id == user.managed_property_id).all()
+        elif current_user.role == 'manager':
+            # Get tasks for properties managed by this manager
+            managed_properties = Property.query.filter_by(manager_id=current_user.user_id).all()
+            property_ids = [p.property_id for p in managed_properties]
+            tasks = TaskAssignment.query.join(Ticket).filter(Ticket.property_id.in_(property_ids)).all()
         else:
-            tasks = TaskAssignment.query.filter_by(assigned_to_user_id=user_id).all()
+            # Regular users see tasks assigned to them
+            tasks = TaskAssignment.query.filter_by(assigned_to_user_id=current_user.user_id).all()
 
-        task_list = [{
-            'task_id': task.task_id,
-            'ticket_id': task.ticket_id,
-            'status': task.status,
-            'assigned_to_user_id': task.assigned_to_user_id
-        } for task in tasks]
+        # Format task data
+        task_list = []
+        for task in tasks:
+            ticket = Ticket.query.get(task.ticket_id)
+            assigned_user = User.query.get(task.assigned_to_user_id)
+            task_list.append({
+                'task_id': task.task_id,
+                'ticket_id': task.ticket_id,
+                'ticket_title': ticket.title if ticket else 'Unknown',
+                'ticket_priority': ticket.priority if ticket else 'Normal',
+                'status': task.status,
+                'assigned_to_user_id': task.assigned_to_user_id,
+                'assigned_to': assigned_user.username if assigned_user else 'Unassigned'
+            })
         
         return jsonify({'tasks': task_list}), 200
     except Exception as e:
@@ -375,7 +429,7 @@ def get_users():
             # Regular users can only see themselves
             users = [current_user]
             
-        return jsonify([user.to_dict() for user in users]), 200
+        return jsonify({"users": [user.to_dict() for user in users]}), 200
         
     except Exception as e:
         app.logger.error(f"Error in get_users: {str(e)}")
@@ -1024,53 +1078,57 @@ def calculate_statistics(tickets, tasks):
 @jwt_required()
 @handle_errors
 def get_dashboard_stats():
-    current_user = get_jwt_identity()
-    property_id = request.args.get('property_id', type=int)
+    try:
+        current_user = get_jwt_identity()
+        property_id = request.args.get('property_id', type=int)
 
-    # Validate access
-    if property_id and current_user['role'] == 'manager' and current_user['managed_property_id'] != property_id:
-        return jsonify({'message': 'Unauthorized'}), 403
+        # Validate access
+        if property_id and current_user['role'] == 'manager' and current_user['managed_property_id'] != property_id:
+            return jsonify({'message': 'Unauthorized'}), 403
 
-    # Base query filters
-    filters = []
-    if property_id:
-        filters.append(Ticket.property_id == property_id)
+        # Base query filters
+        filters = []
+        if property_id:
+            filters.append(Ticket.property_id == property_id)
 
-    # Calculate statistics
-    tickets = Ticket.query.filter(*filters).all()
-    tasks = TaskAssignment.query.join(Ticket).filter(*filters).all()
+        # Calculate statistics
+        tickets = Ticket.query.filter(*filters).all()
+        tasks = TaskAssignment.query.join(Ticket).filter(*filters).all()
 
-    # Calculate ticket distribution
-    status_counts = defaultdict(int)
-    priority_counts = defaultdict(int)
-    resolution_times = []
+        # Calculate ticket distribution
+        status_counts = defaultdict(int)
+        priority_counts = defaultdict(int)
+        resolution_times = []
 
-    for ticket in tickets:
-        status_counts[ticket.status] += 1
-        priority_counts[ticket.priority] += 1
-        if ticket.status == 'Completed' and ticket.completed_at:
-            delta = ticket.completed_at - ticket.created_at
-            resolution_times.append(delta.total_seconds() / 3600)
+        for ticket in tickets:
+            status_counts[ticket.status] += 1
+            priority_counts[ticket.priority] += 1
+            if ticket.status == 'Completed' and hasattr(ticket, 'completed_at') and ticket.completed_at:
+                delta = ticket.completed_at - ticket.created_at
+                resolution_times.append(delta.total_seconds() / 3600)
 
-    # Calculate task statistics
-    active_tasks = len([t for t in tasks if t.status != 'Completed'])
-    total_tasks = len(tasks)
-    completed_tasks = total_tasks - active_tasks
+        # Calculate task statistics
+        active_tasks = len([t for t in tasks if t.status != 'Completed'])
+        total_tasks = len(tasks)
+        completed_tasks = total_tasks - active_tasks
 
-    return jsonify({
-        'openTickets': status_counts['Open'],
-        'activeTasks': active_tasks,
-        'resolutionRate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2),
-        'avgResponseTime': round(sum(resolution_times) / len(resolution_times) if resolution_times else 0, 2),
-        'ticketDistribution': [
-            {'status': status, 'count': count}
-            for status, count in status_counts.items()
-        ],
-        'priorityDistribution': [
-            {'priority': priority, 'value': count}
-            for priority, count in priority_counts.items()
-        ]
-    })
+        return jsonify({
+            'openTickets': status_counts.get('Open', 0),
+            'activeTasks': active_tasks,
+            'resolutionRate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2),
+            'avgResponseTime': round(sum(resolution_times) / len(resolution_times) if resolution_times else 0, 2),
+            'ticketDistribution': [
+                {'status': status, 'count': count}
+                for status, count in status_counts.items()
+            ],
+            'priorityDistribution': [
+                {'priority': priority, 'value': count}
+                for priority, count in priority_counts.items()
+            ]
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error in get_dashboard_stats: {str(e)}")
+        return jsonify({'message': 'Internal server error', 'error': str(e)}), 500
 
 @app.route('/dashboard/activities', methods=['GET'])
 @jwt_required()
@@ -1099,21 +1157,6 @@ def get_recent_activities():
         } for activity in activities]
     })
 
-@app.route('/users/check-first', methods=['GET'])
-def check_first_user():
-    try:
-        # Check if any user exists
-        user_count = User.query.count()
-        return jsonify({'isFirstUser': user_count == 0})
-    except Exception as e:
-        app.logger.error(f"Error checking first user: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
-
-@app.route('/ping', methods=['GET'])
-def health_check():
-    app.logger.info("Health check endpoint called")
-    return jsonify({"status": "healthy", "message": "Server is running"}), 200
-
 # Error handlers
 @app.errorhandler(404)
 def not_found_error(error):
@@ -1127,50 +1170,76 @@ def internal_error(error):
     return jsonify({"msg": "Internal server error"}), 500
 
 # Property Theme Settings Routes
-@app.route('/api/settings/property/theme', methods=['GET'])
+@app.route('/settings/property/theme', methods=['GET'])
 @jwt_required()
+@handle_errors
 def get_property_theme():
     try:
         current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'error': 'User not found'}), 404
         
         # Get the property ID from query params or use the first property for the user
         property_id = request.args.get('property_id', type=int)
         if not property_id:
             if current_user.role == 'super_admin':
                 property = Property.query.first()
+            elif current_user.role == 'manager':
+                property = Property.query.filter_by(manager_id=current_user.user_id).first()
             else:
-                property = Property.query.filter_by(manager_id=current_user.id).first()
+                property = current_user.assigned_properties[0] if current_user.assigned_properties else None
             
             if not property:
                 return jsonify({'error': 'No property found'}), 404
-            property_id = property.id
+            property_id = property.property_id
 
         # Check if user has access to this property
-        if not current_user.role == 'super_admin':
-            property = Property.query.filter_by(id=property_id, manager_id=current_user.id).first()
-            if not property:
+        if current_user.role != 'super_admin':
+            has_access = False
+            if current_user.role == 'manager':
+                has_access = Property.query.filter_by(property_id=property_id, manager_id=current_user.user_id).first() is not None
+            else:
+                has_access = any(p.property_id == property_id for p in current_user.assigned_properties)
+            
+            if not has_access:
                 return jsonify({'error': 'Access denied'}), 403
 
         theme = PropertyTheme.query.filter_by(property_id=property_id).first()
         if not theme:
             # Create default theme if it doesn't exist
-            theme = PropertyTheme(property_id=property_id)
+            theme = PropertyTheme(
+                property_id=property_id,
+                primary_color='#1976d2',
+                secondary_color='#dc004e',
+                background_color='#ffffff',
+                accent_color='#2196f3'
+            )
             db.session.add(theme)
             db.session.commit()
 
-        return jsonify(theme.to_dict()), 200
+        return jsonify({
+            'colors': {
+                'primary': theme.primary_color,
+                'secondary': theme.secondary_color,
+                'background': theme.background_color,
+                'accent': theme.accent_color
+            }
+        }), 200
 
     except Exception as e:
         app.logger.error(f'Error in get_property_theme: {str(e)}')
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/settings/property/theme', methods=['POST'])
+@app.route('/settings/property/theme', methods=['POST'])
 @jwt_required()
+@handle_errors
 def update_property_theme():
     try:
         current_user = get_user_from_jwt()
-        data = request.get_json()
+        if not current_user:
+            return jsonify({'error': 'User not found'}), 404
 
+        data = request.get_json()
         if not data or 'colors' not in data:
             return jsonify({'error': 'Invalid request data'}), 400
 
@@ -1178,17 +1247,24 @@ def update_property_theme():
         if not property_id:
             if current_user.role == 'super_admin':
                 property = Property.query.first()
+            elif current_user.role == 'manager':
+                property = Property.query.filter_by(manager_id=current_user.user_id).first()
             else:
-                property = Property.query.filter_by(manager_id=current_user.id).first()
+                property = current_user.assigned_properties[0] if current_user.assigned_properties else None
             
             if not property:
                 return jsonify({'error': 'No property found'}), 404
-            property_id = property.id
+            property_id = property.property_id
 
         # Check if user has access to this property
-        if not current_user.role == 'super_admin':
-            property = Property.query.filter_by(id=property_id, manager_id=current_user.id).first()
-            if not property:
+        if current_user.role != 'super_admin':
+            has_access = False
+            if current_user.role == 'manager':
+                has_access = Property.query.filter_by(property_id=property_id, manager_id=current_user.user_id).first() is not None
+            else:
+                has_access = any(p.property_id == property_id for p in current_user.assigned_properties)
+            
+            if not has_access:
                 return jsonify({'error': 'Access denied'}), 403
 
         theme = PropertyTheme.query.filter_by(property_id=property_id).first()
@@ -1203,7 +1279,14 @@ def update_property_theme():
         theme.accent_color = colors.get('accent', theme.accent_color)
 
         db.session.commit()
-        return jsonify(theme.to_dict()), 200
+        return jsonify({
+            'colors': {
+                'primary': theme.primary_color,
+                'secondary': theme.secondary_color,
+                'background': theme.background_color,
+                'accent': theme.accent_color
+            }
+        }), 200
 
     except Exception as e:
         app.logger.error(f'Error in update_property_theme: {str(e)}')

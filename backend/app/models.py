@@ -50,14 +50,19 @@ class User(db.Model):
             'role': self.role,
             'email': self.email
         }
+        
+        # Convert datetime objects to ISO format strings
+        additional_claims = {
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'last_login': self.last_login.isoformat() if self.last_login else None,
+            'csrf': None  # Disable CSRF for now
+        }
+        
         return create_access_token(
             identity=identity,
             expires_delta=expires_delta,
-            additional_claims={
-                'is_active': self.is_active,
-                'created_at': self.created_at.isoformat() if self.created_at else None,
-                'last_login': self.last_login.isoformat() if self.last_login else None
-            }
+            additional_claims=additional_claims
         )
 
     def to_dict(self):

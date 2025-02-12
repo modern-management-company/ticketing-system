@@ -1,38 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Select, MenuItem, FormControl, InputLabel, CircularProgress } from '@mui/material';
+import { Select, MenuItem, FormControl, InputLabel, CircularProgress, Box, Chip } from '@mui/material';
 import apiClient from './apiClient';
 
-const PropertySwitcher = () => {
-  const { auth, switchProperty } = useAuth();
+const PropertySwitcher = ({ onPropertyChange }) => {
+  const { auth } = useAuth();
   const [properties, setProperties] = useState([]);
+  const [selectedProperty, setSelectedProperty] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchProperties = async () => {
-      try {
-        const response = await apiClient.get('/properties');
-        if (response.data && Array.isArray(response.data.properties)) {
-          setProperties(response.data.properties);
-        } else {
-          throw new Error('Invalid properties data format');
-        }
-      } catch (error) {
-        console.error('Failed to fetch properties:', error);
-        setError(error.message || 'Failed to load properties');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchProperties();
   }, [auth]);
 
+  const fetchProperties = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.get('/properties');
+      if (response.data && Array.isArray(response.data.properties)) {
+        setProperties(response.data.properties);
+        if (response.data.properties.length > 0) {
+          const defaultProperty = response.data.properties[0].property_id;
+          setSelectedProperty(defaultProperty);
+          if (onPropertyChange) {
+            onPropertyChange(defaultProperty);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch properties:', error);
+      setError('Failed to load properties');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePropertyChange = async (propertyId) => {
     try {
+      setSelectedProperty(propertyId);
       await apiClient.post('/switch-property', { property_id: propertyId });
-      switchProperty(propertyId);
+      if (onPropertyChange) {
+        onPropertyChange(propertyId);
+      }
     } catch (error) {
       console.error('Failed to switch property:', error);
       setError('Failed to switch property');
@@ -43,16 +53,25 @@ const PropertySwitcher = () => {
   if (error) return null;
 
   return (
-    <FormControl sx={{ minWidth: 120, mr: 2 }}>
+    <FormControl sx={{ minWidth: 200 }}>
+      <InputLabel>Select Property</InputLabel>
       <Select
-        value={auth.managedPropertyId || auth.assignedPropertyId || ''}
+        value={selectedProperty}
         onChange={(e) => handlePropertyChange(e.target.value)}
-        displayEmpty
-        sx={{ color: 'white', '& .MuiSelect-icon': { color: 'white' } }}
+        label="Select Property"
+        renderValue={(selected) => {
+          const property = properties.find(p => p.property_id === selected);
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Chip 
+                label={property ? property.name : 'Select Property'} 
+                size="small"
+                color="primary"
+              />
+            </Box>
+          );
+        }}
       >
-        <MenuItem value="" disabled>
-          Select Property
-        </MenuItem>
         {properties.map((property) => (
           <MenuItem key={property.property_id} value={property.property_id}>
             {property.name}

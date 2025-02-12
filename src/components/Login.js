@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link as RouterLink } from "react-router-dom";
+import { useNavigate, Link as RouterLink, useLocation } from "react-router-dom";
 
 import {
   Box,
@@ -13,11 +13,12 @@ import {
   Link,
 } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
-import apiClient from "./apiClient"; 
+import apiClient from "../components/apiClient"; 
 
 const Login = () => {
+  const { login, auth } = useAuth();
   const navigate = useNavigate();
-  const { login, checkFirstUser } = useAuth();
+  const location = useLocation();
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -27,36 +28,62 @@ const Login = () => {
   const [isFirstUser, setIsFirstUser] = useState(false);
 
   useEffect(() => {
+    const checkAuth = async () => {
+      if (auth?.isAuthenticated && auth?.token) {
+        try {
+          await apiClient.get('/verify-token');
+          const from = location.state?.from?.pathname || '/';
+          navigate(from, { replace: true });
+        } catch (error) {
+          console.warn('Token verification failed:', error);
+        }
+      }
+    };
+    checkAuth();
+  }, [auth, navigate, location]);
+
+  useEffect(() => {
     const checkFirst = async () => {
       try {
-        const isFirst = await checkFirstUser();
-        setIsFirstUser(isFirst);
+        const response = await apiClient.get('/check-first-user');
+        setIsFirstUser(response.data.isFirstUser);
       } catch (error) {
         console.error('Failed to check first user status:', error);
+        setError('Failed to check system status');
       }
     };
     checkFirst();
-  }, [checkFirstUser]);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+    setLoading(true);
 
     try {
       if (!formData.username || !formData.password) {
         throw new Error('Please enter both username and password');
       }
       
-      const response = await login(formData.username, formData.password);
-      if (response && response.token) {
-        navigate('/home');
+      const response = await apiClient.post('/login', {
+        username: formData.username,
+        password: formData.password
+      });
+
+      if (response.data && response.data.token) {
+        await login(response.data);
+        const from = location.state?.from?.pathname || '/';
+        navigate(from, { replace: true });
       } else {
         throw new Error('Invalid login response');
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError(error.message || 'Failed to connect to the server. Please try again.');
+      setError(
+        error.response?.data?.msg || 
+        error.message || 
+        'Failed to connect to the server. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -70,26 +97,28 @@ const Login = () => {
         flexDirection: 'column',
         alignItems: 'center',
       }}>
-        <Typography component="h1" variant="h5">
-          Sign in
+        <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
+          Sign in to Ticketing System
         </Typography>
         
         {error && (
-          <Alert severity="error" sx={{ mt: 2, width: '100%' }}>
+          <Alert severity="error" sx={{ mt: 2, width: '100%', mb: 2 }}>
             {error}
           </Alert>
         )}
 
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
           <TextField
             margin="normal"
             required
             fullWidth
             label="Username"
             name="username"
+            autoComplete="username"
             autoFocus
             value={formData.username}
             onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+            disabled={loading}
           />
           <TextField
             margin="normal"
@@ -98,8 +127,10 @@ const Login = () => {
             name="password"
             label="Password"
             type="password"
+            autoComplete="current-password"
             value={formData.password}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            disabled={loading}
           />
           <Button
             type="submit"

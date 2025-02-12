@@ -100,7 +100,7 @@ const Navbar = () => {
     handleSettingsClose();
   };
 
-  const renderMenuItems = () => {
+  const getNavigationItems = (auth) => {
     const items = [
       {
         key: 'dashboard',
@@ -125,24 +125,68 @@ const Navbar = () => {
       }
     ];
 
-    if (auth.role === 'super_admin') {
+    // Add management items based on role
+    if (auth.role === 'super_admin' || auth.role === 'manager') {
       items.push(
         {
-          key: 'admin-properties',
-          path: '/admin/properties',
+          key: 'rooms',
+          path: '/rooms',
           icon: <BusinessIcon />,
-          text: 'Manage Properties',
-          roles: ['super_admin']
+          text: 'Rooms',
+          roles: ['manager', 'super_admin']
         },
         {
-          key: 'admin-users',
-          path: '/admin/users',
-          icon: <PeopleIcon />,
-          text: 'Manage Users',
-          roles: ['super_admin']
+          key: 'properties',
+          path: '/admin/properties',
+          icon: <BusinessIcon />,
+          text: 'Properties',
+          roles: ['manager', 'super_admin']
         }
       );
     }
+
+    // Add user management for super admin
+    if (auth.role === 'super_admin') {
+      items.push({
+        key: 'users',
+        path: '/admin/users',
+        icon: <PeopleIcon />,
+        text: 'User Management',
+        roles: ['super_admin']
+      });
+    }
+
+    return items;
+  };
+
+  const getSettingsItems = (auth) => {
+    const items = [];
+
+    if (auth.role === 'super_admin' || auth.role === 'manager') {
+      items.push({
+        key: 'property-theme',
+        path: '/settings/property',
+        icon: <PaletteIcon />,
+        text: 'Property Theme',
+        roles: ['manager', 'super_admin']
+      });
+    }
+
+    if (auth.role === 'super_admin') {
+      items.push({
+        key: 'system-settings',
+        path: '/settings/system',
+        icon: <SettingsIcon />,
+        text: 'System Settings',
+        roles: ['super_admin']
+      });
+    }
+
+    return items;
+  };
+
+  const renderMenuItems = () => {
+    const items = getNavigationItems(auth);
 
     return items
       .filter(item => item.roles.includes(auth?.role))
@@ -169,24 +213,9 @@ const Navbar = () => {
   };
 
   const renderSettingsMenu = () => {
-    const settingsItems = [
-      {
-        key: 'property-settings',
-        path: '/settings/property',
-        icon: <PaletteIcon />,
-        text: 'Property Settings',
-        roles: ['manager', 'super_admin']
-      },
-      {
-        key: 'system-settings',
-        path: '/settings/system',
-        icon: <SettingsIcon />,
-        text: 'System Settings',
-        roles: ['super_admin']
-      }
-    ];
+    const items = getSettingsItems(auth);
 
-    return settingsItems
+    return items
       .filter(item => item.roles.includes(auth?.role))
       .map(item => (
         <MenuItem 
@@ -278,6 +307,16 @@ const Navbar = () => {
             </FormControl>
           )}
         </Box>
+        {auth?.user && (
+          <Box sx={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+            <Typography variant="body1" sx={{ mr: 2 }}>
+              Logged in as: {auth.user.username}
+            </Typography>
+            <Typography variant="body2" sx={{ mr: 2 }}>
+              Role: {auth.user.role}
+            </Typography>
+          </Box>
+        )}
       </Toolbar>
     </AppBar>
   );
