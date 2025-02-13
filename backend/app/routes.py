@@ -1,6 +1,6 @@
 from flask import request, jsonify, current_app
 from app import app, db
-from app.models import User, Ticket, Property, TaskAssignment, Room, Activity, UserProperty, PropertyTheme, SystemSettings
+from app.models import User, Ticket, Property, TaskAssignment, Room, Activity, UserProperty, PropertyTheme, SystemSettings, Task
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
@@ -1084,20 +1084,42 @@ def get_property_tickets(property_id):
 @app.route('/properties/<int:property_id>/tasks', methods=['GET'])
 @jwt_required()
 def get_property_tasks(property_id):
-    tasks = TaskAssignment.query.join(Ticket).filter(
-        Ticket.property_id == property_id
-    ).all()
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
 
-    return jsonify({
-        'tasks': [{
-            'task_id': t.task_id,
-            'ticket_id': t.ticket_id,
-            'assigned_to_user_id': t.assigned_to_user_id,
-            'assigned_to': User.query.get(t.assigned_to_user_id).username,
-            'status': t.status,
-            'ticket_title': t.ticket.title
-        } for t in tasks]
-    })
+        # Get tasks based on user role and property
+        tasks = Task.query.filter_by(property_id=property_id)
+        
+        if current_user.role == 'user':
+            # Users only see tasks assigned to them
+            tasks = tasks.filter_by(assigned_to_id=current_user.user_id)
+        elif current_user.role == 'manager':
+            # Managers see all tasks for their properties
+            if property_id not in [p.property_id for p in current_user.managed_properties]:
+                return jsonify({"msg": "Unauthorized"}), 403
+
+        tasks = tasks.all()
+        
+        # Format tasks as expected by frontend
+        task_list = []
+        for task in tasks:
+            assigned_user = User.query.get(task.assigned_to_id) if task.assigned_to_id else None
+            task_list.append({
+                'task_id': task.task_id,
+                'title': task.title,
+                'description': task.description,
+                'status': task.status,
+                'priority': task.priority,
+                'assigned_to_id': task.assigned_to_id,
+                'assigned_to': assigned_user.username if assigned_user else None
+            })
+
+        return jsonify({'tasks': task_list}), 200
+    except Exception as e:
+        app.logger.error(f"Error in get_property_tasks: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
 
 # User Profile and Password Management Routes
 @app.route('/users/<int:user_id>/profile', methods=['GET'])

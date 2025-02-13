@@ -101,7 +101,9 @@ const ManageUsers = () => {
       
       // Refresh user data
       const response = await apiClient.get('/users');
-      setUsers(response.data.users);
+      if (response.data?.users) {
+        setUsers(response.data.users);
+      }
       setSuccess('Property assignments updated successfully');
     } catch (error) {
       setError('Failed to update property assignments');
@@ -197,16 +199,20 @@ const ManageUsers = () => {
                 <TableCell>
                   <Select
                     multiple
-                    value={user.assigned_properties.map(p => p.property_id)}
+                    value={user.assigned_properties?.map(p => p.property_id) || []}
                     onChange={(e) => handlePropertyAssignment(user.user_id, e.target.value)}
                     renderValue={(selected) => (
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {selected.map((value) => (
-                          <Chip
-                            key={value}
-                            label={properties.find(p => p.property_id === value)?.name}
-                          />
-                        ))}
+                        {selected.map((propertyId) => {
+                          const property = user.assigned_properties.find(p => p.property_id === propertyId);
+                          return (
+                            <Chip
+                              key={propertyId}
+                              label={property ? property.name : 'Unknown'}
+                              size="small"
+                            />
+                          );
+                        })}
                       </Box>
                     )}
                   >

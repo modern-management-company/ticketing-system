@@ -61,11 +61,13 @@ const PropertyManagement = () => {
         auth.role === 'super_admin' ? apiClient.get('/users') : null
       ]);
 
-      if (propertiesResponse.data && Array.isArray(propertiesResponse.data.properties)) {
-        setProperties(propertiesResponse.data.properties);
+      console.log('Properties response:', propertiesResponse.data);
+
+      if (propertiesResponse.data) {
+        setProperties(propertiesResponse.data);
       }
 
-      if (usersResponse?.data && Array.isArray(usersResponse.data.users)) {
+      if (usersResponse?.data?.users) {
         setUsers(usersResponse.data.users);
       }
     } catch (error) {
@@ -194,39 +196,43 @@ const PropertyManagement = () => {
         </Alert>
       )}
 
-      <Grid container spacing={3}>
-        {properties.map((property) => (
-          <Grid item xs={12} sm={6} md={4} key={property.property_id}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6">{property.name}</Typography>
-                <Typography color="textSecondary">{property.address}</Typography>
-                <Typography>Type: {property.type || 'N/A'}</Typography>
-                <Typography>Status: {property.status}</Typography>
-                {property.description && (
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    {property.description}
-                  </Typography>
-                )}
-                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                  <IconButton
-                    onClick={() => handlePropertyEdit(property)}
-                    color="primary"
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    onClick={() => handlePropertyDelete(property.property_id)}
-                    color="error"
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+      {properties.length === 0 ? (
+        <Alert severity="info" sx={{ mb: 2 }}>No properties found</Alert>
+      ) : (
+        <Grid container spacing={3}>
+          {properties.map((property) => (
+            <Grid item xs={12} sm={6} md={4} key={property.property_id}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6">{property.name}</Typography>
+                  <Typography color="textSecondary">{property.address}</Typography>
+                  <Typography>Type: {property.type || 'N/A'}</Typography>
+                  <Typography>Status: {property.status}</Typography>
+                  {property.description && (
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      {property.description}
+                    </Typography>
+                  )}
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                    <IconButton
+                      onClick={() => handlePropertyEdit(property)}
+                      color="primary"
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton
+                      onClick={() => handlePropertyDelete(property.property_id)}
+                      color="error"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      )}
 
       {/* Property Dialog */}
       <Dialog open={openPropertyDialog} onClose={() => setOpenPropertyDialog(false)}>

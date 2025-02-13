@@ -54,7 +54,13 @@ class User(db.Model):
             'user_id': self.user_id,
             'username': self.username,
             'role': self.role,
-            'email': self.email
+            'email': self.email,
+            'assigned_properties': [
+                {
+                    'property_id': prop.property_id,
+                    'name': prop.name
+                } for prop in self.assigned_properties
+            ]
         }
         
         # Convert datetime objects to ISO format strings
@@ -74,14 +80,23 @@ class User(db.Model):
     def to_dict(self):
         """Convert user object to dictionary"""
         return {
-            'id': self.user_id,
+            'user_id': self.user_id,
             'username': self.username,
             'email': self.email,
             'role': self.role,
             'manager_id': self.manager_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None,
-            'is_active': self.is_active
+            'is_active': self.is_active,
+            'assigned_properties': [
+                {
+                    'property_id': prop.property_id,
+                    'name': prop.name,
+                    'address': prop.address,
+                    'type': prop.type,
+                    'status': prop.status
+                } for prop in self.assigned_properties
+            ]
         }
 
     def __repr__(self):

@@ -96,12 +96,13 @@ const ViewTasks = () => {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'Pending':
+    const normalizedStatus = status?.toLowerCase();
+    switch (normalizedStatus) {
+      case 'pending':
         return 'warning';
-      case 'In Progress':
+      case 'in progress':
         return 'info';
-      case 'Completed':
+      case 'completed':
         return 'success';
       default:
         return 'default';
@@ -110,18 +111,19 @@ const ViewTasks = () => {
 
   const handleQuickAction = async (taskId, currentStatus) => {
     let newStatus;
-    switch (currentStatus) {
-      case 'Pending':
-        newStatus = 'In Progress';
+    const normalizedStatus = currentStatus?.toLowerCase();
+    switch (normalizedStatus) {
+      case 'pending':
+        newStatus = 'in progress';
         break;
-      case 'In Progress':
-        newStatus = 'Completed';
+      case 'in progress':
+        newStatus = 'completed';
         break;
-      case 'Completed':
-        newStatus = 'In Progress';
+      case 'completed':
+        newStatus = 'in progress';
         break;
       default:
-        newStatus = 'Pending';
+        newStatus = 'pending';
     }
     await handleStatusChange(taskId, newStatus);
   };
@@ -209,16 +211,16 @@ const ViewTasks = () => {
                         size="small"
                         sx={{ minWidth: 120 }}
                       >
-                        <MenuItem value="Pending">Pending</MenuItem>
-                        <MenuItem value="In Progress">In Progress</MenuItem>
-                        <MenuItem value="Completed">Completed</MenuItem>
+                        <MenuItem value="pending">Pending</MenuItem>
+                        <MenuItem value="in progress">In Progress</MenuItem>
+                        <MenuItem value="completed">Completed</MenuItem>
                       </Select>
                       <IconButton
                         onClick={() => handleQuickAction(task.task_id, task.status)}
-                        color={task.status === 'Completed' ? 'success' : 'primary'}
+                        color={task.status === 'completed' ? 'success' : 'primary'}
                         size="small"
                       >
-                        {task.status === 'Completed' ? 
+                        {task.status === 'completed' ? 
                           <CheckCircleIcon /> : 
                           <PauseCircleIcon />
                         }
