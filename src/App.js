@@ -20,26 +20,15 @@ import Login from "./components/Login";
 import RegisterUser from "./components/RegisterUser";
 import Dashboard from "./components/Dashboard";
 import ManageUsers from './components/ManageUsers';
-import ManageProperties from './components/ManageProperties';
-import ViewRooms from './components/ViewRooms';
 import ViewTasks from './components/ViewTasks';
-import CreateTicket from './components/CreateTicket';
 import ViewTickets from './components/ViewTickets';
-import HomeOverview from './components/HomeOverview';
+import ViewRooms from './components/ViewRooms';
+import TicketDetails from './components/TicketDetails';
+import PropertyManagement from './components/PropertyManagement';
 import PropertySettings from './components/settings/PropertySettings';
 import SystemSettings from './components/settings/SystemSettings';
 import Unauthorized from './components/Unauthorized';
 import UserProfile from './components/UserProfile';
-import TicketDetails from './components/TicketDetails';
-import PropertyManagement from './components/PropertyManagement';
-
-const AdminLayout = () => {
-  return (
-    <ProtectedRoute allowedRoles={['super_admin']}>
-      <Outlet />
-    </ProtectedRoute>
-  );
-};
 
 const App = () => {
   return (
@@ -66,11 +55,6 @@ const App = () => {
                   <ViewTickets />
                 </ProtectedRoute>
               } />
-              <Route path="/tickets/create" element={
-                <ProtectedRoute>
-                  <CreateTicket />
-                </ProtectedRoute>
-              } />
               <Route path="/tickets/:ticketId" element={
                 <ProtectedRoute>
                   <TicketDetails />
@@ -82,9 +66,9 @@ const App = () => {
                   <ViewTasks />
                 </ProtectedRoute>
               } />
-              
+
               <Route path="/rooms" element={
-                <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
+                <ProtectedRoute>
                   <ViewRooms />
                 </ProtectedRoute>
               } />
@@ -125,7 +109,7 @@ const App = () => {
             </Route>
             
             {/* Default route */}
-            <Route path="*" element={<Unauthorized />} />
+            <Route path="*" element={<Navigate to="/unauthorized" replace />} />
           </Routes>
         </Router>
       </AuthProvider>

@@ -34,9 +34,9 @@ const ViewTasks = () => {
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     if (selectedProperty) {
@@ -46,57 +46,39 @@ const ViewTasks = () => {
 
   const fetchData = async () => {
     try {
+      if (!auth?.token || !selectedProperty) {
+        return;
+      }
+
       setLoading(true);
-      setError(null);
-      
       const [tasksResponse, usersResponse] = await Promise.all([
         apiClient.get(`/properties/${selectedProperty}/tasks`),
-        apiClient.get('/users')
+        apiClient.get(`/properties/${selectedProperty}/users`)
       ]);
 
-      if (tasksResponse.data && Array.isArray(tasksResponse.data.tasks)) {
+      if (tasksResponse.data?.tasks) {
         setTasks(tasksResponse.data.tasks);
-      } else if (tasksResponse.data && Array.isArray(tasksResponse.data)) {
-        setTasks(tasksResponse.data);
-      } else {
-        setTasks([]);
-        console.warn('No tasks data available or invalid format');
       }
-
-      if (usersResponse.data && Array.isArray(usersResponse.data.users)) {
+      if (usersResponse.data?.users) {
         setUsers(usersResponse.data.users);
-      } else if (usersResponse.data && Array.isArray(usersResponse.data)) {
-        setUsers(usersResponse.data);
-      } else {
-        setUsers([]);
-        console.warn('No users data available or invalid format');
       }
+      setError(null);
     } catch (error) {
       console.error('Failed to fetch data:', error);
-      setError('Failed to fetch tasks and users');
-      setTasks([]);
-      setUsers([]);
+      setError(error.response?.data?.message || 'Failed to fetch data');
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePropertyChange = (propertyId) => {
-    setSelectedProperty(propertyId);
-  };
-
   const handleAssigneeChange = async (taskId, newUserId) => {
     try {
-      if (!auth?.token) {
-        throw new Error('Authentication required');
-      }
-
       await apiClient.patch(`/tasks/${taskId}`, { assigned_to_id: newUserId });
-      setSuccess('Task assigned successfully');
+      setMessage('Task assigned successfully');
       await fetchData();
     } catch (error) {
       console.error('Failed to update task assignee:', error);
-      setError(error.message || 'Failed to update task assignee');
+      setError(error.response?.data?.message || 'Failed to update task assignee');
     }
   };
 
@@ -106,7 +88,7 @@ const ViewTasks = () => {
       setTasks(tasks.map(task => 
         task.task_id === taskId ? { ...task, status: newStatus } : task
       ));
-      setSuccess('Task status updated successfully');
+      setMessage('Task status updated successfully');
     } catch (error) {
       setError('Failed to update task status');
       console.error(error);
@@ -114,12 +96,12 @@ const ViewTasks = () => {
   };
 
   const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
-      case 'pending':
+    switch (status) {
+      case 'Pending':
         return 'warning';
-      case 'in progress':
+      case 'In Progress':
         return 'info';
-      case 'completed':
+      case 'Completed':
         return 'success';
       default:
         return 'default';
@@ -128,14 +110,14 @@ const ViewTasks = () => {
 
   const handleQuickAction = async (taskId, currentStatus) => {
     let newStatus;
-    switch (currentStatus.toLowerCase()) {
-      case 'pending':
+    switch (currentStatus) {
+      case 'Pending':
         newStatus = 'In Progress';
         break;
-      case 'in progress':
+      case 'In Progress':
         newStatus = 'Completed';
         break;
-      case 'completed':
+      case 'Completed':
         newStatus = 'In Progress';
         break;
       default:
@@ -144,7 +126,9 @@ const ViewTasks = () => {
     await handleStatusChange(taskId, newStatus);
   };
 
-  if (loading && !selectedProperty) return <CircularProgress />;
+  const handlePropertyChange = (propertyId) => {
+    setSelectedProperty(propertyId);
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -152,96 +136,100 @@ const ViewTasks = () => {
         <Typography variant="h5">Tasks</Typography>
         <PropertySwitcher onPropertyChange={handlePropertyChange} />
       </Box>
+      
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      
+      {message && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setMessage('')}>
+          {message}
+        </Alert>
+      )}
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-
-      {selectedProperty ? (
-        loading ? (
-          <CircularProgress />
-        ) : (
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Task</TableCell>
-                  <TableCell>Assigned To</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {tasks.map((task) => (
-                  <TableRow key={task.task_id}>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="subtitle2">{task.title}</Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          {task.description}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      {auth.role !== 'user' ? (
-                        <Select
-                          value={task.assigned_to_id || ''}
-                          onChange={(e) => handleAssigneeChange(task.task_id, e.target.value)}
-                          size="small"
-                          sx={{ minWidth: 120 }}
-                        >
-                          <MenuItem value="">
-                            <em>Unassigned</em>
-                          </MenuItem>
-                          {users.map(user => (
-                            <MenuItem key={user.user_id} value={user.user_id}>
-                              {user.username}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      ) : (
-                        task.assigned_to || 'Unassigned'
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={task.status}
-                        color={getStatusColor(task.status)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Select
-                          value={task.status}
-                          onChange={(e) => handleStatusChange(task.task_id, e.target.value)}
-                          size="small"
-                          sx={{ minWidth: 120 }}
-                        >
-                          {['Pending', 'In Progress', 'Completed'].map(status => (
-                            <MenuItem key={status} value={status}>
-                              {status}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                        <IconButton
-                          onClick={() => handleQuickAction(task.task_id, task.status)}
-                          color={task.status.toLowerCase() === 'completed' ? 'success' : 'primary'}
-                          size="small"
-                        >
-                          {task.status.toLowerCase() === 'completed' ? 
-                            <CheckCircleIcon /> : 
-                            <PauseCircleIcon />
-                          }
-                        </IconButton>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )
-      ) : (
+      {!selectedProperty ? (
         <Alert severity="info">Please select a property to view tasks</Alert>
+      ) : loading ? (
+        <Box display="flex" justifyContent="center" p={3}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Task ID</TableCell>
+                <TableCell>Title</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>Assigned To</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {tasks.map((task) => (
+                <TableRow key={task.task_id}>
+                  <TableCell>{task.task_id}</TableCell>
+                  <TableCell>{task.title}</TableCell>
+                  <TableCell>{task.description}</TableCell>
+                  <TableCell>
+                    {auth.role !== 'user' ? (
+                      <Select
+                        value={task.assigned_to_id || ''}
+                        onChange={(e) => handleAssigneeChange(task.task_id, e.target.value)}
+                        size="small"
+                        sx={{ minWidth: 120 }}
+                      >
+                        <MenuItem value="">
+                          <em>Unassigned</em>
+                        </MenuItem>
+                        {users.map(user => (
+                          <MenuItem key={user.user_id} value={user.user_id}>
+                            {user.username}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    ) : (
+                      task.assigned_to || 'Unassigned'
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={task.status}
+                      color={getStatusColor(task.status)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Select
+                        value={task.status}
+                        onChange={(e) => handleStatusChange(task.task_id, e.target.value)}
+                        size="small"
+                        sx={{ minWidth: 120 }}
+                      >
+                        <MenuItem value="Pending">Pending</MenuItem>
+                        <MenuItem value="In Progress">In Progress</MenuItem>
+                        <MenuItem value="Completed">Completed</MenuItem>
+                      </Select>
+                      <IconButton
+                        onClick={() => handleQuickAction(task.task_id, task.status)}
+                        color={task.status === 'Completed' ? 'success' : 'primary'}
+                        size="small"
+                      >
+                        {task.status === 'Completed' ? 
+                          <CheckCircleIcon /> : 
+                          <PauseCircleIcon />
+                        }
+                      </IconButton>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
     </Box>
   );

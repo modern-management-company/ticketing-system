@@ -252,11 +252,11 @@ def get_properties():
             app.logger.info(f"Super admin: Found {len(properties)} properties")
         elif current_user.role == 'manager':
             # Managers can see properties they manage
-            properties = Property.query.filter_by(manager_id=current_user.user_id).all()
+            properties = current_user.managed_properties.all()
             app.logger.info(f"Manager: Found {len(properties)} properties")
         else:
             # Regular users can see properties they're assigned to
-            properties = current_user.assigned_properties
+            properties = current_user.assigned_properties.all()
             app.logger.info(f"User: Found {len(properties)} properties")
             
         return jsonify([prop.to_dict() for prop in properties]), 200
@@ -269,54 +269,218 @@ def get_properties():
 @jwt_required()
 def create_property():
     try:
-        current_user_id = get_jwt_identity()
-        current_user = User.query.get(current_user_id)
-        
-        if not current_user or current_user.role not in ['super_admin', 'manager']:
-            app.logger.warning(f"Unauthorized property creation attempt by user {current_user_id}")
-            return jsonify({"msg": "Unauthorized"}), 403
+        # Get current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            app.logger.error("User not found from JWT")
+            return jsonify({"msg": "User not found"}), 404
             
+        app.logger.info(f"User role: {current_user.role}")
+        if current_user.role not in ['super_admin', 'manager']:
+            app.logger.warning(f"Unauthorized property creation attempt by user {current_user.user_id} with role {current_user.role}")
+            return jsonify({"msg": "Unauthorized - Insufficient permissions"}), 403
+            
+        # Get and validate input data
         data = request.get_json()
+        app.logger.info(f"Received property data: {data}")
+        
         if not data:
+            app.logger.error("No input data provided")
             return jsonify({"msg": "No input data provided"}), 400
             
         # Validate required fields
         required_fields = ['name', 'address']
-        if not all(field in data for field in required_fields):
-            return jsonify({"msg": "Missing required fields"}), 400
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        if missing_fields:
+            app.logger.error(f"Missing required fields: {missing_fields}")
+            return jsonify({"msg": f"Missing required fields: {', '.join(missing_fields)}"}), 400
             
-        property = Property(
+        # Create new property
+        new_property = Property(
             name=data['name'],
             address=data['address'],
-            manager_id=current_user_id if current_user.role == 'manager' else data.get('manager_id')
+            type=data.get('type', 'residential'),
+            status=data.get('status', 'active'),
+            description=data.get('description', ''),
+            manager_id=current_user.user_id if current_user.role == 'manager' else data.get('manager_id')
         )
         
-        db.session.add(property)
-        db.session.commit()
+        db.session.add(new_property)
         
-        app.logger.info(f"Property created: {property.id} by user {current_user_id}")
-        return jsonify(property.to_dict()), 201
+        # If manager is creating the property, assign them to it
+        if current_user.role == 'manager':
+            user_property = UserProperty(user_id=current_user.user_id, property_id=new_property.property_id)
+            db.session.add(user_property)
+            
+        db.session.commit()
+        app.logger.info(f"Property created successfully: {new_property.property_id}")
+        return jsonify({"msg": "Property created successfully", "property": new_property.to_dict()}), 201
         
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Error in create_property: {str(e)}")
+        app.logger.error(f"Error creating property: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/properties/<int:property_id>/rooms', methods=['GET'])
+@jwt_required()
+def get_property_rooms(property_id):
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            app.logger.error("User not found from JWT")
+            return jsonify({"msg": "User not found"}), 404
+
+        # Check if user has access to this property
+        if current_user.role == 'super_admin':
+            property = Property.query.get(property_id)
+        elif current_user.role == 'manager':
+            property = Property.query.filter_by(property_id=property_id, manager_id=current_user.user_id).first()
+        else:
+            property = Property.query.join(UserProperty).filter(
+                Property.property_id == property_id,
+                UserProperty.user_id == current_user.user_id
+            ).first()
+
+        if not property:
+            app.logger.warning(f"User {current_user.user_id} attempted to access rooms for property {property_id}")
+            return jsonify({"msg": "Property not found or access denied"}), 404
+
+        rooms = Room.query.filter_by(property_id=property_id).all()
+        return jsonify({
+            'rooms': [{
+                'room_id': room.room_id,
+                'name': room.name,
+                'type': room.type,
+                'floor': room.floor,
+                'status': room.status
+            } for room in rooms]
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting property rooms: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/properties/<int:property_id>/rooms', methods=['POST'])
 @jwt_required()
-def create_room(property_id):
-    data = request.json
-    if not data or not data.get('name'):
-        return jsonify({'message': 'Invalid input'}), 400
+def create_property_room(property_id):
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            app.logger.error("User not found from JWT")
+            return jsonify({"msg": "User not found"}), 404
 
-    property = Property.query.get(property_id)
-    if not property:
-        return jsonify({'message': 'Property not found'}), 404
+        # Check if user has permission to manage this property
+        if current_user.role == 'super_admin':
+            property = Property.query.get(property_id)
+        elif current_user.role == 'manager':
+            property = Property.query.filter_by(property_id=property_id, manager_id=current_user.user_id).first()
+        else:
+            app.logger.warning(f"User {current_user.user_id} attempted to create room without permission")
+            return jsonify({"msg": "Unauthorized"}), 403
 
-    room = Room(name=data['name'], property_id=property_id)
-    db.session.add(room)
-    db.session.commit()
-    return jsonify({'message': 'Room created successfully!', 'room_id': room.room_id})
+        if not property:
+            app.logger.warning(f"Property {property_id} not found or access denied")
+            return jsonify({"msg": "Property not found or access denied"}), 404
+
+        data = request.get_json()
+        if not data or not data.get('name'):
+            return jsonify({"msg": "Room name is required"}), 400
+
+        new_room = Room(
+            name=data['name'],
+            property_id=property_id,
+            type=data.get('type', 'standard'),
+            floor=data.get('floor'),
+            status=data.get('status', 'available')
+        )
+
+        db.session.add(new_room)
+        db.session.commit()
+
+        app.logger.info(f"Room created successfully for property {property_id}")
+        return jsonify({
+            "msg": "Room created successfully",
+            "room": {
+                'room_id': new_room.room_id,
+                'name': new_room.name,
+                'type': new_room.type,
+                'floor': new_room.floor,
+                'status': new_room.status
+            }
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error creating room: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/properties/<int:property_id>/rooms/<int:room_id>', methods=['GET', 'PUT', 'DELETE'])
+@jwt_required()
+def manage_property_room(property_id, room_id):
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            app.logger.error("User not found from JWT")
+            return jsonify({"msg": "User not found"}), 404
+
+        # Check if user has permission to manage this property
+        if current_user.role == 'super_admin':
+            property = Property.query.get(property_id)
+        elif current_user.role == 'manager':
+            property = Property.query.filter_by(property_id=property_id, manager_id=current_user.user_id).first()
+        else:
+            property = Property.query.join(UserProperty).filter(
+                Property.property_id == property_id,
+                UserProperty.user_id == current_user.user_id
+            ).first()
+
+        if not property:
+            app.logger.warning(f"Property {property_id} not found or access denied")
+            return jsonify({"msg": "Property not found or access denied"}), 404
+
+        room = Room.query.filter_by(room_id=room_id, property_id=property_id).first()
+        if not room:
+            return jsonify({"msg": "Room not found"}), 404
+
+        if request.method == 'GET':
+            return jsonify({
+                'room_id': room.room_id,
+                'name': room.name,
+                'type': room.type,
+                'floor': room.floor,
+                'status': room.status
+            })
+
+        # Only managers and super_admins can modify rooms
+        if current_user.role not in ['super_admin', 'manager']:
+            app.logger.warning(f"User {current_user.user_id} attempted to modify room without permission")
+            return jsonify({"msg": "Unauthorized"}), 403
+
+        if request.method == 'PUT':
+            data = request.get_json()
+            if data.get('name'):
+                room.name = data['name']
+            if data.get('type'):
+                room.type = data['type']
+            if 'floor' in data:
+                room.floor = data['floor']
+            if data.get('status'):
+                room.status = data['status']
+
+            db.session.commit()
+            app.logger.info(f"Room {room_id} updated successfully")
+            return jsonify({"msg": "Room updated successfully"})
+
+        elif request.method == 'DELETE':
+            db.session.delete(room)
+            db.session.commit()
+            app.logger.info(f"Room {room_id} deleted successfully")
+            return jsonify({"msg": "Room deleted successfully"})
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error managing room: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/assign-task', methods=['POST'])
 @jwt_required()
@@ -749,8 +913,6 @@ def switch_property():
         user.managed_property_id = new_property_id
         db.session.commit()
         return jsonify({'message': 'Property switched successfully'}), 200
-    else:
-        return jsonify({'message': 'Unauthorized access'}), 403
 
 @app.route('/assign-property', methods=['POST'])
 @jwt_required()

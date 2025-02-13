@@ -22,7 +22,13 @@ class User(db.Model):
     
     managed_properties = db.relationship('Property',
                                        backref='manager',
-                                       lazy='dynamic')
+                                       lazy='dynamic',
+                                       foreign_keys='Property.manager_id')
+    
+    assigned_properties = db.relationship('Property',
+                                        secondary='user_properties',
+                                        backref=db.backref('assigned_users', lazy='dynamic'),
+                                        lazy='dynamic')
     
     assigned_tasks = db.relationship('Task',
                                    backref='assigned_to',
@@ -88,6 +94,7 @@ class Property(db.Model):
     address = db.Column(db.String(200))
     type = db.Column(db.String(50))
     status = db.Column(db.String(20), default='active')
+    description = db.Column(db.Text)
     manager_id = db.Column(db.Integer, db.ForeignKey('users.user_id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -98,11 +105,12 @@ class Property(db.Model):
     def to_dict(self):
         """Convert property object to dictionary"""
         return {
-            'id': self.property_id,
+            'property_id': self.property_id,
             'name': self.name,
             'address': self.address,
             'type': self.type,
             'status': self.status,
+            'description': self.description,
             'manager_id': self.manager_id,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
@@ -112,6 +120,23 @@ class Room(db.Model):
     room_id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     property_id = db.Column(db.Integer, db.ForeignKey('properties.property_id'), nullable=False)
+    type = db.Column(db.String(50), default='standard')
+    floor = db.Column(db.Integer)
+    status = db.Column(db.String(20), default='available')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'room_id': self.room_id,
+            'name': self.name,
+            'property_id': self.property_id,
+            'type': self.type,
+            'floor': self.floor,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
 
 class Ticket(db.Model):
     __tablename__ = 'tickets'

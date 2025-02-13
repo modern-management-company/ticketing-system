@@ -18,10 +18,10 @@ const PropertySwitcher = ({ onPropertyChange }) => {
     try {
       setLoading(true);
       const response = await apiClient.get('/properties');
-      if (response.data && Array.isArray(response.data.properties)) {
-        setProperties(response.data.properties);
-        if (response.data.properties.length > 0) {
-          const defaultProperty = response.data.properties[0].property_id;
+      if (response.data && Array.isArray(response.data)) {
+        setProperties(response.data);
+        if (response.data.length > 0) {
+          const defaultProperty = response.data[0].property_id;
           setSelectedProperty(defaultProperty);
           if (onPropertyChange) {
             onPropertyChange(defaultProperty);
