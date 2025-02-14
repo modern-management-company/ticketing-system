@@ -28,6 +28,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import LockResetIcon from '@mui/icons-material/LockReset';
 
 const ManageUsers = () => {
   const { auth } = useAuth();
@@ -44,6 +45,12 @@ const ManageUsers = () => {
     role: 'user',
     assigned_properties: [],
     managed_property: null
+  });
+  const [openPasswordDialog, setOpenPasswordDialog] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [passwordForm, setPasswordForm] = useState({
+    newPassword: '',
+    confirmPassword: ''
   });
 
   useEffect(() => {
@@ -194,6 +201,39 @@ const ManageUsers = () => {
     });
   };
 
+  const handleChangePassword = async () => {
+    try {
+      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+        setError("Passwords do not match");
+        return;
+      }
+
+      if (passwordForm.newPassword.length < 6) {
+        setError("Password must be at least 6 characters long");
+        return;
+      }
+
+      await apiClient.post(`/users/${selectedUser.user_id}/admin-change-password`, {
+        new_password: passwordForm.newPassword
+      });
+
+      setSuccess('Password changed successfully');
+      setOpenPasswordDialog(false);
+      resetPasswordForm();
+    } catch (error) {
+      console.error('Failed to change password:', error);
+      setError(error.response?.data?.message || 'Failed to change password');
+    }
+  };
+
+  const resetPasswordForm = () => {
+    setPasswordForm({
+      newPassword: '',
+      confirmPassword: ''
+    });
+    setSelectedUser(null);
+  };
+
   if (loading) return <CircularProgress />;
   if (error) return <Alert severity="error">{error}</Alert>;
 
@@ -297,6 +337,17 @@ const ManageUsers = () => {
                     >
                       <DeleteIcon />
                     </IconButton>
+                    <IconButton
+                      onClick={() => {
+                        setSelectedUser(user);
+                        setOpenPasswordDialog(true);
+                      }}
+                      color="secondary"
+                      disabled={user.role === 'super_admin'}
+                      title="Change Password"
+                    >
+                      <LockResetIcon />
+                    </IconButton>
                   </Box>
                 </TableCell>
               </TableRow>
@@ -397,6 +448,53 @@ const ManageUsers = () => {
           </Button>
           <Button onClick={handleSubmit} variant="contained" color="primary">
             {editingUser ? 'Update' : 'Add'} User
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog 
+        open={openPasswordDialog} 
+        onClose={() => {
+          setOpenPasswordDialog(false);
+          resetPasswordForm();
+        }}
+      >
+        <DialogTitle>
+          Change Password for {selectedUser?.username}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              label="New Password"
+              type="password"
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+              fullWidth
+              required
+            />
+            <TextField
+              label="Confirm Password"
+              type="password"
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+              fullWidth
+              required
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setOpenPasswordDialog(false);
+            resetPasswordForm();
+          }}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleChangePassword}
+            variant="contained" 
+            color="primary"
+          >
+            Change Password
           </Button>
         </DialogActions>
       </Dialog>

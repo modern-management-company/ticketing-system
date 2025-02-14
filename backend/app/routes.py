@@ -1197,6 +1197,27 @@ def change_password(user_id):
     
     return jsonify({'message': 'Password updated successfully'})
 
+@app.route('/users/<int:user_id>/admin-change-password', methods=['POST'])
+@jwt_required()
+@handle_errors
+def admin_change_password(user_id):
+    current_user = get_user_from_jwt()
+    if not current_user or current_user.role != 'super_admin':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    data = request.json
+    if not data or 'new_password' not in data:
+        return jsonify({'message': 'New password is required'}), 400
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'message': 'User not found'}), 404
+
+    user.set_password(data['new_password'])
+    db.session.commit()
+    
+    return jsonify({'message': 'Password updated successfully'})
+
 # Statistics Routes
 @app.route('/statistics', methods=['GET'])
 @jwt_required()
