@@ -76,12 +76,7 @@ const Layout = () => {
         text: 'Rooms',
         icon: <RoomIcon />,
         path: '/rooms',
-      },
-      {
-        text: 'Property Theme',
-        icon: <ThemeIcon />,
-        path: '/settings/property',
-      },
+      }
     ];
 
     const adminItems = [
@@ -94,12 +89,7 @@ const Layout = () => {
         text: 'Users',
         icon: <UsersIcon />,
         path: '/admin/users',
-      },
-      {
-        text: 'System Settings',
-        icon: <SettingsIcon />,
-        path: '/settings/system',
-      },
+      }
     ];
 
     switch (auth.user.role) {

@@ -161,8 +161,22 @@ def create_ticket():
             return jsonify({"msg": "User not found"}), 404
 
         data = request.json
-        if not data or not data.get('title') or not data.get('description') or not data.get('priority'):
+        if not data or not data.get('title') or not data.get('description') or not data.get('priority') or not data.get('property_id'):
             return jsonify({'msg': 'Invalid input'}), 400
+
+        # Verify user has access to the property
+        property_id = data.get('property_id')
+        if current_user.role == 'user':
+            has_access = any(p.property_id == property_id for p in current_user.assigned_properties)
+            if not has_access:
+                return jsonify({'msg': 'Unauthorized access to property'}), 403
+
+        # Verify room belongs to property if room_id is provided
+        room_id = data.get('room_id')
+        if room_id:
+            room = Room.query.filter_by(room_id=room_id, property_id=property_id).first()
+            if not room:
+                return jsonify({'msg': 'Invalid room for this property'}), 400
 
         ticket = Ticket(
             title=data['title'],
@@ -170,7 +184,8 @@ def create_ticket():
             priority=data['priority'],
             category=data.get('category', 'General'),
             user_id=current_user.user_id,
-            property_id=data.get('property_id')
+            property_id=property_id,
+            room_id=room_id
         )
         db.session.add(ticket)
         db.session.commit()
@@ -1053,33 +1068,49 @@ def get_property_users(property_id):
 @app.route('/properties/<int:property_id>/tickets', methods=['GET'])
 @jwt_required()
 def get_property_tickets(property_id):
-    current_user = get_jwt_identity()
-    
-    # Verify access rights
-    if current_user['role'] == 'manager' and current_user['managed_property_id'] != property_id:
-        return jsonify({'message': 'Unauthorized'}), 403
-    elif current_user['role'] == 'user' and current_user['assigned_property_id'] != property_id:
-        return jsonify({'message': 'Unauthorized'}), 403
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
 
-    # Get tickets based on role
-    if current_user['role'] in ['super_admin', 'manager']:
+        # Verify access to property
+        if current_user.role == 'user':
+            has_access = any(p.property_id == property_id for p in current_user.assigned_properties)
+            if not has_access:
+                return jsonify({'msg': 'Unauthorized access to property'}), 403
+        elif current_user.role == 'manager':
+            has_access = any(p.property_id == property_id for p in current_user.managed_properties)
+            if not has_access:
+                return jsonify({'msg': 'Unauthorized access to property'}), 403
+
+        # Get tickets for the property
         tickets = Ticket.query.filter_by(property_id=property_id).all()
-    else:
-        tickets = Ticket.query.filter_by(
-            property_id=property_id,
-            user_id=current_user['user_id']
-        ).all()
+        
+        ticket_list = []
+        for ticket in tickets:
+            creator = User.query.get(ticket.user_id)
+            room = Room.query.get(ticket.room_id) if ticket.room_id else None
+            
+            ticket_list.append({
+                'ticket_id': ticket.ticket_id,
+                'title': ticket.title,
+                'description': ticket.description,
+                'status': ticket.status,
+                'priority': ticket.priority,
+                'category': ticket.category,
+                'room_id': ticket.room_id,
+                'room_name': room.name if room else None,
+                'created_by_id': ticket.user_id,
+                'created_by_username': creator.username if creator else 'Unknown',
+                'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+                'property_id': ticket.property_id
+            })
 
-    return jsonify({
-        'tickets': [{
-            'ticket_id': t.ticket_id,
-            'title': t.title,
-            'description': t.description,
-            'status': t.status,
-            'priority': t.priority,
-            'category': t.category
-        } for t in tickets]
-    })
+        return jsonify({'tickets': ticket_list}), 200
+
+    except Exception as e:
+        app.logger.error(f"Error in get_property_tickets: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/properties/<int:property_id>/tasks', methods=['GET'])
 @jwt_required()

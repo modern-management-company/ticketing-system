@@ -16,11 +16,8 @@ import {
   Select,
   FormControl,
   InputLabel,
-  Tooltip,
-  Divider,
-  CircularProgress,
-  Alert,
-  Button
+  Button,
+  Divider
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -30,7 +27,6 @@ import {
   ConfirmationNumber as ConfirmationNumberIcon,
   Assignment as AssignmentIcon,
   Settings as SettingsIcon,
-  Palette as PaletteIcon,
   Dashboard as DashboardIcon,
   Logout as LogoutIcon
 } from '@mui/icons-material';
@@ -144,21 +140,6 @@ const Navbar = () => {
     }
   ];
 
-  const settingsItems = [
-    {
-      label: 'Property Settings',
-      icon: <PaletteIcon />,
-      path: '/settings/property',
-      roles: ['manager', 'super_admin']
-    },
-    {
-      label: 'System Settings',
-      icon: <SettingsIcon />,
-      path: '/settings/system',
-      roles: ['super_admin']
-    }
-  ];
-
   if (!auth?.isAuthenticated) return null;
 
   return (
@@ -202,13 +183,6 @@ const Navbar = () => {
             color="secondary"
             sx={{ mr: 1 }}
           />
-          
-          <IconButton
-            color="inherit"
-            onClick={handleSettingsMenu}
-          >
-            <SettingsIcon />
-          </IconButton>
 
           <Button
             color="inherit"
@@ -236,30 +210,6 @@ const Navbar = () => {
                 <ListItemText primary={item.label} />
               </MenuItem>
             ))}
-        </Menu>
-
-        <Menu
-          anchorEl={settingsAnchorEl}
-          open={Boolean(settingsAnchorEl)}
-          onClose={handleSettingsClose}
-          sx={{ mt: 1 }}
-        >
-          {settingsItems
-            .filter(item => item.roles.includes(auth.role))
-            .map((item) => (
-              <MenuItem
-                key={item.path}
-                onClick={() => handleNavigate(item.path)}
-              >
-                <ListItemIcon>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.label} />
-              </MenuItem>
-            ))}
-          <Divider />
-          <MenuItem onClick={() => handleNavigate('/profile')}>
-            <ListItemIcon><AccountCircleIcon /></ListItemIcon>
-            <ListItemText primary="Profile" />
-          </MenuItem>
         </Menu>
       </Toolbar>
     </AppBar>

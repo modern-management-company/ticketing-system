@@ -51,6 +51,12 @@ const ViewRooms = () => {
   const roomStatuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];
 
   useEffect(() => {
+    console.log('Auth context:', auth);
+  }, [auth]);
+
+  const isManager = auth?.user?.role === 'manager' || auth?.user?.role === 'super_admin';
+
+  useEffect(() => {
     if (selectedProperty) {
       fetchRooms();
     }
@@ -121,6 +127,7 @@ const ViewRooms = () => {
         setSuccess('Room deleted successfully');
         await fetchRooms();
       } catch (error) {
+        console.error('Failed to delete room:', error);
         setError(error.response?.data?.message || 'Failed to delete room');
       }
     }
@@ -141,7 +148,7 @@ const ViewRooms = () => {
         <Typography variant="h5">Room Management</Typography>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
-          {selectedProperty && (auth.role === 'manager' || auth.role === 'super_admin') && (
+          {selectedProperty && isManager && (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -168,8 +175,8 @@ const ViewRooms = () => {
                   <TableCell>Type</TableCell>
                   <TableCell>Floor</TableCell>
                   <TableCell>Status</TableCell>
-                  {(auth.role === 'manager' || auth.role === 'super_admin') && (
-                    <TableCell>Actions</TableCell>
+                  {isManager && (
+                    <TableCell align="center">Actions</TableCell>
                   )}
                 </TableRow>
               </TableHead>
@@ -185,9 +192,9 @@ const ViewRooms = () => {
                         color={room.status === 'Available' ? 'success' : 'default'}
                       />
                     </TableCell>
-                    {(auth.role === 'manager' || auth.role === 'super_admin') && (
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
+                    {isManager && (
+                      <TableCell align="center">
+                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
                           <IconButton
                             onClick={() => {
                               setRoomFormData(room);
@@ -195,6 +202,7 @@ const ViewRooms = () => {
                             }}
                             color="primary"
                             size="small"
+                            title="Edit Room"
                           >
                             <EditIcon />
                           </IconButton>
@@ -202,6 +210,7 @@ const ViewRooms = () => {
                             onClick={() => handleDeleteRoom(room.room_id)}
                             color="error"
                             size="small"
+                            title="Delete Room"
                           >
                             <DeleteIcon />
                           </IconButton>

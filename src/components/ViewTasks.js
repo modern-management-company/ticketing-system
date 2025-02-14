@@ -20,12 +20,18 @@ import {
   IconButton,
   Grid,
   FormControl,
-  InputLabel
+  InputLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField
 } from "@mui/material";
 import { useAuth } from '../context/AuthContext';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
+import AddIcon from '@mui/icons-material/Add';
 import PropertySwitcher from './PropertySwitcher';
 
 const ViewTasks = () => {
@@ -37,6 +43,18 @@ const ViewTasks = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState('');
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [taskForm, setTaskForm] = useState({
+    title: '',
+    description: '',
+    priority: 'Low',
+    status: 'pending',
+    assigned_to_id: ''
+  });
+
+  const priorities = ['Low', 'Medium', 'High', 'Critical'];
+  const statuses = ['pending', 'in progress', 'completed'];
 
   useEffect(() => {
     if (selectedProperty) {
@@ -56,6 +74,8 @@ const ViewTasks = () => {
         apiClient.get(`/properties/${selectedProperty}/users`)
       ]);
 
+      console.log('Tasks response:', tasksResponse.data); // Debug log
+
       if (tasksResponse.data?.tasks) {
         setTasks(tasksResponse.data.tasks);
       }
@@ -71,15 +91,66 @@ const ViewTasks = () => {
     }
   };
 
-  const handleAssigneeChange = async (taskId, newUserId) => {
+  const handleCreateOrEdit = async () => {
     try {
-      await apiClient.patch(`/tasks/${taskId}`, { assigned_to_id: newUserId });
-      setMessage('Task assigned successfully');
-      await fetchData();
+      if (!selectedProperty) {
+        setError('Please select a property first');
+        return;
+      }
+
+      const taskData = {
+        ...taskForm,
+        property_id: selectedProperty
+      };
+
+      if (editingTask) {
+        await apiClient.patch(`/tasks/${editingTask.task_id}`, taskData);
+        setMessage('Task updated successfully');
+      } else {
+        await apiClient.post('/tasks', taskData);
+        setMessage('Task created successfully');
+      }
+      fetchData();
+      handleCloseDialog();
     } catch (error) {
-      console.error('Failed to update task assignee:', error);
-      setError(error.response?.data?.message || 'Failed to update task assignee');
+      setError('Failed to save task');
+      console.error(error);
     }
+  };
+
+  const handleOpenDialog = (task = null) => {
+    if (task) {
+      setEditingTask(task);
+      setTaskForm({
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        status: task.status,
+        assigned_to_id: task.assigned_to_id || ''
+      });
+    } else {
+      setEditingTask(null);
+      setTaskForm({
+        title: '',
+        description: '',
+        priority: 'Low',
+        status: 'pending',
+        assigned_to_id: ''
+      });
+    }
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setEditingTask(null);
+    setTaskForm({
+      title: '',
+      description: '',
+      priority: 'Low',
+      status: 'pending',
+      assigned_to_id: ''
+    });
   };
 
   const handleStatusChange = async (taskId, newStatus) => {
@@ -92,6 +163,17 @@ const ViewTasks = () => {
     } catch (error) {
       setError('Failed to update task status');
       console.error(error);
+    }
+  };
+
+  const handleAssigneeChange = async (taskId, newUserId) => {
+    try {
+      await apiClient.patch(`/tasks/${taskId}`, { assigned_to_id: newUserId });
+      setMessage('Task assigned successfully');
+      await fetchData();
+    } catch (error) {
+      console.error('Failed to update task assignee:', error);
+      setError(error.response?.data?.message || 'Failed to update task assignee');
     }
   };
 
@@ -109,25 +191,6 @@ const ViewTasks = () => {
     }
   };
 
-  const handleQuickAction = async (taskId, currentStatus) => {
-    let newStatus;
-    const normalizedStatus = currentStatus?.toLowerCase();
-    switch (normalizedStatus) {
-      case 'pending':
-        newStatus = 'in progress';
-        break;
-      case 'in progress':
-        newStatus = 'completed';
-        break;
-      case 'completed':
-        newStatus = 'in progress';
-        break;
-      default:
-        newStatus = 'pending';
-    }
-    await handleStatusChange(taskId, newStatus);
-  };
-
   const handlePropertyChange = (propertyId) => {
     setSelectedProperty(propertyId);
   };
@@ -136,7 +199,18 @@ const ViewTasks = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Tasks</Typography>
-        <PropertySwitcher onPropertyChange={handlePropertyChange} />
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <PropertySwitcher onPropertyChange={handlePropertyChange} />
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+            disabled={!selectedProperty}
+          >
+            Create Task
+          </Button>
+        </Box>
       </Box>
       
       {error && (
@@ -167,6 +241,7 @@ const ViewTasks = () => {
                 <TableCell>Description</TableCell>
                 <TableCell>Assigned To</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell>Priority</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -194,13 +269,24 @@ const ViewTasks = () => {
                         ))}
                       </Select>
                     ) : (
-                      task.assigned_to || 'Unassigned'
+                      users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unassigned'
                     )}
                   </TableCell>
                   <TableCell>
                     <Chip 
                       label={task.status}
                       color={getStatusColor(task.status)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={task.priority}
+                      color={
+                        task.priority === 'Critical' ? 'error' :
+                        task.priority === 'High' ? 'warning' :
+                        task.priority === 'Medium' ? 'info' :
+                        'success'
+                      }
                     />
                   </TableCell>
                   <TableCell>
@@ -211,19 +297,18 @@ const ViewTasks = () => {
                         size="small"
                         sx={{ minWidth: 120 }}
                       >
-                        <MenuItem value="pending">Pending</MenuItem>
-                        <MenuItem value="in progress">In Progress</MenuItem>
-                        <MenuItem value="completed">Completed</MenuItem>
+                        {statuses.map(status => (
+                          <MenuItem key={status} value={status}>
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                          </MenuItem>
+                        ))}
                       </Select>
                       <IconButton
-                        onClick={() => handleQuickAction(task.task_id, task.status)}
-                        color={task.status === 'completed' ? 'success' : 'primary'}
+                        onClick={() => handleOpenDialog(task)}
+                        color="primary"
                         size="small"
                       >
-                        {task.status === 'completed' ? 
-                          <CheckCircleIcon /> : 
-                          <PauseCircleIcon />
-                        }
+                        <EditIcon />
                       </IconButton>
                     </Box>
                   </TableCell>
@@ -233,6 +318,81 @@ const ViewTasks = () => {
           </Table>
         </TableContainer>
       )}
+
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {editingTask ? 'Edit Task' : 'Create New Task'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+            <TextField
+              label="Title"
+              value={taskForm.title}
+              onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+              fullWidth
+              required
+            />
+            <TextField
+              label="Description"
+              value={taskForm.description}
+              onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+              multiline
+              rows={4}
+              fullWidth
+              required
+            />
+            <FormControl fullWidth>
+              <InputLabel>Assigned To</InputLabel>
+              <Select
+                value={taskForm.assigned_to_id}
+                onChange={(e) => setTaskForm({ ...taskForm, assigned_to_id: e.target.value })}
+                label="Assigned To"
+              >
+                <MenuItem value="">
+                  <em>Unassigned</em>
+                </MenuItem>
+                {users.map((user) => (
+                  <MenuItem key={user.user_id} value={user.user_id}>
+                    {user.username}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Priority</InputLabel>
+              <Select
+                value={taskForm.priority}
+                onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}
+                label="Priority"
+              >
+                {priorities.map((priority) => (
+                  <MenuItem key={priority} value={priority}>{priority}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={taskForm.status}
+                onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value })}
+                label="Status"
+              >
+                {statuses.map((status) => (
+                  <MenuItem key={status} value={status}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleCreateOrEdit} variant="contained" color="primary">
+            {editingTask ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

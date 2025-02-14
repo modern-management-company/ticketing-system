@@ -25,8 +25,6 @@ import ViewTickets from './components/ViewTickets';
 import ViewRooms from './components/ViewRooms';
 import TicketDetails from './components/TicketDetails';
 import PropertyManagement from './components/PropertyManagement';
-import PropertySettings from './components/settings/PropertySettings';
-import SystemSettings from './components/settings/SystemSettings';
 import Unauthorized from './components/Unauthorized';
 import UserProfile from './components/UserProfile';
 
@@ -82,19 +80,6 @@ const App = () => {
                 <Route path="users" element={
                   <ProtectedRoute allowedRoles={['super_admin']}>
                     <ManageUsers />
-                  </ProtectedRoute>
-                } />
-              </Route>
-              
-              <Route path="/settings">
-                <Route path="property" element={
-                  <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
-                    <PropertySettings />
-                  </ProtectedRoute>
-                } />
-                <Route path="system" element={
-                  <ProtectedRoute allowedRoles={['super_admin']}>
-                    <SystemSettings />
                   </ProtectedRoute>
                 } />
               </Route>

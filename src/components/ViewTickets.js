@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from '../context/AuthContext';
 import apiClient from "./apiClient";
 import {
@@ -22,10 +22,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Container,
-  List,
-  ListItem,
-  ListItemText,
+  FormControl,
+  InputLabel
 } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -33,56 +31,105 @@ import EditIcon from '@mui/icons-material/Edit';
 const ViewTickets = () => {
   const { auth } = useAuth();
   const [tickets, setTickets] = useState([]);
+  const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState("");
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTicket, setEditingTicket] = useState(null);
+  const [selectedProperty, setSelectedProperty] = useState(null);
+  const [rooms, setRooms] = useState([]);
   const [ticketForm, setTicketForm] = useState({
     title: '',
     description: '',
     priority: 'Low',
-    category: 'General'
+    category: 'General',
+    property_id: '',
+    room_id: ''
   });
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Cleaning', 'Other'];
 
-  const fetchTickets = useCallback(async () => {
+  // Fetch properties on component mount
+  useEffect(() => {
+    fetchProperties();
+  }, []);
+
+  // Fetch tickets and rooms when property is selected
+  useEffect(() => {
+    if (selectedProperty) {
+      fetchTickets();
+      fetchRooms();
+    }
+  }, [selectedProperty]);
+
+  const fetchProperties = async () => {
     try {
-      if (!auth?.token) {
-        throw new Error('No auth token found');
+      const response = await apiClient.get('/properties');
+      if (response.data) {
+        setProperties(response.data);
+        // Set first property as default if available
+        if (response.data.length > 0) {
+          setSelectedProperty(response.data[0].property_id);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch properties:', error);
+      setError('Failed to load properties');
+    }
+  };
+
+  const fetchTickets = async () => {
+    try {
+      if (!auth?.token || !selectedProperty) {
+        return;
       }
       setLoading(true);
-      const response = await apiClient.get('/tickets');
+      const response = await apiClient.get(`/properties/${selectedProperty}/tickets`);
       if (response.data?.tickets) {
         setTickets(response.data.tickets);
       } else {
         setTickets([]);
       }
+      setError(null);
     } catch (error) {
       console.error('Failed to fetch tickets:', error);
-      if (error.response?.status === 422) {
-        setError('Session expired. Please login again.');
-      } else {
-        setError(error.message || 'Failed to fetch tickets');
-      }
+      setError(error.message || 'Failed to fetch tickets');
     } finally {
       setLoading(false);
     }
-  }, [auth?.token]);
+  };
 
-  useEffect(() => {
-    fetchTickets();
-  }, [fetchTickets]);
+  const fetchRooms = async () => {
+    try {
+      if (!selectedProperty) return;
+      const response = await apiClient.get(`/properties/${selectedProperty}/rooms`);
+      if (response.data?.rooms) {
+        setRooms(response.data.rooms);
+      }
+    } catch (error) {
+      console.error('Failed to fetch rooms:', error);
+    }
+  };
 
   const handleCreateOrEdit = async () => {
     try {
+      if (!selectedProperty) {
+        setError('Please select a property first');
+        return;
+      }
+
+      const ticketData = {
+        ...ticketForm,
+        property_id: selectedProperty
+      };
+
       if (editingTicket) {
-        await apiClient.patch(`/tickets/${editingTicket.ticket_id}`, ticketForm);
+        await apiClient.patch(`/tickets/${editingTicket.ticket_id}`, ticketData);
         setMessage('Ticket updated successfully');
       } else {
-        await apiClient.post('/tickets', ticketForm);
+        await apiClient.post('/tickets', ticketData);
         setMessage('Ticket created successfully');
       }
       fetchTickets();
@@ -100,7 +147,9 @@ const ViewTickets = () => {
         title: ticket.title,
         description: ticket.description,
         priority: ticket.priority,
-        category: ticket.category
+        category: ticket.category,
+        property_id: ticket.property_id,
+        room_id: ticket.room_id || ''
       });
     } else {
       setEditingTicket(null);
@@ -108,7 +157,9 @@ const ViewTickets = () => {
         title: '',
         description: '',
         priority: 'Low',
-        category: 'General'
+        category: 'General',
+        property_id: selectedProperty || '',
+        room_id: ''
       });
     }
     setOpenDialog(true);
@@ -121,22 +172,17 @@ const ViewTickets = () => {
       title: '',
       description: '',
       priority: 'Low',
-      category: 'General'
+      category: 'General',
+      property_id: selectedProperty || '',
+      room_id: ''
     });
   };
 
-  const handleStatusChange = async (ticketId, newStatus) => {
-    try {
-      await apiClient.patch(`/tickets/${ticketId}`, { status: newStatus });
-      setTickets(tickets.map(ticket => 
-        ticket.ticket_id === ticketId ? { ...ticket, status: newStatus } : ticket
-      ));
-    } catch (error) {
-      console.error('Failed to update ticket status:', error);
-    }
+  const handlePropertyChange = (event) => {
+    setSelectedProperty(event.target.value);
   };
 
-  if (loading) {
+  if (loading && !properties.length) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
         <CircularProgress />
@@ -144,109 +190,118 @@ const ViewTickets = () => {
     );
   }
 
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        {error}
-      </Alert>
-    );
-  }
-
   return (
-    <Container maxWidth="md">
-      <Typography variant="h4" component="h1" gutterBottom sx={{ mt: 4 }}>
-        Tickets
-      </Typography>
-      <List>
-        {tickets.map((ticket) => (
-          <Paper key={ticket.ticket_id} sx={{ mb: 2 }}>
-            <ListItem>
-              <ListItemText
-                primary={ticket.title}
-                secondary={`Status: ${ticket.status} | Created: ${new Date(ticket.created_at).toLocaleDateString()}`}
-              />
-            </ListItem>
-          </Paper>
-        ))}
-      </List>
-
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Tickets</Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Create Ticket
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <FormControl sx={{ minWidth: 200 }}>
+            <InputLabel>Select Property</InputLabel>
+            <Select
+              value={selectedProperty || ''}
+              onChange={handlePropertyChange}
+              label="Select Property"
+            >
+              {properties.map((property) => (
+                <MenuItem key={property.property_id} value={property.property_id}>
+                  {property.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+            disabled={!selectedProperty}
+          >
+            Create Ticket
+          </Button>
+        </Box>
       </Box>
 
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      
       {message && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setMessage('')}>
           {message}
         </Alert>
       )}
-      
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>ID</TableCell>
-              <TableCell>Title</TableCell>
-              <TableCell>Description</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Priority</TableCell>
-              <TableCell>Category</TableCell>
-              <TableCell>Created By</TableCell>
-              <TableCell>Assigned To</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {tickets.map((ticket) => (
-              <TableRow key={ticket.ticket_id}>
-                <TableCell>{ticket.ticket_id}</TableCell>
-                <TableCell>{ticket.title}</TableCell>
-                <TableCell>{ticket.description}</TableCell>
-                <TableCell>
-                  <Chip 
-                    label={ticket.status}
-                    color={
-                      ticket.status === 'Open' ? 'error' :
-                      ticket.status === 'In Progress' ? 'warning' :
-                      'success'
-                    }
-                  />
-                </TableCell>
-                <TableCell>
-                  <Chip 
-                    label={ticket.priority}
-                    color={
-                      ticket.priority === 'Critical' ? 'error' :
-                      ticket.priority === 'High' ? 'warning' :
-                      ticket.priority === 'Medium' ? 'info' :
-                      'success'
-                    }
-                  />
-                </TableCell>
-                <TableCell>{ticket.category}</TableCell>
-                <TableCell>{ticket.created_by_username}</TableCell>
-                <TableCell>{ticket.assigned_to_username}</TableCell>
-                <TableCell>
-                  <Button
-                    startIcon={<EditIcon />}
-                    onClick={() => handleOpenDialog(ticket)}
-                    size="small"
-                  >
-                    Edit
-                  </Button>
-                </TableCell>
+
+      {!selectedProperty ? (
+        <Alert severity="info">Please select a property to view tickets</Alert>
+      ) : loading ? (
+        <Box display="flex" justifyContent="center" p={3}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Title</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>Room</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Priority</TableCell>
+                <TableCell>Category</TableCell>
+                <TableCell>Created By</TableCell>
+                <TableCell>Actions</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {tickets.map((ticket) => (
+                <TableRow key={ticket.ticket_id}>
+                  <TableCell>{ticket.ticket_id}</TableCell>
+                  <TableCell>{ticket.title}</TableCell>
+                  <TableCell>{ticket.description}</TableCell>
+                  <TableCell>
+                    {rooms.find(r => r.room_id === ticket.room_id)?.name || 'N/A'}
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={ticket.status}
+                      color={
+                        ticket.status.toLowerCase() === 'open' ? 'error' :
+                        ticket.status.toLowerCase() === 'in progress' ? 'warning' :
+                        'success'
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={ticket.priority}
+                      color={
+                        ticket.priority === 'Critical' ? 'error' :
+                        ticket.priority === 'High' ? 'warning' :
+                        ticket.priority === 'Medium' ? 'info' :
+                        'success'
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>{ticket.category}</TableCell>
+                  <TableCell>{ticket.created_by_username}</TableCell>
+                  <TableCell>
+                    <Button
+                      startIcon={<EditIcon />}
+                      onClick={() => handleOpenDialog(ticket)}
+                      size="small"
+                    >
+                      Edit
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
@@ -270,26 +325,47 @@ const ViewTickets = () => {
               fullWidth
               required
             />
-            <Select
-              value={ticketForm.priority}
-              onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
-              fullWidth
-              label="Priority"
-            >
-              {priorities.map((priority) => (
-                <MenuItem key={priority} value={priority}>{priority}</MenuItem>
-              ))}
-            </Select>
-            <Select
-              value={ticketForm.category}
-              onChange={(e) => setTicketForm({ ...ticketForm, category: e.target.value })}
-              fullWidth
-              label="Category"
-            >
-              {categories.map((category) => (
-                <MenuItem key={category} value={category}>{category}</MenuItem>
-              ))}
-            </Select>
+            <FormControl fullWidth>
+              <InputLabel>Room</InputLabel>
+              <Select
+                value={ticketForm.room_id}
+                onChange={(e) => setTicketForm({ ...ticketForm, room_id: e.target.value })}
+                label="Room"
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {rooms.map((room) => (
+                  <MenuItem key={room.room_id} value={room.room_id}>
+                    {room.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Priority</InputLabel>
+              <Select
+                value={ticketForm.priority}
+                onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
+                label="Priority"
+              >
+                {priorities.map((priority) => (
+                  <MenuItem key={priority} value={priority}>{priority}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={ticketForm.category}
+                onChange={(e) => setTicketForm({ ...ticketForm, category: e.target.value })}
+                label="Category"
+              >
+                {categories.map((category) => (
+                  <MenuItem key={category} value={category}>{category}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Box>
         </DialogContent>
         <DialogActions>
@@ -299,7 +375,7 @@ const ViewTickets = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </Box>
   );
 };
 

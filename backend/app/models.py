@@ -138,6 +138,10 @@ class Room(db.Model):
     type = db.Column(db.String(50), default='standard')
     floor = db.Column(db.Integer)
     status = db.Column(db.String(20), default='available')
+    capacity = db.Column(db.Integer)
+    amenities = db.Column(db.JSON, default=list)
+    description = db.Column(db.Text)
+    last_cleaned = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -149,6 +153,10 @@ class Room(db.Model):
             'type': self.type,
             'floor': self.floor,
             'status': self.status,
+            'capacity': self.capacity,
+            'amenities': self.amenities or [],
+            'description': self.description,
+            'last_cleaned': self.last_cleaned.isoformat() if self.last_cleaned else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
