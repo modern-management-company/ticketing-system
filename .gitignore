@@ -44,3 +44,16 @@ dist/
 .DS_Store
 Thumbs.db
 package-lock.json
+backend/serviceAccountKey.json
+.qodo/history.sqlite
+backend/logs/app.log.2
+backend/logs/app.log.1
+backend/logs/app.log.3
+backend/logs/app.log.4
+backend/logs/app.log.5
+backend/logs/app.log.6
+backend/logs/app.log.7
+backend/logs/app.log.8
+backend/logs/app.log.9
+backend/logs/app.log.10
+package-lock.json

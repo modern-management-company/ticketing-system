@@ -1,219 +1,297 @@
-import React, { useEffect, useState } from "react";
-import apiClient from "./apiClient";
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Grid,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
   Select,
   MenuItem,
-  TextField,
-  Snackbar,
+  FormControl,
+  InputLabel,
   Alert,
-} from "@mui/material";
+  CircularProgress,
+  Chip,
+  IconButton,
+  Grid
+} from '@mui/material';
+import { useAuth } from '../context/AuthContext';
+import apiClient from './apiClient';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import PropertySwitcher from './PropertySwitcher';
 
-const ViewRooms = ({ token }) => {
-  const [properties, setProperties] = useState([]);
-  const [selectedProperty, setSelectedProperty] = useState("");
+const ViewRooms = () => {
+  const { auth } = useAuth();
   const [rooms, setRooms] = useState([]);
-  const [editRoom, setEditRoom] = useState({});
-  const [newRoomName, setNewRoomName] = useState("");
-  const [message, setMessage] = useState("");
-  const [snackbarType, setSnackbarType] = useState("success");
+  const [selectedProperty, setSelectedProperty] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [roomFormData, setRoomFormData] = useState({
+    name: '',
+    type: '',
+    floor: '',
+    status: 'Available'
+  });
+
+  const roomTypes = ['Single', 'Double', 'Suite', 'Conference', 'Other'];
+  const roomStatuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];
 
   useEffect(() => {
-    const fetchProperties = async () => {
-      try {
-        const response = await apiClient.get("/properties", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setProperties(response.data.properties);
-      } catch (error) {
-        console.error("Failed to fetch properties", error);
+    console.log('Auth context:', auth);
+  }, [auth]);
+
+  const isManager = auth?.user?.role === 'manager' || auth?.user?.role === 'super_admin';
+
+  useEffect(() => {
+    if (selectedProperty) {
+      fetchRooms();
+    }
+  }, [selectedProperty]);
+
+  const fetchRooms = async () => {
+    if (!selectedProperty) return;
+    
+    try {
+      setLoading(true);
+      const response = await apiClient.get(`/properties/${selectedProperty}/rooms`);
+      if (response.data && Array.isArray(response.data.rooms)) {
+        setRooms(response.data.rooms);
+      } else {
+        setRooms([]);
       }
-    };
-
-    fetchProperties();
-  }, [token]);
-
-  const fetchRooms = async (propertyId) => {
-    try {
-      const response = await apiClient.get(`/properties/${propertyId}/rooms`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setRooms(response.data.rooms);
     } catch (error) {
-      console.error("Failed to fetch rooms", error);
+      console.error('Failed to fetch rooms:', error);
+      setError('Failed to load rooms');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleEdit = async (roomId) => {
-    try {
-      const response = await apiClient.patch(
-        `/rooms/${roomId}`,
-        { name: editRoom.name },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMessage("Room updated successfully!");
-      setSnackbarType("success");
-      setRooms((prev) =>
-        prev.map((room) =>
-          room.room_id === roomId ? { ...room, name: editRoom.name } : room
-        )
-      );
-      setEditRoom({});
-    } catch (error) {
-      setMessage("Failed to update room.");
-      setSnackbarType("error");
-    }
-  };
-
-  const handleDelete = async (roomId) => {
-    try {
-      await apiClient.delete(`/rooms/${roomId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setMessage("Room deleted successfully!");
-      setSnackbarType("success");
-      setRooms((prev) => prev.filter((room) => room.room_id !== roomId));
-    } catch (error) {
-      setMessage("Failed to delete room.");
-      setSnackbarType("error");
-    }
+  const handlePropertyChange = (propertyId) => {
+    setSelectedProperty(propertyId);
   };
 
   const handleAddRoom = async () => {
-    if (!newRoomName || !selectedProperty) {
-      setMessage("Please enter a room name and select a property.");
-      setSnackbarType("error");
-      return;
-    }
     try {
-      const response = await apiClient.post(
-        `/properties/${selectedProperty}/rooms`,
-        { name: newRoomName },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMessage("Room added successfully!");
-      setSnackbarType("success");
-      setNewRoomName("");
-      fetchRooms(selectedProperty); // Refresh the rooms list after adding
+      setError(null);
+      setSuccess(null);
+      
+      if (!roomFormData.name) {
+        setError('Room name is required');
+        return;
+      }
+
+      const response = await apiClient.post(`/properties/${selectedProperty}/rooms`, roomFormData);
+      if (response.data) {
+        setSuccess('Room added successfully');
+        await fetchRooms();
+        setOpenDialog(false);
+        resetForm();
+      }
     } catch (error) {
-      setMessage("Failed to add room.");
-      setSnackbarType("error");
+      console.error('Failed to add room:', error);
+      setError(error.response?.data?.message || 'Failed to add room');
     }
   };
 
+  const handleEditRoom = async (roomId) => {
+    try {
+      await apiClient.put(`/properties/${selectedProperty}/rooms/${roomId}`, roomFormData);
+      setSuccess('Room updated successfully');
+      await fetchRooms();
+      setOpenDialog(false);
+      resetForm();
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to update room');
+    }
+  };
+
+  const handleDeleteRoom = async (roomId) => {
+    if (window.confirm('Are you sure you want to delete this room?')) {
+      try {
+        await apiClient.delete(`/properties/${selectedProperty}/rooms/${roomId}`);
+        setSuccess('Room deleted successfully');
+        await fetchRooms();
+      } catch (error) {
+        console.error('Failed to delete room:', error);
+        setError(error.response?.data?.message || 'Failed to delete room');
+      }
+    }
+  };
+
+  const resetForm = () => {
+    setRoomFormData({
+      name: '',
+      type: '',
+      floor: '',
+      status: 'Available'
+    });
+  };
+
   return (
-    <Box p={3}>
-      <Typography variant="h4" gutterBottom>
-        View and Manage Rooms
-      </Typography>
-      <Select
-        fullWidth
-        value={selectedProperty}
-        onChange={(e) => {
-          setSelectedProperty(e.target.value);
-          fetchRooms(e.target.value);
-        }}
-        displayEmpty
-      >
-        <MenuItem value="">Select Property</MenuItem>
-        {properties.map((property) => (
-          <MenuItem key={property.property_id} value={property.property_id}>
-            {property.name}
-          </MenuItem>
-        ))}
-      </Select>
-
-      <Box mt={2} display="flex" gap={2}>
-        <TextField
-          fullWidth
-          label="New Room Name"
-          value={newRoomName}
-          onChange={(e) => setNewRoomName(e.target.value)}
-        />
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleAddRoom}
-          disabled={!selectedProperty}
-        >
-          Add Room
-        </Button>
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h5">Room Management</Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <PropertySwitcher onPropertyChange={handlePropertyChange} />
+          {selectedProperty && isManager && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setOpenDialog(true)}
+            >
+              Add Room
+            </Button>
+          )}
+        </Box>
       </Box>
 
-      <Box mt={4}>
-        <Grid container spacing={2}>
-          {rooms.map((room) => (
-            <Grid item xs={6} sm={4} md={3} key={room.room_id}>
-              <Box
-                p={2}
-                border={1}
-                borderRadius={1}
-                borderColor="grey.300"
-                textAlign="center"
-                display="flex"
-                flexDirection="column"
-                justifyContent="space-between"
-              >
-                {editRoom.room_id === room.room_id ? (
-                  <TextField
-                    fullWidth
-                    defaultValue={room.name}
-                    onChange={(e) =>
-                      setEditRoom({ ...editRoom, name: e.target.value })
-                    }
-                  />
-                ) : (
-                  <Typography variant="h6">{room.name}</Typography>
-                )}
-                <Box mt={2} display="flex" gap={1}>
-                  {editRoom.room_id === room.room_id ? (
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      color="primary"
-                      onClick={() => handleEdit(room.room_id)}
-                    >
-                      Save
-                    </Button>
-                  ) : (
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      onClick={() => setEditRoom(room)}
-                    >
-                      Edit
-                    </Button>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+      {selectedProperty ? (
+        loading ? (
+          <CircularProgress />
+        ) : (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Floor</TableCell>
+                  <TableCell>Status</TableCell>
+                  {isManager && (
+                    <TableCell align="center">Actions</TableCell>
                   )}
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    color="secondary"
-                    onClick={() => handleDelete(room.room_id)}
-                  >
-                    Delete
-                  </Button>
-                </Box>
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-      </Box>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rooms.map((room) => (
+                  <TableRow key={room.room_id}>
+                    <TableCell>{room.name}</TableCell>
+                    <TableCell>{room.type || 'N/A'}</TableCell>
+                    <TableCell>{room.floor || 'N/A'}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={room.status} 
+                        color={room.status === 'Available' ? 'success' : 'default'}
+                      />
+                    </TableCell>
+                    {isManager && (
+                      <TableCell align="center">
+                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                          <IconButton
+                            onClick={() => {
+                              setRoomFormData(room);
+                              setOpenDialog(true);
+                            }}
+                            color="primary"
+                            size="small"
+                            title="Edit Room"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton
+                            onClick={() => handleDeleteRoom(room.room_id)}
+                            color="error"
+                            size="small"
+                            title="Delete Room"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )
+      ) : (
+        <Alert severity="info">Please select a property to view rooms</Alert>
+      )}
 
-      <Snackbar
-        open={!!message}
-        autoHideDuration={6000}
-        onClose={() => setMessage("")}
-      >
-        <Alert
-          severity={snackbarType}
-          onClose={() => setMessage("")}
-        >
-          {message}
-        </Alert>
-      </Snackbar>
+      <Dialog open={openDialog} onClose={() => {
+        setOpenDialog(false);
+        resetForm();
+      }}>
+        <DialogTitle>
+          {roomFormData.room_id ? 'Edit Room' : 'Add New Room'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              label="Room Name"
+              value={roomFormData.name}
+              onChange={(e) => setRoomFormData({ ...roomFormData, name: e.target.value })}
+              fullWidth
+              required
+            />
+            <FormControl fullWidth>
+              <InputLabel>Room Type</InputLabel>
+              <Select
+                value={roomFormData.type}
+                onChange={(e) => setRoomFormData({ ...roomFormData, type: e.target.value })}
+                label="Room Type"
+              >
+                {roomTypes.map(type => (
+                  <MenuItem key={type} value={type}>{type}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Floor"
+              value={roomFormData.floor}
+              onChange={(e) => setRoomFormData({ ...roomFormData, floor: e.target.value })}
+              fullWidth
+              type="number"
+            />
+            <FormControl fullWidth>
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={roomFormData.status}
+                onChange={(e) => setRoomFormData({ ...roomFormData, status: e.target.value })}
+                label="Status"
+              >
+                {roomStatuses.map(status => (
+                  <MenuItem key={status} value={status}>{status}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setOpenDialog(false);
+            resetForm();
+          }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => roomFormData.room_id ? handleEditRoom(roomFormData.room_id) : handleAddRoom()}
+            variant="contained"
+            color="primary"
+          >
+            {roomFormData.room_id ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

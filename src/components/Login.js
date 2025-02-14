@@ -1,6 +1,6 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import apiClient from "./apiClient";
+import React, { useState, useEffect } from "react";
+import { useNavigate, Link as RouterLink, useLocation } from "react-router-dom";
+
 import {
   Box,
   Button,
@@ -8,87 +8,154 @@ import {
   Typography,
   Container,
   Alert,
+  CircularProgress,
+  Grid,
+  Link,
 } from "@mui/material";
+import { useAuth } from "../context/AuthContext";
+import apiClient from "../components/apiClient"; 
 
-const Login = ({ setToken }) => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+const Login = () => {
+  const { login, auth } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [formData, setFormData] = useState({
+    username: '',
+    password: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isFirstUser, setIsFirstUser] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (auth?.isAuthenticated && auth?.token) {
+        try {
+          await apiClient.get('/verify-token');
+          const from = location.state?.from?.pathname || '/';
+          navigate(from, { replace: true });
+        } catch (error) {
+          console.warn('Token verification failed:', error);
+        }
+      }
+    };
+    checkAuth();
+  }, [auth, navigate, location]);
+
+  useEffect(() => {
+    const checkFirst = async () => {
+      try {
+        const response = await apiClient.get('/check-first-user');
+        setIsFirstUser(response.data.isFirstUser);
+      } catch (error) {
+        console.error('Failed to check first user status:', error);
+        setError('Failed to check system status');
+      }
+    };
+    checkFirst();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    setError(null);
+    setLoading(true);
 
     try {
-      console.log('Attempting login with:', { username });
-      
-      const response = await apiClient.post("/login", { username, password });
-      const { token } = response.data;
-      
-      console.log('Login response:', {
-        success: !!token,
-        data: response.data
-      });
-
-      if (!token) {
-        throw new Error("No token received");
+      if (!formData.username || !formData.password) {
+        throw new Error('Please enter both username and password');
       }
-
-      setToken(token, username);
-      navigate("/home");
-    } catch (error) {
-      console.error("Login error:", {
-        message: error.message,
-        response: error.response?.data
-      });
       
+      const response = await apiClient.post('/login', {
+        username: formData.username,
+        password: formData.password
+      });
+
+      if (response.data && response.data.token) {
+        await login(response.data);
+        const from = location.state?.from?.pathname || '/';
+        navigate(from, { replace: true });
+      } else {
+        throw new Error('Invalid login response');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
       setError(
-        error.response?.data?.message || 
+        error.response?.data?.msg || 
         error.message || 
-        "Login failed"
+        'Failed to connect to the server. Please try again.'
       );
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box sx={{ mt: 8, display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <Typography component="h1" variant="h5">
-          Login
+    <Container component="main" maxWidth="xs">
+      <Box sx={{
+        marginTop: 8,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+      }}>
+        <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
+          Sign in to Ticketing System
         </Typography>
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+        
+        {error && (
+          <Alert severity="error" sx={{ mt: 2, width: '100%', mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
           <TextField
             margin="normal"
             required
             fullWidth
             label="Username"
+            name="username"
+            autoComplete="username"
             autoFocus
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            value={formData.username}
+            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+            disabled={loading}
           />
           <TextField
             margin="normal"
             required
             fullWidth
+            name="password"
             label="Password"
             type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            value={formData.password}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            disabled={loading}
           />
-          {error && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {error}
-            </Alert>
-          )}
           <Button
             type="submit"
             fullWidth
             variant="contained"
             sx={{ mt: 3, mb: 2 }}
+            disabled={loading}
           >
-            Login
+            {loading ? <CircularProgress size={24} /> : 'Sign In'}
           </Button>
+          <Grid container spacing={2}>
+            {isFirstUser ? (
+              <Grid item xs={12}>
+                <Link component={RouterLink} to="/register-admin" variant="body2">
+                  Create Super Admin Account
+                </Link>
+              </Grid>
+            ) : (
+              <Grid item xs={12}>
+                <Link component={RouterLink} to="/register" variant="body2">
+                  {"Don't have an account? Sign Up"}
+                </Link>
+              </Grid>
+            )}
+          </Grid>
         </Box>
       </Box>
     </Container>

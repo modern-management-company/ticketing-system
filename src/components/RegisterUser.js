@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate, Link as RouterLink } from "react-router-dom";
 import {
   Box,
   Button,
@@ -6,75 +7,168 @@ import {
   Typography,
   Snackbar,
   Alert,
+  Link,
+  Paper
 } from "@mui/material";
-import apiClient from "./apiClient"; // Import the centralized API client
+import apiClient from "./apiClient";
 
-const RegisterUser = () => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+const RegisterUser = ({ isAdminRegistration = false }) => {
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    username: "",
+    email: "",
+    password: "",
+    role: isAdminRegistration ? "super_admin" : "user"
+  });
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
+
     try {
-      await apiClient.post("/register", { username, password }); // Use apiClient here
-      setMessage("User registered successfully!");
-      setUsername("");
-      setPassword("");
+      setLoading(true);
+      setError("");
+      setMessage("");
+      
+      // Validate required fields
+      if (!formData.username || !formData.email || !formData.password) {
+        setError("All fields are required");
+        setLoading(false);
+        return;
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        setError("Please enter a valid email address");
+        setLoading(false);
+        return;
+      }
+
+      // Validate password length
+      if (formData.password.length < 6) {
+        setError("Password must be at least 6 characters long");
+        setLoading(false);
+        return;
+      }
+
+      // Register user
+      const response = await apiClient.post("/register", formData);
+      console.log('Registration response:', response.data);
+
+      setMessage("Registration successful! Please wait for an admin to assign you to properties.");
+      
+      // Clear form
+      setFormData({
+        username: "",
+        email: "",
+        password: "",
+        role: isAdminRegistration ? "super_admin" : "user"
+      });
+
+      // Navigate after showing success message
+      setTimeout(() => {
+        navigate('/login');
+      }, 3000);
+
     } catch (error) {
-      console.error("Failed to register user", error);
-      setMessage("Failed to register user.");
+      console.error('Registration error:', error);
+      const errorMessage = error.response?.data?.msg || 
+                          error.response?.data?.message || 
+                          error.message || 
+                          "Registration failed. Please try again.";
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <Box sx={{ maxWidth: 600, margin: "auto", padding: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Register User
-      </Typography>
-      <form onSubmit={handleSubmit}>
-        <TextField
-          fullWidth
-          margin="normal"
-          label="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-        />
-        <TextField
-          fullWidth
-          margin="normal"
-          label="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <Button
-          type="submit"
-          variant="contained"
-          color="primary"
-          fullWidth
-          sx={{ mt: 2 }}
-        >
-          Register
-        </Button>
-      </form>
-
-      {message && (
-        <Snackbar
-          open={!!message}
-          autoHideDuration={6000}
-          onClose={() => setMessage("")}
-        >
-          <Alert
-            severity={message.includes("successfully") ? "success" : "error"}
-            onClose={() => setMessage("")}
+    <Box sx={{ 
+      maxWidth: 400, 
+      mx: "auto", 
+      mt: 4, 
+      p: 2,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center'
+    }}>
+      <Paper elevation={3} sx={{ p: 3, width: '100%' }}>
+        <Typography variant="h4" gutterBottom align="center">
+          {isAdminRegistration ? "Create Admin Account" : "Register User"}
+        </Typography>
+        
+        <form onSubmit={handleSubmit}>
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Username"
+            value={formData.username}
+            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+            required
+            disabled={loading}
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            required
+            disabled={loading}
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Password"
+            type="password"
+            value={formData.password}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            required
+            disabled={loading}
+          />
+          
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            sx={{ mt: 3, mb: 2 }}
+            disabled={loading}
           >
-            {message}
-          </Alert>
-        </Snackbar>
-      )}
+            {loading ? "Registering..." : "Register"}
+          </Button>
+        </form>
+
+        <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <Link component={RouterLink} to="/login" variant="body2">
+            Already have an account? Sign in
+          </Link>
+        </Box>
+      </Paper>
+
+      <Snackbar
+        open={!!message || !!error}
+        autoHideDuration={6000}
+        onClose={() => {
+          setMessage("");
+          setError("");
+        }}
+      >
+        <Alert
+          severity={message ? "success" : "error"}
+          onClose={() => {
+            setMessage("");
+            setError("");
+          }}
+          sx={{ width: '100%' }}
+        >
+          {message || error}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

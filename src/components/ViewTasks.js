@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import apiClient from "./apiClient"; 
 import {
   Box,
@@ -13,153 +14,385 @@ import {
   Select,
   MenuItem,
   Button,
+  CircularProgress,
+  Alert,
+  Chip,
+  IconButton,
+  Grid,
+  FormControl,
+  InputLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField
 } from "@mui/material";
+import { useAuth } from '../context/AuthContext';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import PauseCircleIcon from '@mui/icons-material/PauseCircle';
+import AddIcon from '@mui/icons-material/Add';
+import PropertySwitcher from './PropertySwitcher';
 
-const ViewTasks = ({ token }) => {
+const ViewTasks = () => {
+  const navigate = useNavigate();
+  const { auth } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
-  const [message, setMessage] = useState("");
+  const [selectedProperty, setSelectedProperty] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [message, setMessage] = useState('');
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [taskForm, setTaskForm] = useState({
+    title: '',
+    description: '',
+    priority: 'Low',
+    status: 'pending',
+    assigned_to_id: ''
+  });
+
+  const priorities = ['Low', 'Medium', 'High', 'Critical'];
+  const statuses = ['pending', 'in progress', 'completed'];
 
   useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const response = await apiClient.get("/tasks", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setTasks(response.data.tasks);
-      } catch (error) {
-        console.error("Failed to fetch tasks", error);
-      }
-    };
+    if (selectedProperty) {
+      fetchData();
+    }
+  }, [selectedProperty]);
 
-    const fetchUsers = async () => {
-      try {
-        const response = await apiClient.get("/users", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setUsers(response.data.users);
-      } catch (error) {
-        console.error("Failed to fetch users", error);
-      }
-    };
-
-    fetchTasks();
-    fetchUsers();
-  }, [token]);
-
-  const updateTaskStatus = async (taskId, newStatus) => {
+  const fetchData = async () => {
     try {
-      const response = await apiClient.patch(
-        `/tasks/${taskId}`,
-        { status: newStatus },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      setMessage(response.data.message);
+      if (!auth?.token || !selectedProperty) {
+        return;
+      }
 
-      // Update the local state for the task
-      setTasks((prev) =>
-        prev.map((task) =>
-          task.task_id === taskId ? { ...task, status: newStatus } : task
-        )
-      );
+      setLoading(true);
+      const [tasksResponse, usersResponse] = await Promise.all([
+        apiClient.get(`/properties/${selectedProperty}/tasks`),
+        apiClient.get(`/properties/${selectedProperty}/users`)
+      ]);
+
+      console.log('Tasks response:', tasksResponse.data); // Debug log
+
+      if (tasksResponse.data?.tasks) {
+        setTasks(tasksResponse.data.tasks);
+      }
+      if (usersResponse.data?.users) {
+        setUsers(usersResponse.data.users);
+      }
+      setError(null);
     } catch (error) {
-      console.error("Failed to update task status", error);
+      console.error('Failed to fetch data:', error);
+      setError(error.response?.data?.message || 'Failed to fetch data');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const updateTaskAssignee = async (taskId, newUserId) => {
+  const handleCreateOrEdit = async () => {
     try {
-      const response = await apiClient.patch(
-        `/tasks/${taskId}`,
-        { assigned_to_user_id: newUserId },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      setMessage(response.data.message);
+      if (!selectedProperty) {
+        setError('Please select a property first');
+        return;
+      }
 
-      // Update the local state for the task
-      setTasks((prev) =>
-        prev.map((task) =>
-          task.task_id === taskId
-            ? { ...task, assigned_to: users.find((u) => u.user_id === newUserId)?.username }
-            : task
-        )
-      );
+      const taskData = {
+        ...taskForm,
+        property_id: selectedProperty
+      };
+
+      if (editingTask) {
+        await apiClient.patch(`/tasks/${editingTask.task_id}`, taskData);
+        setMessage('Task updated successfully');
+      } else {
+        await apiClient.post('/tasks', taskData);
+        setMessage('Task created successfully');
+      }
+      fetchData();
+      handleCloseDialog();
     } catch (error) {
-      console.error("Failed to update task assignee", error);
+      setError('Failed to save task');
+      console.error(error);
     }
+  };
+
+  const handleOpenDialog = (task = null) => {
+    if (task) {
+      setEditingTask(task);
+      setTaskForm({
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        status: task.status,
+        assigned_to_id: task.assigned_to_id || ''
+      });
+    } else {
+      setEditingTask(null);
+      setTaskForm({
+        title: '',
+        description: '',
+        priority: 'Low',
+        status: 'pending',
+        assigned_to_id: ''
+      });
+    }
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setEditingTask(null);
+    setTaskForm({
+      title: '',
+      description: '',
+      priority: 'Low',
+      status: 'pending',
+      assigned_to_id: ''
+    });
+  };
+
+  const handleStatusChange = async (taskId, newStatus) => {
+    try {
+      await apiClient.patch(`/tasks/${taskId}`, { status: newStatus });
+      setTasks(tasks.map(task => 
+        task.task_id === taskId ? { ...task, status: newStatus } : task
+      ));
+      setMessage('Task status updated successfully');
+    } catch (error) {
+      setError('Failed to update task status');
+      console.error(error);
+    }
+  };
+
+  const handleAssigneeChange = async (taskId, newUserId) => {
+    try {
+      await apiClient.patch(`/tasks/${taskId}`, { assigned_to_id: newUserId });
+      setMessage('Task assigned successfully');
+      await fetchData();
+    } catch (error) {
+      console.error('Failed to update task assignee:', error);
+      setError(error.response?.data?.message || 'Failed to update task assignee');
+    }
+  };
+
+  const getStatusColor = (status) => {
+    const normalizedStatus = status?.toLowerCase();
+    switch (normalizedStatus) {
+      case 'pending':
+        return 'warning';
+      case 'in progress':
+        return 'info';
+      case 'completed':
+        return 'success';
+      default:
+        return 'default';
+    }
+  };
+
+  const handlePropertyChange = (propertyId) => {
+    setSelectedProperty(propertyId);
   };
 
   return (
-    <Box p={3}>
-      <Typography variant="h4" gutterBottom>
-        View Tasks
-      </Typography>
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell align="center">Task ID</TableCell>
-              <TableCell align="center">Ticket ID</TableCell>
-              <TableCell align="center">Assigned User</TableCell>
-              <TableCell align="center">Status</TableCell>
-              <TableCell align="center">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {tasks.map((task) => (
-              <TableRow key={task.task_id}>
-                <TableCell align="center">{task.task_id}</TableCell>
-                <TableCell align="center">{task.ticket_id}</TableCell>
-                <TableCell align="center">
-                  <Select
-                    value={users.find((user) => user.username === task.assigned_to)?.user_id || ""}
-                    onChange={(e) =>
-                      updateTaskAssignee(task.task_id, e.target.value)
-                    }
-                    displayEmpty
-                  >
-                    <MenuItem value="">Select User</MenuItem>
-                    {users.map((user) => (
-                      <MenuItem key={user.user_id} value={user.user_id}>
-                        {user.username}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </TableCell>
-                <TableCell align="center">
-                  <Select
-                    value={task.status}
-                    onChange={(e) =>
-                      updateTaskStatus(task.task_id, e.target.value)
-                    }
-                    displayEmpty
-                  >
-                    <MenuItem value="Pending">Pending</MenuItem>
-                    <MenuItem value="In Progress">In Progress</MenuItem>
-                    <MenuItem value="Completed">Completed</MenuItem>
-                  </Select>
-                </TableCell>
-                <TableCell align="center">
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={() =>
-                      updateTaskStatus(task.task_id, task.status)
-                    }
-                  >
-                    Update
-                  </Button>
-                </TableCell>
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h5">Tasks</Typography>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <PropertySwitcher onPropertyChange={handlePropertyChange} />
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+            disabled={!selectedProperty}
+          >
+            Create Task
+          </Button>
+        </Box>
+      </Box>
+      
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      
+      {message && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setMessage('')}>
+          {message}
+        </Alert>
+      )}
+
+      {!selectedProperty ? (
+        <Alert severity="info">Please select a property to view tasks</Alert>
+      ) : loading ? (
+        <Box display="flex" justifyContent="center" p={3}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Task ID</TableCell>
+                <TableCell>Title</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>Assigned To</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Priority</TableCell>
+                <TableCell>Actions</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      {message && <Typography color="success.main">{message}</Typography>}
+            </TableHead>
+            <TableBody>
+              {tasks.map((task) => (
+                <TableRow key={task.task_id}>
+                  <TableCell>{task.task_id}</TableCell>
+                  <TableCell>{task.title}</TableCell>
+                  <TableCell>{task.description}</TableCell>
+                  <TableCell>
+                    {auth.role !== 'user' ? (
+                      <Select
+                        value={task.assigned_to_id || ''}
+                        onChange={(e) => handleAssigneeChange(task.task_id, e.target.value)}
+                        size="small"
+                        sx={{ minWidth: 120 }}
+                      >
+                        <MenuItem value="">
+                          <em>Unassigned</em>
+                        </MenuItem>
+                        {users.map(user => (
+                          <MenuItem key={user.user_id} value={user.user_id}>
+                            {user.username}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    ) : (
+                      users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unassigned'
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={task.status}
+                      color={getStatusColor(task.status)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={task.priority}
+                      color={
+                        task.priority === 'Critical' ? 'error' :
+                        task.priority === 'High' ? 'warning' :
+                        task.priority === 'Medium' ? 'info' :
+                        'success'
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Select
+                        value={task.status}
+                        onChange={(e) => handleStatusChange(task.task_id, e.target.value)}
+                        size="small"
+                        sx={{ minWidth: 120 }}
+                      >
+                        {statuses.map(status => (
+                          <MenuItem key={status} value={status}>
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      <IconButton
+                        onClick={() => handleOpenDialog(task)}
+                        color="primary"
+                        size="small"
+                      >
+                        <EditIcon />
+                      </IconButton>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {editingTask ? 'Edit Task' : 'Create New Task'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+            <TextField
+              label="Title"
+              value={taskForm.title}
+              onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+              fullWidth
+              required
+            />
+            <TextField
+              label="Description"
+              value={taskForm.description}
+              onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+              multiline
+              rows={4}
+              fullWidth
+              required
+            />
+            <FormControl fullWidth>
+              <InputLabel>Assigned To</InputLabel>
+              <Select
+                value={taskForm.assigned_to_id}
+                onChange={(e) => setTaskForm({ ...taskForm, assigned_to_id: e.target.value })}
+                label="Assigned To"
+              >
+                <MenuItem value="">
+                  <em>Unassigned</em>
+                </MenuItem>
+                {users.map((user) => (
+                  <MenuItem key={user.user_id} value={user.user_id}>
+                    {user.username}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Priority</InputLabel>
+              <Select
+                value={taskForm.priority}
+                onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}
+                label="Priority"
+              >
+                {priorities.map((priority) => (
+                  <MenuItem key={priority} value={priority}>{priority}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={taskForm.status}
+                onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value })}
+                label="Status"
+              >
+                {statuses.map((status) => (
+                  <MenuItem key={status} value={status}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleCreateOrEdit} variant="contained" color="primary">
+            {editingTask ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
