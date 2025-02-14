@@ -97,29 +97,22 @@ const ManageUsers = () => {
     }
   };
 
-  const handlePropertyAssignment = async (userId, propertyIds, isManager = false) => {
+  const handlePropertyAssignment = async (userId, propertyIds) => {
     try {
       const user = users.find(u => u.user_id === userId);
       if (!user) return;
 
       // For managers, only allow one property
       if (user.role === 'manager' && propertyIds.length > 1) {
-        setError('Managers can only manage one property');
+        setError('Managers can only be assigned to one property');
         return;
       }
 
-      // For managers, update the managed property
-      if (isManager) {
-        await apiClient.patch(`/users/${userId}`, {
-          managed_property_id: propertyIds[0]
-        });
-      } else {
-        // For regular users, update assigned properties
-        await apiClient.post('/assign-property', {
-          user_id: userId,
-          property_ids: propertyIds
-        });
-      }
+      await apiClient.post('/assign-property', {
+        user_id: userId,
+        property_ids: propertyIds,
+        is_manager: user.role === 'manager'
+      });
       
       await fetchData(); // Refresh data
       setSuccess('Property assignments updated successfully');
@@ -232,7 +225,6 @@ const ManageUsers = () => {
               <TableCell>Email</TableCell>
               <TableCell>Role</TableCell>
               <TableCell>Assigned Properties</TableCell>
-              {auth.role === 'super_admin' && <TableCell>Managed Property</TableCell>}
               <TableCell>Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -257,61 +249,43 @@ const ManageUsers = () => {
                   )}
                 </TableCell>
                 <TableCell>
-                  {user.role !== 'manager' && (
-                    <Select
-                      multiple
-                      value={user.assigned_properties?.map(p => p.property_id) || []}
-                      onChange={(e) => handlePropertyAssignment(user.user_id, e.target.value)}
-                      renderValue={(selected) => (
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {selected.map((propertyId) => {
-                            const property = user.assigned_properties.find(p => p.property_id === propertyId);
-                            return (
-                              <Chip
-                                key={propertyId}
-                                label={property ? property.name : 'Unknown'}
-                                size="small"
-                              />
-                            );
-                          })}
-                        </Box>
-                      )}
-                      size="small"
-                    >
-                      {properties.map((property) => (
-                        <MenuItem key={property.property_id} value={property.property_id}>
-                          {property.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  )}
-                </TableCell>
-                {auth.role === 'super_admin' && (
-                  <TableCell>
-                    {user.role === 'manager' && (
-                      <Select
-                        value={user.managed_property_id || ''}
-                        onChange={(e) => handlePropertyAssignment(user.user_id, [e.target.value], true)}
-                        size="small"
-                      >
-                        <MenuItem value="">
-                          <em>None</em>
-                        </MenuItem>
-                        {properties.map((property) => (
-                          <MenuItem key={property.property_id} value={property.property_id}>
-                            {property.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
+                  <Select
+                    multiple
+                    value={user.assigned_properties?.map(p => p.property_id) || []}
+                    onChange={(e) => handlePropertyAssignment(user.user_id, e.target.value)}
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selected.map((propertyId) => {
+                          const property = user.assigned_properties.find(p => p.property_id === propertyId);
+                          return (
+                            <Chip
+                              key={propertyId}
+                              label={property ? property.name : 'Unknown'}
+                              size="small"
+                              color={user.role === 'manager' && property?.property_id === user.managed_property_id ? 'primary' : 'default'}
+                              variant={user.role === 'manager' && property?.property_id === user.managed_property_id ? 'filled' : 'outlined'}
+                            />
+                          );
+                        })}
+                      </Box>
                     )}
-                  </TableCell>
-                )}
+                    size="small"
+                    disabled={user.role === 'super_admin'}
+                  >
+                    {properties.map((property) => (
+                      <MenuItem key={property.property_id} value={property.property_id}>
+                        {property.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <IconButton
                       onClick={() => handleEditUser(user)}
                       color="primary"
                       disabled={user.role === 'super_admin'}
+                      title="Edit User"
                     >
                       <EditIcon />
                     </IconButton>
@@ -319,6 +293,7 @@ const ManageUsers = () => {
                       onClick={() => handleDeleteUser(user.user_id)}
                       color="error"
                       disabled={user.role === 'super_admin'}
+                      title="Delete User"
                     >
                       <DeleteIcon />
                     </IconButton>
@@ -376,47 +351,32 @@ const ManageUsers = () => {
               </Select>
             </FormControl>
             
-            {userFormData.role === 'manager' ? (
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Managed Property</InputLabel>
-                <Select
-                  value={userFormData.managed_property || ''}
-                  onChange={(e) => setUserFormData({
-                    ...userFormData,
-                    managed_property: e.target.value
-                  })}
-                  label="Managed Property"
-                >
-                  <MenuItem value="">
-                    <em>None</em>
-                  </MenuItem>
-                  {properties.map((property) => (
-                    <MenuItem key={property.property_id} value={property.property_id}>
-                      {property.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            ) : (
+            {userFormData.role !== 'super_admin' && (
               <FormControl fullWidth margin="normal">
                 <InputLabel>Assign Properties</InputLabel>
                 <Select
-                  multiple
+                  multiple={userFormData.role !== 'manager'}
                   value={userFormData.assigned_properties}
-                  onChange={(e) => setUserFormData({
-                    ...userFormData,
-                    assigned_properties: e.target.value
-                  })}
+                  onChange={(e) => {
+                    const newValue = Array.isArray(e.target.value) ? e.target.value : [e.target.value];
+                    setUserFormData({
+                      ...userFormData,
+                      assigned_properties: userFormData.role === 'manager' ? [newValue[newValue.length - 1]] : newValue
+                    });
+                  }}
                   renderValue={(selected) => (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {selected.map((value) => (
+                      {(Array.isArray(selected) ? selected : [selected]).map((value) => (
                         <Chip
                           key={value}
                           label={properties.find(p => p.property_id === value)?.name}
+                          color={userFormData.role === 'manager' ? 'primary' : 'default'}
+                          variant={userFormData.role === 'manager' ? 'filled' : 'outlined'}
                         />
                       ))}
                     </Box>
                   )}
+                  label="Assign Properties"
                 >
                   {properties.map((property) => (
                     <MenuItem key={property.property_id} value={property.property_id}>

@@ -92,24 +92,45 @@ def setup_database():
         
         # Create manager users (one for each property)
         managers = []
-        for i, prop in enumerate(properties):
+        manager_credentials = [
+            ('WBW_M', 'Wingate by Wyndham'),
+            ('RBW_M', 'Ramada by Wyndham'),
+            ('FIA_M', 'Fairfield Inn & Suites Avon'),
+            ('CAF_M', 'Courtyard Akron Fairlawn'),
+            ('FIC_M', 'Fairfield Inn & Suites Canton'),
+            ('RIC_M', 'Residence Inn Canton'),
+            ('HIM_M', 'Hampton Inn Mansfield'),
+            ('FIM_M', 'Fairfield Inn & Suites Mansfield')
+        ]
+        
+        for (username, hotel_name), prop in zip(manager_credentials, properties):
             manager = User(
-                username=f'manager{i+1}',
-                email=f'manager{i+1}@example.net',
-                password=f'manager{i+1}123',
+                username=username,
+                email=f"{username.lower()}@example.net",
+                password=f"{username.lower()}123",
                 role='manager'
             )
             managers.append(manager)
             prop.manager_id = manager.user_id
         
-        # Create regular users
-        users = [
-            User(username='user1', email="user1@example.net", password='user123', role='user'),
-            User(username='user2', email="user2@example.net", password='user123', role='user'),
-            User(username='user3', email="user3@example.net", password='user123', role='user'),
-            User(username='user4', email="user4@example.net", password='user123', role='user'),
-            User(username='user5', email="user5@example.net", password='user123', role='user')
+        # Create regular users (2 users per property)
+        users = []
+        user_credentials = [
+            ('WBW_U1', 'WBW_U2', 'Wingate by Wyndham'),
+            ('RBW_U1', 'RBW_U2', 'Ramada by Wyndham'),
+            ('FIA_U1', 'FIA_U2', 'Fairfield Inn & Suites Avon'),
+            ('CAF_U1', 'CAF_U2', 'Courtyard Akron Fairlawn'),
+            ('FIC_U1', 'FIC_U2', 'Fairfield Inn & Suites Canton'),
+            ('RIC_U1', 'RIC_U2', 'Residence Inn Canton'),
+            ('HIM_U1', 'HIM_U2', 'Hampton Inn Mansfield'),
+            ('FIM_U1', 'FIM_U2', 'Fairfield Inn & Suites Mansfield')
         ]
+        
+        for user1, user2, _ in user_credentials:
+            users.extend([
+                User(username=user1, email=f"{user1.lower()}@example.net", password=f"{user1.lower()}123", role='user'),
+                User(username=user2, email=f"{user2.lower()}@example.net", password=f"{user2.lower()}123", role='user')
+            ])
 
         all_users = [admin] + managers + users
         db.session.add_all(all_users)
@@ -141,17 +162,33 @@ def setup_database():
         db.session.add_all(rooms)
         db.session.commit()
 
-        # Assign properties to managers and users
-        for manager, prop in zip(managers, properties):
-            manager.assigned_properties.append(prop)
+        # Update property assignments
+        # First, clear any existing assignments
+        for user in users + managers:
+            user.assigned_properties = []
         
-        # Assign multiple properties to each regular user
-        for user in users:
-            # Assign 2-3 random properties to each user
-            num_properties = random.randint(2, 3)
-            assigned_properties = random.sample(properties, num_properties)
-            for prop in assigned_properties:
-                user.assigned_properties.append(prop)
+        # Assign properties to managers (one property each)
+        for manager, prop in zip(managers, properties):
+            manager.assigned_properties = [prop]  # Managers get exactly one property
+            prop.manager_id = manager.user_id
+        
+        # Assign properties to users (2-3 properties each)
+        for i, prop in enumerate(properties):
+            # Get the two users for this property
+            user1 = users[i * 2]
+            user2 = users[i * 2 + 1]
+            
+            # Always assign their main property
+            user1.assigned_properties.append(prop)
+            user2.assigned_properties.append(prop)
+            
+            # Assign 1-2 additional random properties
+            other_properties = [p for p in properties if p != prop]
+            for user in [user1, user2]:
+                num_extra = random.randint(1, 2)
+                extra_properties = random.sample(other_properties, num_extra)
+                for extra_prop in extra_properties:
+                    user.assigned_properties.append(extra_prop)
         
         db.session.commit()
 
