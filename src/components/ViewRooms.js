@@ -2,12 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   Button,
   Dialog,
@@ -23,13 +17,17 @@ import {
   CircularProgress,
   Chip,
   IconButton,
-  Grid
+  Grid,
+  Card,
+  CardContent,
+  CardActions
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import apiClient from './apiClient';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 import PropertySwitcher from './PropertySwitcher';
 
 const ViewRooms = () => {
@@ -167,61 +165,78 @@ const ViewRooms = () => {
         loading ? (
           <CircularProgress />
         ) : (
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Floor</TableCell>
-                  <TableCell>Status</TableCell>
-                  {isManager && (
-                    <TableCell align="center">Actions</TableCell>
-                  )}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rooms.map((room) => (
-                  <TableRow key={room.room_id}>
-                    <TableCell>{room.name}</TableCell>
-                    <TableCell>{room.type || 'N/A'}</TableCell>
-                    <TableCell>{room.floor || 'N/A'}</TableCell>
-                    <TableCell>
+          <Grid container spacing={3}>
+            {rooms.map((room) => (
+              <Grid item xs={12} sm={6} md={4} lg={3} key={room.room_id}>
+                <Card 
+                  sx={{ 
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    position: 'relative'
+                  }}
+                >
+                  <CardContent sx={{ flexGrow: 1 }}>
+                    <Box sx={{ 
+                      position: 'absolute', 
+                      top: 10, 
+                      right: 10,
+                      display: 'flex',
+                      gap: 1
+                    }}>
                       <Chip 
                         label={room.status} 
-                        color={room.status === 'Available' ? 'success' : 'default'}
+                        size="small"
+                        color={
+                          room.status === 'Available' ? 'success' :
+                          room.status === 'Occupied' ? 'error' :
+                          room.status === 'Maintenance' ? 'warning' :
+                          'default'
+                        }
                       />
-                    </TableCell>
-                    {isManager && (
-                      <TableCell align="center">
-                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                          <IconButton
-                            onClick={() => {
-                              setRoomFormData(room);
-                              setOpenDialog(true);
-                            }}
-                            color="primary"
-                            size="small"
-                            title="Edit Room"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton
-                            onClick={() => handleDeleteRoom(room.room_id)}
-                            color="error"
-                            size="small"
-                            title="Delete Room"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Box>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, mt: 1 }}>
+                      <MeetingRoomIcon sx={{ mr: 1, color: 'primary.main' }} />
+                      <Typography variant="h6" component="div">
+                        {room.name}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Typography color="textSecondary">
+                        Type: {room.type || 'N/A'}
+                      </Typography>
+                      <Typography color="textSecondary">
+                        Floor: {room.floor || 'N/A'}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                  {isManager && (
+                    <CardActions sx={{ justifyContent: 'flex-end', p: 2 }}>
+                      <IconButton
+                        onClick={() => {
+                          setRoomFormData(room);
+                          setOpenDialog(true);
+                        }}
+                        color="primary"
+                        size="small"
+                        title="Edit Room"
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton
+                        onClick={() => handleDeleteRoom(room.room_id)}
+                        color="error"
+                        size="small"
+                        title="Delete Room"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </CardActions>
+                  )}
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
         )
       ) : (
         <Alert severity="info">Please select a property to view rooms</Alert>
