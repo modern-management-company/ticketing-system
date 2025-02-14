@@ -27,11 +27,11 @@ import {
 } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import PropertySwitcher from './PropertySwitcher';
 
 const ViewTickets = () => {
   const { auth } = useAuth();
   const [tickets, setTickets] = useState([]);
-  const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState("");
@@ -51,11 +51,6 @@ const ViewTickets = () => {
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Cleaning', 'Other'];
 
-  // Fetch properties on component mount
-  useEffect(() => {
-    fetchProperties();
-  }, []);
-
   // Fetch tickets and rooms when property is selected
   useEffect(() => {
     if (selectedProperty) {
@@ -63,22 +58,6 @@ const ViewTickets = () => {
       fetchRooms();
     }
   }, [selectedProperty]);
-
-  const fetchProperties = async () => {
-    try {
-      const response = await apiClient.get('/properties');
-      if (response.data) {
-        setProperties(response.data);
-        // Set first property as default if available
-        if (response.data.length > 0) {
-          setSelectedProperty(response.data[0].property_id);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch properties:', error);
-      setError('Failed to load properties');
-    }
-  };
 
   const fetchTickets = async () => {
     try {
@@ -111,6 +90,10 @@ const ViewTickets = () => {
     } catch (error) {
       console.error('Failed to fetch rooms:', error);
     }
+  };
+
+  const handlePropertyChange = (propertyId) => {
+    setSelectedProperty(propertyId);
   };
 
   const handleCreateOrEdit = async () => {
@@ -178,37 +161,12 @@ const ViewTickets = () => {
     });
   };
 
-  const handlePropertyChange = (event) => {
-    setSelectedProperty(event.target.value);
-  };
-
-  if (loading && !properties.length) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Tickets</Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel>Select Property</InputLabel>
-            <Select
-              value={selectedProperty || ''}
-              onChange={handlePropertyChange}
-              label="Select Property"
-            >
-              {properties.map((property) => (
-                <MenuItem key={property.property_id} value={property.property_id}>
-                  {property.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <PropertySwitcher onPropertyChange={handlePropertyChange} />
           <Button
             variant="contained"
             color="primary"

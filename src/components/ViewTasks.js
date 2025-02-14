@@ -25,13 +25,15 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField
+  TextField,
+  Tooltip
 } from "@mui/material";
 import { useAuth } from '../context/AuthContext';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import AddIcon from '@mui/icons-material/Add';
+import ImportExportIcon from '@mui/icons-material/ImportExport';
 import PropertySwitcher from './PropertySwitcher';
 
 const ViewTasks = () => {
@@ -39,11 +41,13 @@ const ViewTasks = () => {
   const { auth } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
+  const [tickets, setTickets] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
+  const [openImportDialog, setOpenImportDialog] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [taskForm, setTaskForm] = useState({
     title: '',
@@ -69,9 +73,10 @@ const ViewTasks = () => {
       }
 
       setLoading(true);
-      const [tasksResponse, usersResponse] = await Promise.all([
+      const [tasksResponse, usersResponse, ticketsResponse] = await Promise.all([
         apiClient.get(`/properties/${selectedProperty}/tasks`),
-        apiClient.get(`/properties/${selectedProperty}/users`)
+        apiClient.get(`/properties/${selectedProperty}/users`),
+        apiClient.get(`/properties/${selectedProperty}/tickets`)
       ]);
 
       console.log('Tasks response:', tasksResponse.data); // Debug log
@@ -80,7 +85,15 @@ const ViewTasks = () => {
         setTasks(tasksResponse.data.tasks);
       }
       if (usersResponse.data?.users) {
-        setUsers(usersResponse.data.users);
+        const propertyUsers = usersResponse.data.users.filter(user => 
+          user.assigned_properties?.some(p => p.property_id === selectedProperty) ||
+          user.role === 'manager' ||
+          user.role === 'super_admin'
+        );
+        setUsers(propertyUsers);
+      }
+      if (ticketsResponse.data?.tickets) {
+        setTickets(ticketsResponse.data.tickets);
       }
       setError(null);
     } catch (error) {
@@ -89,6 +102,19 @@ const ViewTasks = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleImportTicket = (ticket) => {
+    setTaskForm({
+      title: `[Ticket #${ticket.ticket_id}] ${ticket.title}`,
+      description: ticket.description,
+      priority: ticket.priority,
+      status: 'pending',
+      assigned_to_id: '',
+      ticket_id: ticket.ticket_id
+    });
+    setOpenImportDialog(false);
+    setOpenDialog(true);
   };
 
   const handleCreateOrEdit = async () => {
@@ -201,6 +227,15 @@ const ViewTasks = () => {
         <Typography variant="h5">Tasks</Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<ImportExportIcon />}
+            onClick={() => setOpenImportDialog(true)}
+            disabled={!selectedProperty}
+          >
+            Import from Ticket
+          </Button>
           <Button
             variant="contained"
             color="primary"
@@ -391,6 +426,68 @@ const ViewTasks = () => {
           <Button onClick={handleCreateOrEdit} variant="contained" color="primary">
             {editingTask ? 'Update' : 'Create'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Import from Ticket Dialog */}
+      <Dialog 
+        open={openImportDialog} 
+        onClose={() => setOpenImportDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Import Task from Ticket</DialogTitle>
+        <DialogContent>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Ticket ID</TableCell>
+                  <TableCell>Title</TableCell>
+                  <TableCell>Priority</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {tickets.map((ticket) => (
+                  <TableRow key={ticket.ticket_id}>
+                    <TableCell>{ticket.ticket_id}</TableCell>
+                    <TableCell>{ticket.title}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={ticket.priority}
+                        color={
+                          ticket.priority === 'Critical' ? 'error' :
+                          ticket.priority === 'High' ? 'warning' :
+                          ticket.priority === 'Medium' ? 'info' :
+                          'success'
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={ticket.status}
+                        color={getStatusColor(ticket.status)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => handleImportTicket(ticket)}
+                      >
+                        Import
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenImportDialog(false)}>Cancel</Button>
         </DialogActions>
       </Dialog>
     </Box>
