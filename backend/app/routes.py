@@ -561,32 +561,193 @@ def get_tasks():
         app.logger.error(f"Error in get_tasks: {str(e)}")
         return jsonify({'message': 'Internal server error'}), 500
 
-@app.route('/tasks/<int:task_id>', methods=['PATCH'])
+@app.route('/tasks/<int:task_id>', methods=['GET', 'PUT', 'PATCH', 'DELETE'])
 @jwt_required()
-def update_task(task_id):
-    data = request.json
+def manage_task(task_id):
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
 
-    if not data or ('status' not in data and 'assigned_to_user_id' not in data):
-        return jsonify({'message': 'Invalid input'}), 400
+        task = Task.query.get_or_404(task_id)
+        if not task:
+            return jsonify({"msg": "Task not found"}), 404
 
-    task = TaskAssignment.query.get(task_id)
-    if not task:
-        return jsonify({'message': 'Task not found'}), 404
+        # Check authorization
+        if current_user.role not in ['super_admin', 'manager'] and task.assigned_to_id != current_user.user_id:
+            return jsonify({'msg': 'Unauthorized'}), 403
 
-    # Update status if provided
-    if 'status' in data:
-        task.status = data['status']
+        if request.method == 'GET':
+            return jsonify(task.to_dict())
 
-    # Update assigned user if provided
-    if 'assigned_to_user_id' in data:
-        new_user_id = data['assigned_to_user_id']
-        user = User.query.get(new_user_id)
-        if not user:
-            return jsonify({'message': 'User not found'}), 404
-        task.assigned_to_user_id = new_user_id
+        elif request.method in ['PUT', 'PATCH']:
+            data = request.get_json()
+            if not data:
+                return jsonify({'msg': 'No input data provided'}), 400
 
-    db.session.commit()
-    return jsonify({'message': 'Task updated successfully!'})
+            app.logger.info(f"Updating task {task_id} with data: {data}")
+
+            # Validate assigned_to_id if it's being updated
+            if 'assigned_to_id' in data:
+                # Handle null/empty assignment
+                if data['assigned_to_id'] is None or data['assigned_to_id'] == '':
+                    task.assigned_to_id = None
+                else:
+                    # Check if the user exists
+                    assigned_user = User.query.get(data['assigned_to_id'])
+                    if not assigned_user:
+                        return jsonify({'msg': 'Invalid assigned_to_id: User not found'}), 400
+                    # Only managers and super_admins can update assignee
+                    if current_user.role not in ['super_admin', 'manager']:
+                        return jsonify({'msg': 'Unauthorized to change task assignee'}), 403
+                    task.assigned_to_id = data['assigned_to_id']
+
+            # Update other allowed fields
+            if 'title' in data:
+                task.title = data['title']
+            if 'description' in data:
+                task.description = data['description']
+            if 'status' in data:
+                if data['status'] not in ['pending', 'in progress', 'completed']:
+                    return jsonify({'msg': 'Invalid status value'}), 400
+                task.status = data['status']
+            if 'priority' in data:
+                if data['priority'] not in ['Low', 'Medium', 'High', 'Critical']:
+                    return jsonify({'msg': 'Invalid priority value'}), 400
+                task.priority = data['priority']
+            if 'due_date' in data:
+                try:
+                    task.due_date = datetime.fromisoformat(data['due_date'].replace('Z', '+00:00')) if data['due_date'] else None
+                except ValueError:
+                    return jsonify({'msg': 'Invalid date format'}), 400
+            
+            # Only managers and super_admins can update property_id
+            if current_user.role in ['super_admin', 'manager'] and 'property_id' in data:
+                task.property_id = data['property_id']
+
+            task.updated_at = datetime.utcnow()
+            
+            try:
+                db.session.commit()
+                app.logger.info(f"Successfully updated task {task_id}")
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Database error while updating task: {str(e)}")
+                return jsonify({'msg': 'Failed to update task'}), 500
+
+            # Get the updated task with user information
+            assigned_user = User.query.get(task.assigned_to_id) if task.assigned_to_id else None
+            response_data = task.to_dict()
+            response_data['assigned_to'] = assigned_user.username if assigned_user else None
+
+            return jsonify({
+                'msg': 'Task updated successfully',
+                'task': response_data
+            })
+
+        elif request.method == 'DELETE':
+            if current_user.role not in ['super_admin', 'manager']:
+                return jsonify({'msg': 'Unauthorized'}), 403
+                
+            db.session.delete(task)
+            db.session.commit()
+            return jsonify({'msg': 'Task deleted successfully'})
+
+    except Exception as e:
+        app.logger.error(f"Error in manage_task endpoint: {str(e)}")
+        db.session.rollback()
+        return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/properties/<int:property_id>/tasks', methods=['GET'])
+@jwt_required()
+def get_property_tasks(property_id):
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+
+        # Verify access to property
+        if current_user.role == 'user':
+            has_access = any(p.property_id == property_id for p in current_user.assigned_properties)
+            if not has_access:
+                return jsonify({'msg': 'Unauthorized access to property'}), 403
+        elif current_user.role == 'manager':
+            has_access = any(p.property_id == property_id for p in current_user.managed_properties)
+            if not has_access:
+                return jsonify({'msg': 'Unauthorized access to property'}), 403
+
+        # Get tasks based on user role and property
+        tasks = Task.query.filter_by(property_id=property_id)
+        
+        if current_user.role == 'user':
+            # Users only see tasks assigned to them
+            tasks = tasks.filter_by(assigned_to_id=current_user.user_id)
+
+        tasks = tasks.all()
+        
+        # Format tasks with user information
+        task_list = []
+        for task in tasks:
+            assigned_user = User.query.get(task.assigned_to_id) if task.assigned_to_id else None
+            task_data = task.to_dict()
+            task_data['assigned_to'] = assigned_user.username if assigned_user else None
+            task_list.append(task_data)
+
+        return jsonify({'tasks': task_list}), 200
+
+    except Exception as e:
+        app.logger.error(f"Error in get_property_tasks: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/tasks', methods=['POST'])
+@jwt_required()
+def create_task():
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+
+        if current_user.role not in ['super_admin', 'manager']:
+            return jsonify({'msg': 'Unauthorized'}), 403
+
+        data = request.get_json()
+        if not data or not data.get('title'):
+            return jsonify({'msg': 'Missing required fields'}), 400
+
+        new_task = Task(
+            title=data['title'],
+            description=data.get('description', ''),
+            status=data.get('status', 'pending'),
+            priority=data.get('priority', 'Low'),
+            property_id=data.get('property_id'),
+            assigned_to_id=data.get('assigned_to_id'),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+
+        if data.get('due_date'):
+            try:
+                new_task.due_date = datetime.fromisoformat(data['due_date'].replace('Z', '+00:00'))
+            except ValueError:
+                return jsonify({'msg': 'Invalid date format'}), 400
+
+        db.session.add(new_task)
+        db.session.commit()
+
+        # Get the assigned user information
+        assigned_user = User.query.get(new_task.assigned_to_id) if new_task.assigned_to_id else None
+        response_data = new_task.to_dict()
+        response_data['assigned_to'] = assigned_user.username if assigned_user else None
+
+        return jsonify({
+            'msg': 'Task created successfully',
+            'task': response_data
+        }), 201
+
+    except Exception as e:
+        app.logger.error(f"Error in create_task: {str(e)}")
+        db.session.rollback()
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/users', methods=['GET'])
 @jwt_required()
@@ -800,77 +961,6 @@ def manage_room(room_id):
         db.session.commit()
         return jsonify({'message': 'Room deleted successfully'})
 
-@app.route('/tasks', methods=['GET', 'POST'])
-@jwt_required()
-def tasks():
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
-
-    if request.method == 'GET':
-        if current_user.role == 'super_admin':
-            tasks = TaskAssignment.query.all()
-        elif current_user.role == 'manager':
-            tasks = TaskAssignment.query.join(Ticket).filter(
-                Ticket.property_id == current_user.managed_property_id
-            ).all()
-        else:
-            tasks = TaskAssignment.query.filter_by(assigned_to_user_id=current_user_id).all()
-
-        return jsonify({
-            'tasks': [{
-                'task_id': task.task_id,
-                'ticket_id': task.ticket_id,
-                'assigned_to_user_id': task.assigned_to_user_id,
-                'status': task.status
-            } for task in tasks]
-        })
-
-    elif request.method == 'POST':
-        if current_user.role not in ['super_admin', 'manager']:
-            return jsonify({'message': 'Unauthorized'}), 403
-
-        data = request.get_json()
-        new_task = TaskAssignment(
-            ticket_id=data['ticket_id'],
-            assigned_to_user_id=data['assigned_to_user_id'],
-            status=data.get('status', 'Pending')
-        )
-        db.session.add(new_task)
-        db.session.commit()
-        return jsonify({'message': 'Task created successfully', 'task_id': new_task.task_id}), 201
-
-@app.route('/tasks/<int:task_id>', methods=['GET', 'PUT', 'DELETE'])
-@jwt_required()
-def manage_task(task_id):
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
-    task = TaskAssignment.query.get_or_404(task_id)
-
-    if request.method == 'GET':
-        return jsonify({
-            'task_id': task.task_id,
-            'ticket_id': task.ticket_id,
-            'assigned_to_user_id': task.assigned_to_user_id,
-            'status': task.status
-        })
-
-    if current_user.role not in ['super_admin', 'manager'] and task.assigned_to_user_id != current_user_id:
-        return jsonify({'message': 'Unauthorized'}), 403
-
-    if request.method == 'PUT':
-        data = request.get_json()
-        for key, value in data.items():
-            setattr(task, key, value)
-        db.session.commit()
-        return jsonify({'message': 'Task updated successfully'})
-
-    elif request.method == 'DELETE':
-        if current_user.role not in ['super_admin', 'manager']:
-            return jsonify({'message': 'Unauthorized'}), 403
-        db.session.delete(task)
-        db.session.commit()
-        return jsonify({'message': 'Task deleted successfully'})
-
 @app.route('/reports/properties', methods=['GET'])
 @jwt_required()
 def property_report():
@@ -1049,21 +1139,48 @@ def get_assigned_properties(user_id):
 @app.route('/properties/<int:property_id>/users', methods=['GET'])
 @jwt_required()
 def get_property_users(property_id):
-    property = Property.query.get(property_id)
-    if not property:
-        return jsonify({'message': 'Property not found'}), 404
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'message': 'User not found'}), 404
 
-    users = User.query.filter(
-        User.assigned_properties.any(property_id=property_id)
-    ).all()
+        property = Property.query.get(property_id)
+        if not property:
+            return jsonify({'message': 'Property not found'}), 404
 
-    return jsonify({
-        'users': [{
-            'user_id': user.user_id,
-            'username': user.username,
-            'role': user.role
-        } for user in users]
-    })
+        # Get all users assigned to this property
+        assigned_users = User.query.join(UserProperty).filter(
+            UserProperty.property_id == property_id
+        ).all()
+
+        # Get the property manager
+        manager = User.query.get(property.manager_id) if property.manager_id else None
+        
+        # Combine manager and assigned users, avoiding duplicates
+        all_users = []
+        if manager:
+            all_users.append({
+                'user_id': manager.user_id,
+                'username': manager.username,
+                'role': manager.role,
+                'email': manager.email
+            })
+
+        for user in assigned_users:
+            # Only add if not already in the list (avoid duplicate manager)
+            if not any(u['user_id'] == user.user_id for u in all_users):
+                all_users.append({
+                    'user_id': user.user_id,
+                    'username': user.username,
+                    'role': user.role,
+                    'email': user.email
+                })
+
+        return jsonify({'users': all_users}), 200
+
+    except Exception as e:
+        app.logger.error(f"Error in get_property_users: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/properties/<int:property_id>/tickets', methods=['GET'])
 @jwt_required()
@@ -1112,47 +1229,6 @@ def get_property_tickets(property_id):
         app.logger.error(f"Error in get_property_tickets: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500
 
-@app.route('/properties/<int:property_id>/tasks', methods=['GET'])
-@jwt_required()
-def get_property_tasks(property_id):
-    try:
-        current_user = get_user_from_jwt()
-        if not current_user:
-            return jsonify({"msg": "User not found"}), 404
-
-        # Get tasks based on user role and property
-        tasks = Task.query.filter_by(property_id=property_id)
-        
-        if current_user.role == 'user':
-            # Users only see tasks assigned to them
-            tasks = tasks.filter_by(assigned_to_id=current_user.user_id)
-        elif current_user.role == 'manager':
-            # Managers see all tasks for their properties
-            if property_id not in [p.property_id for p in current_user.managed_properties]:
-                return jsonify({"msg": "Unauthorized"}), 403
-
-        tasks = tasks.all()
-        
-        # Format tasks as expected by frontend
-        task_list = []
-        for task in tasks:
-            assigned_user = User.query.get(task.assigned_to_id) if task.assigned_to_id else None
-            task_list.append({
-                'task_id': task.task_id,
-                'title': task.title,
-                'description': task.description,
-                'status': task.status,
-                'priority': task.priority,
-                'assigned_to_id': task.assigned_to_id,
-                'assigned_to': assigned_user.username if assigned_user else None
-            })
-
-        return jsonify({'tasks': task_list}), 200
-    except Exception as e:
-        app.logger.error(f"Error in get_property_tasks: {str(e)}")
-        return jsonify({"msg": "Internal server error"}), 500
-
-# User Profile and Password Management Routes
 @app.route('/users/<int:user_id>/profile', methods=['GET'])
 @jwt_required()
 @handle_errors

@@ -208,17 +208,17 @@ class Task(db.Model):
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
     status = db.Column(db.String(20), default='pending')
-    priority = db.Column(db.String(20))
+    priority = db.Column(db.String(20), default='Low')
     due_date = db.Column(db.DateTime)
     property_id = db.Column(db.Integer, db.ForeignKey('properties.property_id'))
     assigned_to_id = db.Column(db.Integer, db.ForeignKey('users.user_id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def to_dict(self):
         """Convert task object to dictionary"""
         return {
-            'id': self.task_id,
+            'task_id': self.task_id,
             'title': self.title,
             'description': self.description,
             'status': self.status,

@@ -80,17 +80,14 @@ const ViewTasks = () => {
       ]);
 
       console.log('Tasks response:', tasksResponse.data); // Debug log
+      console.log('Users response:', usersResponse.data); // Debug log
 
       if (tasksResponse.data?.tasks) {
         setTasks(tasksResponse.data.tasks);
       }
       if (usersResponse.data?.users) {
-        const propertyUsers = usersResponse.data.users.filter(user => 
-          user.assigned_properties?.some(p => p.property_id === selectedProperty) ||
-          user.role === 'manager' ||
-          user.role === 'super_admin'
-        );
-        setUsers(propertyUsers);
+        // Include all users regardless of role
+        setUsers(usersResponse.data.users);
       }
       if (ticketsResponse.data?.tickets) {
         setTickets(ticketsResponse.data.tickets);
@@ -194,12 +191,30 @@ const ViewTasks = () => {
 
   const handleAssigneeChange = async (taskId, newUserId) => {
     try {
-      await apiClient.patch(`/tasks/${taskId}`, { assigned_to_id: newUserId });
-      setMessage('Task assigned successfully');
-      await fetchData();
+      if (!taskId) {
+        setError('Invalid task ID');
+        return;
+      }
+
+      const data = { assigned_to_id: newUserId };
+      if (newUserId === '') {
+        data.assigned_to_id = null;  // Handle unassignment properly
+      }
+
+      const response = await apiClient.patch(`/tasks/${taskId}`, data);
+      
+      if (response.data && response.data.task) {
+        // Update the local task state
+        setTasks(tasks.map(task => 
+          task.task_id === taskId ? { ...task, assigned_to_id: newUserId } : task
+        ));
+        setMessage('Task assigned successfully');
+      } else {
+        throw new Error('Invalid response from server');
+      }
     } catch (error) {
       console.error('Failed to update task assignee:', error);
-      setError(error.response?.data?.message || 'Failed to update task assignee');
+      setError(error.response?.data?.msg || 'Failed to update task assignee');
     }
   };
 
