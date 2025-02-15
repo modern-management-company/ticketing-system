@@ -3,7 +3,7 @@ from datetime import timedelta
 
 class Config:
     # Database configuration
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', '')
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'postgresql://username:password@localhost:5432/ticketing_system')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Secret key for session management
