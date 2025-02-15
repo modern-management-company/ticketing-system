@@ -39,10 +39,16 @@ app.config.from_object(Config)
 # Set up logging
 setup_logging(app)
 
-# Configure CORS with more permissive settings for development
+# Update CORS configuration
 CORS(app, resources={
     r"/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "https://modernhotels.management", "https://ticketing-system-gilt.vercel.app/" ],
+        "origins": [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://modernhotels.management",
+            "https://ticketing-system-gilt.vercel.app",
+            "https://ticketing-system-gilt.vercel.app/"  # Note the trailing slash version
+        ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
         "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
         "expose_headers": ["Content-Type", "Authorization"],
