@@ -11,7 +11,7 @@ class EmailService:
         self.smtp_server = 'smtp.gmail.com'
         self.smtp_port = 587
         self.smtp_username = 'modernmanagementhotels@gmail.com'  # Your Gmail address
-        self.smtp_password = current_app.config.get('EMAIL_PASSWORD', '')  # Only password from config
+        self.smtp_password = current_app.config.get('EMAIL_PASSWORD', '')        
         self.sender_email = 'modernmanagementhotels@gmail.com'  # Same as username
         self.logger = current_app.logger
 
@@ -144,6 +144,40 @@ class EmailService:
         """
 
         return self.send_email(user.email, subject, html_content)
+
+    def send_user_registration_email(self, user, password, requested_by=None):
+        subject = "Welcome to Property Management System - Your Account Details"
+        
+        requester_info = f"This account was requested by {requested_by.username} ({requested_by.email})." if requested_by else ""
+        
+        html_content = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #1976d2;">Welcome to Property Management System</h2>
+                    <p>Hello {user.username},</p>
+                    <p>Your account has been created successfully. {requester_info}</p>
+                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <p><strong>Username:</strong> {user.username}</p>
+                        <p><strong>Temporary Password:</strong> {password}</p>
+                        <p><strong>Role:</strong> {user.role.capitalize()}</p>
+                    </div>
+                    <p>For security reasons, please change your password after your first login.</p>
+                    <p>You can access the system using these credentials.</p>
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                        <p style="color: #666;">Best regards,<br>Property Management System</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+
+        success = self.send_email(user.email, subject, html_content)
+        if success:
+            self.logger.info(f"✓ Registration email sent successfully to {user.username} ({user.email})")
+        else:
+            self.logger.error(f"❌ Failed to send registration email to {user.username} ({user.email})")
+        return success
 
     def _get_priority_color(self, priority):
         colors = {

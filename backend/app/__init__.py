@@ -71,7 +71,7 @@ app.config['JWT_HEADER_NAME'] = 'Authorization'
 app.config['JWT_HEADER_TYPE'] = 'Bearer'
 app.config['JWT_IDENTITY_CLAIM'] = 'identity'
 app.config['JWT_BLACKLIST_ENABLED'] = False
-
+app.config['EMAIL_PASSWORD'] = os.getenv('EMAIL_PASSWORD', '')
 jwt = JWTManager(app)
 
 # JWT error handlers

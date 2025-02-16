@@ -59,7 +59,7 @@ const RegisterUser = ({ isAdminRegistration = false }) => {
       const response = await apiClient.post("/register", formData);
       console.log('Registration response:', response.data);
 
-      setMessage("Registration successful! Please wait for an admin to assign you to properties.");
+      setMessage("Registration successful! Please check your email for login credentials. You will need to wait for an admin to assign you to properties.");
       
       // Clear form
       setFormData({
@@ -72,7 +72,7 @@ const RegisterUser = ({ isAdminRegistration = false }) => {
       // Navigate after showing success message
       setTimeout(() => {
         navigate('/login');
-      }, 3000);
+      }, 5000);  // Increased to 5 seconds to give user time to read the message
 
     } catch (error) {
       console.error('Registration error:', error);

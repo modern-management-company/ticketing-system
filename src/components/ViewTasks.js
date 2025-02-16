@@ -61,7 +61,16 @@ const ViewTasks = () => {
   const statuses = ['pending', 'in progress', 'completed'];
 
   useEffect(() => {
+    if (auth?.assigned_properties?.length > 0) {
+      const defaultProperty = auth.assigned_properties[0].property_id;
+      console.log('Setting default property:', defaultProperty);
+      setSelectedProperty(defaultProperty);
+    }
+  }, [auth]);
+
+  useEffect(() => {
     if (selectedProperty) {
+      console.log('Selected property changed, fetching data...');
       fetchData();
     }
   }, [selectedProperty]);
@@ -73,35 +82,51 @@ const ViewTasks = () => {
       }
 
       setLoading(true);
+      console.log('Fetching data for property:', selectedProperty);
+
       const [tasksResponse, usersResponse, ticketsResponse] = await Promise.all([
         apiClient.get(`/properties/${selectedProperty}/tasks`),
         apiClient.get(`/properties/${selectedProperty}/users`),
         apiClient.get(`/properties/${selectedProperty}/tickets`)
       ]);
 
-      console.log('Tasks response:', tasksResponse.data); // Debug log
-      console.log('Users response:', usersResponse.data); // Debug log
+      console.log('Tasks response:', tasksResponse.data);
+      console.log('Users response:', usersResponse.data);
+      console.log('Tickets response:', ticketsResponse.data);
 
       if (tasksResponse.data?.tasks) {
         setTasks(tasksResponse.data.tasks);
+      } else {
+        console.warn('No tasks data in response');
+        setTasks([]);
       }
+
       if (usersResponse.data?.users) {
-        // Include all users regardless of role
         setUsers(usersResponse.data.users);
+      } else {
+        console.warn('No users data in response');
+        setUsers([]);
       }
+
       if (ticketsResponse.data?.tickets) {
         setTickets(ticketsResponse.data.tickets);
+      } else {
+        console.warn('No tickets data in response');
+        setTickets([]);
       }
+
       setError(null);
     } catch (error) {
       console.error('Failed to fetch data:', error);
-      setError(error.response?.data?.message || 'Failed to fetch data');
+      console.error('Error response:', error.response?.data);
+      setError(error.response?.data?.message || error.message || 'Failed to fetch data');
     } finally {
       setLoading(false);
     }
   };
 
   const handleImportTicket = (ticket) => {
+    console.log('Importing ticket:', ticket);
     setTaskForm({
       title: `[Ticket #${ticket.ticket_id}] ${ticket.title}`,
       description: ticket.description,
@@ -121,23 +146,31 @@ const ViewTasks = () => {
         return;
       }
 
+      console.log('Creating/Editing task with data:', {
+        ...taskForm,
+        property_id: selectedProperty
+      });
+
       const taskData = {
         ...taskForm,
         property_id: selectedProperty
       };
 
       if (editingTask) {
-        await apiClient.patch(`/tasks/${editingTask.task_id}`, taskData);
+        const response = await apiClient.patch(`/tasks/${editingTask.task_id}`, taskData);
+        console.log('Task update response:', response.data);
         setMessage('Task updated successfully');
       } else {
-        await apiClient.post('/tasks', taskData);
+        const response = await apiClient.post('/tasks', taskData);
+        console.log('Task creation response:', response.data);
         setMessage('Task created successfully');
       }
-      fetchData();
+      await fetchData();
       handleCloseDialog();
     } catch (error) {
-      setError('Failed to save task');
-      console.error(error);
+      console.error('Failed to save task:', error);
+      console.error('Error response:', error.response?.data);
+      setError(error.response?.data?.message || 'Failed to save task');
     }
   };
 
@@ -233,6 +266,7 @@ const ViewTasks = () => {
   };
 
   const handlePropertyChange = (propertyId) => {
+    console.log('Property changed to:', propertyId);
     setSelectedProperty(propertyId);
   };
 
