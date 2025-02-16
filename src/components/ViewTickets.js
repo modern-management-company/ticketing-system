@@ -51,9 +51,20 @@ const ViewTickets = () => {
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Cleaning', 'Other'];
 
-  // Fetch tickets and rooms when property is selected
+  // Add this useEffect
+  useEffect(() => {
+    // If user has assigned properties, use the first one as default
+    if (auth?.assigned_properties?.length > 0) {
+      const defaultProperty = auth.assigned_properties[0].property_id;
+      console.log('Setting default property:', defaultProperty);
+      setSelectedProperty(defaultProperty);
+    }
+  }, [auth]);
+
+  // Modify the existing useEffect
   useEffect(() => {
     if (selectedProperty) {
+      console.log('Selected property changed, fetching data...');
       fetchTickets();
       fetchRooms();
     }
@@ -65,16 +76,22 @@ const ViewTickets = () => {
         return;
       }
       setLoading(true);
+      console.log('Fetching tickets for property:', selectedProperty);
+      
       const response = await apiClient.get(`/properties/${selectedProperty}/tickets`);
+      console.log('Tickets response:', response.data);
+      
       if (response.data?.tickets) {
         setTickets(response.data.tickets);
       } else {
+        console.warn('No tickets data in response:', response.data);
         setTickets([]);
       }
       setError(null);
     } catch (error) {
       console.error('Failed to fetch tickets:', error);
-      setError(error.message || 'Failed to fetch tickets');
+      console.error('Error response:', error.response?.data);
+      setError(error.response?.data?.message || error.message || 'Failed to fetch tickets');
     } finally {
       setLoading(false);
     }
@@ -83,16 +100,25 @@ const ViewTickets = () => {
   const fetchRooms = async () => {
     try {
       if (!selectedProperty) return;
+      console.log('Fetching rooms for property:', selectedProperty);
+      
       const response = await apiClient.get(`/properties/${selectedProperty}/rooms`);
+      console.log('Rooms response:', response.data);
+      
       if (response.data?.rooms) {
         setRooms(response.data.rooms);
+      } else {
+        console.warn('No rooms data in response:', response.data);
+        setRooms([]);
       }
     } catch (error) {
       console.error('Failed to fetch rooms:', error);
+      console.error('Error response:', error.response?.data);
     }
   };
 
   const handlePropertyChange = (propertyId) => {
+    console.log('Property changed to:', propertyId);
     setSelectedProperty(propertyId);
   };
 
@@ -103,23 +129,42 @@ const ViewTickets = () => {
         return;
       }
 
+      // Validate required fields
+      if (!ticketForm.title.trim()) {
+        setError('Title is required');
+        return;
+      }
+      if (!ticketForm.description.trim()) {
+        setError('Description is required');
+        return;
+      }
+
       const ticketData = {
         ...ticketForm,
         property_id: selectedProperty
       };
 
+      console.log('Creating/Editing ticket with data:', ticketData);
+
       if (editingTicket) {
-        await apiClient.patch(`/tickets/${editingTicket.ticket_id}`, ticketData);
+        const response = await apiClient.patch(`/tickets/${editingTicket.ticket_id}`, ticketData);
+        console.log('Ticket update response:', response.data);
         setMessage('Ticket updated successfully');
       } else {
-        await apiClient.post('/tickets', ticketData);
-        setMessage('Ticket created successfully');
+        const response = await apiClient.post('/tickets', ticketData);
+        console.log('Ticket creation response:', response.data);
+        if (response.data?.notifications_sent) {
+          setMessage('Ticket created successfully. Email notifications have been sent.');
+        } else {
+          setMessage('Ticket created successfully');
+        }
       }
-      fetchTickets();
+      await fetchTickets();
       handleCloseDialog();
     } catch (error) {
-      setError('Failed to save ticket');
-      console.error(error);
+      console.error('Failed to save ticket:', error);
+      console.error('Error response:', error.response?.data);
+      setError(error.response?.data?.msg || error.message || 'Failed to save ticket');
     }
   };
 

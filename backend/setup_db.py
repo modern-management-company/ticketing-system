@@ -88,30 +88,35 @@ def setup_database():
         db.session.commit()
 
         # Create Users
-        admin = User(username='admin', email="admin@example.net", password='admin123', role='super_admin')
+        # Create Super Admin - Aditya
+        aditya = User(
+            username='aditya',
+            email='adityadixit@live.com',
+            password='aditya123',
+            role='super_admin'
+        )
+        
+        # Create Manager - Adixit
+        adixit = User(
+            username='adixit',
+            email='adixit@nyu.edu',
+            password='adixit123',
+            role='manager'
+        )
+        
+        # Create Regular User - Adidix
+        adidix = User(
+            username='adidix',
+            email='aditya@adityadixit.com',
+            password='adidix123',
+            role='user'
+        )
+        
+        db.session.add_all([aditya, adixit, adidix])
+        db.session.commit()
         
         # Create manager users (one for each property)
-        managers = []
-        manager_credentials = [
-            ('WBW_M', 'Wingate by Wyndham'),
-            ('RBW_M', 'Ramada by Wyndham'),
-            ('FIA_M', 'Fairfield Inn & Suites Avon'),
-            ('CAF_M', 'Courtyard Akron Fairlawn'),
-            ('FIC_M', 'Fairfield Inn & Suites Canton'),
-            ('RIC_M', 'Residence Inn Canton'),
-            ('HIM_M', 'Hampton Inn Mansfield'),
-            ('FIM_M', 'Fairfield Inn & Suites Mansfield')
-        ]
-        
-        for (username, hotel_name), prop in zip(manager_credentials, properties):
-            manager = User(
-                username=username,
-                email=f"{username.lower()}@example.net",
-                password=f"{username.lower()}123",
-                role='manager'
-            )
-            managers.append(manager)
-            prop.manager_id = manager.user_id
+        managers = [adixit]  # Start with adixit as the first manager
         
         # Create regular users (2 users per property)
         users = []
@@ -132,7 +137,7 @@ def setup_database():
                 User(username=user2, email=f"{user2.lower()}@example.net", password=f"{user2.lower()}123", role='user')
             ])
 
-        all_users = [admin] + managers + users
+        all_users = [aditya] + managers + users
         db.session.add_all(all_users)
         db.session.commit()
 
@@ -167,12 +172,15 @@ def setup_database():
         for user in users + managers:
             user.assigned_properties = []
         
-        # Assign properties to managers (one property each)
-        for manager, prop in zip(managers, properties):
-            manager.assigned_properties = [prop]  # Managers get exactly one property
-            prop.manager_id = manager.user_id
+        # Assign all properties to adixit (manager)
+        adixit.assigned_properties = properties
+        for prop in properties:
+            prop.manager_id = adixit.user_id
         
-        # Assign properties to users (2-3 properties each)
+        # Assign all properties to adidix (regular user)
+        adidix.assigned_properties = properties
+        
+        # Assign properties to other users (2-3 properties each)
         for i, prop in enumerate(properties):
             # Get the two users for this property
             user1 = users[i * 2]

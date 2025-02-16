@@ -78,10 +78,12 @@ const Dashboard = () => {
     }
 
     try {
+      setLoading(true);
       await apiClient.get('/verify-token');
       
       // Get properties first
       const propertiesRes = await apiClient.get('/properties');
+      console.log('Properties response:', propertiesRes.data);
       const properties = propertiesRes.data || [];
       
       // Initialize arrays for tickets and tasks
@@ -91,30 +93,51 @@ const Dashboard = () => {
       
       // Fetch data for each property
       for (const property of properties) {
-        const [ticketsRes, tasksRes, roomsRes] = await Promise.all([
-          apiClient.get(`/properties/${property.property_id}/tickets`),
-          apiClient.get(`/properties/${property.property_id}/tasks`),
-          apiClient.get(`/properties/${property.property_id}/rooms`)
-        ]);
-        
-        console.log(`Tasks for property ${property.name}:`, tasksRes.data);
-        
-        // Add property's tickets and tasks to the arrays
-        if (ticketsRes.data?.tickets) {
-          allTickets = [...allTickets, ...ticketsRes.data.tickets];
+        console.log(`Fetching data for property: ${property.name}`);
+        try {
+          const [ticketsRes, tasksRes, roomsRes] = await Promise.all([
+            apiClient.get(`/properties/${property.property_id}/tickets`),
+            apiClient.get(`/properties/${property.property_id}/tasks`),
+            apiClient.get(`/properties/${property.property_id}/rooms`)
+          ]);
+          
+          console.log(`Data for property ${property.name}:`, {
+            tickets: ticketsRes.data?.tickets,
+            tasks: tasksRes.data?.tasks,
+            rooms: roomsRes.data?.rooms
+          });
+          
+          // Add property's tickets and tasks to the arrays
+          if (ticketsRes.data?.tickets) {
+            const propertyTickets = ticketsRes.data.tickets.map(ticket => ({
+              ...ticket,
+              property_id: property.property_id,
+              property_name: property.name
+            }));
+            allTickets = [...allTickets, ...propertyTickets];
+          }
+          
+          if (tasksRes.data?.tasks) {
+            const propertyTasks = tasksRes.data.tasks.map(task => ({
+              ...task,
+              property_id: property.property_id,
+              property_name: property.name
+            }));
+            allTasks = [...allTasks, ...propertyTasks];
+          }
+          
+          roomsData[property.property_id] = roomsRes.data?.rooms || [];
+        } catch (error) {
+          console.error(`Error fetching data for property ${property.name}:`, error);
         }
-        if (tasksRes.data?.tasks) {
-          const propertyTasks = tasksRes.data.tasks.map(task => ({
-            ...task,
-            property_id: property.property_id // Ensure property_id is set
-          }));
-          allTasks = [...allTasks, ...propertyTasks];
-        }
-        roomsData[property.property_id] = roomsRes.data?.rooms || [];
       }
 
-      console.log('All tasks:', allTasks);
-      console.log('All tickets:', allTickets);
+      console.log('Final dashboard data:', {
+        tickets: allTickets,
+        tasks: allTasks,
+        properties: properties,
+        rooms: roomsData
+      });
 
       setDashboardData({
         tickets: allTickets,
@@ -142,34 +165,46 @@ const Dashboard = () => {
   }, [verifyAuthAndFetchData]);
 
   const getTicketStatusData = () => {
+    console.log('Generating ticket status data with tickets:', dashboardData.tickets);
+    
     const statusCounts = {
-      open: dashboardData.tickets.filter(t => t.status.toLowerCase() === 'open').length,
-      inProgress: dashboardData.tickets.filter(t => t.status.toLowerCase() === 'in progress').length,
-      completed: dashboardData.tickets.filter(t => t.status.toLowerCase() === 'completed').length
+      open: dashboardData.tickets.filter(t => t.status?.toLowerCase() === 'open').length || 0,
+      inProgress: dashboardData.tickets.filter(t => t.status?.toLowerCase() === 'in progress').length || 0,
+      completed: dashboardData.tickets.filter(t => t.status?.toLowerCase() === 'completed').length || 0
     };
+
+    console.log('Ticket status counts:', statusCounts);
 
     return {
       labels: ['Open', 'In Progress', 'Completed'],
       datasets: [{
+        label: 'Tickets by Status',
         data: [statusCounts.open, statusCounts.inProgress, statusCounts.completed],
         backgroundColor: ['#ff6384', '#ffcd56', '#4bc0c0'],
+        borderColor: ['#ff6384', '#ffcd56', '#4bc0c0'],
         borderWidth: 1
       }]
     };
   };
 
   const getTaskStatusData = () => {
+    console.log('Generating task status data with tasks:', dashboardData.tasks);
+    
     const statusCounts = {
-      pending: dashboardData.tasks.filter(t => t.status.toLowerCase() === 'pending').length,
-      inProgress: dashboardData.tasks.filter(t => t.status.toLowerCase() === 'in progress').length,
-      completed: dashboardData.tasks.filter(t => t.status.toLowerCase() === 'completed').length
+      pending: dashboardData.tasks.filter(t => t.status?.toLowerCase() === 'pending').length || 0,
+      inProgress: dashboardData.tasks.filter(t => t.status?.toLowerCase() === 'in progress').length || 0,
+      completed: dashboardData.tasks.filter(t => t.status?.toLowerCase() === 'completed').length || 0
     };
+
+    console.log('Task status counts:', statusCounts);
 
     return {
       labels: ['Pending', 'In Progress', 'Completed'],
       datasets: [{
+        label: 'Tasks by Status',
         data: [statusCounts.pending, statusCounts.inProgress, statusCounts.completed],
         backgroundColor: ['#ff9f40', '#36a2eb', '#4bc0c0'],
+        borderColor: ['#ff9f40', '#36a2eb', '#4bc0c0'],
         borderWidth: 1
       }]
     };
@@ -183,8 +218,8 @@ const Dashboard = () => {
     });
 
     const propertyData = dashboardData.properties.map(property => {
-      const propertyTickets = dashboardData.tickets.filter(t => t.property_id === property.property_id).length;
-      const propertyTasks = dashboardData.tasks.filter(t => t.property_id === property.property_id).length;
+      const propertyTickets = dashboardData.tickets.filter(t => t.property_id === property.property_id).length || 0;
+      const propertyTasks = dashboardData.tasks.filter(t => t.property_id === property.property_id).length || 0;
       
       console.log(`Property ${property.name} stats:`, {
         tickets: propertyTickets,
@@ -204,14 +239,16 @@ const Dashboard = () => {
         {
           label: 'Tickets',
           data: propertyData.map(p => p.tickets),
-          backgroundColor: '#ff6384',
-          borderColor: '#ff6384',
+          backgroundColor: 'rgba(255, 99, 132, 0.5)',
+          borderColor: 'rgb(255, 99, 132)',
+          borderWidth: 1
         },
         {
           label: 'Tasks',
           data: propertyData.map(p => p.tasks),
-          backgroundColor: '#36a2eb',
-          borderColor: '#36a2eb',
+          backgroundColor: 'rgba(54, 162, 235, 0.5)',
+          borderColor: 'rgb(54, 162, 235)',
+          borderWidth: 1
         }
       ]
     };
@@ -241,19 +278,26 @@ const Dashboard = () => {
           <Card>
             <CardHeader title="Tickets Overview" />
             <CardContent>
-              <Box sx={{ height: 200 }}>
-                <Doughnut 
-                  data={getTicketStatusData()}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'bottom'
+              <Box sx={{ height: 300, position: 'relative' }}>
+                {dashboardData.tickets.length > 0 ? (
+                  <Doughnut 
+                    data={getTicketStatusData()}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: 'bottom',
+                          display: true
+                        }
                       }
-                    }
-                  }}
-                />
+                    }}
+                  />
+                ) : (
+                  <Typography variant="body1" align="center" sx={{ pt: 8 }}>
+                    No ticket data available
+                  </Typography>
+                )}
               </Box>
             </CardContent>
           </Card>
@@ -263,19 +307,26 @@ const Dashboard = () => {
           <Card>
             <CardHeader title="Tasks Overview" />
             <CardContent>
-              <Box sx={{ height: 200 }}>
-                <Doughnut 
-                  data={getTaskStatusData()}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'bottom'
+              <Box sx={{ height: 300, position: 'relative' }}>
+                {dashboardData.tasks.length > 0 ? (
+                  <Doughnut 
+                    data={getTaskStatusData()}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: 'bottom',
+                          display: true
+                        }
                       }
-                    }
-                  }}
-                />
+                    }}
+                  />
+                ) : (
+                  <Typography variant="body1" align="center" sx={{ pt: 8 }}>
+                    No task data available
+                  </Typography>
+                )}
               </Box>
             </CardContent>
           </Card>
@@ -307,24 +358,34 @@ const Dashboard = () => {
           <Card>
             <CardHeader title="Property Performance Overview" />
             <CardContent>
-              <Box sx={{ height: 300 }}>
-                <Bar
-                  data={getPropertyData()}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      y: {
-                        beginAtZero: true
+              <Box sx={{ height: 400, position: 'relative' }}>
+                {dashboardData.properties.length > 0 ? (
+                  <Bar
+                    data={getPropertyData()}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          ticks: {
+                            stepSize: 1
+                          }
+                        }
+                      },
+                      plugins: {
+                        legend: {
+                          position: 'top',
+                          display: true
+                        }
                       }
-                    },
-                    plugins: {
-                      legend: {
-                        position: 'top'
-                      }
-                    }
-                  }}
-                />
+                    }}
+                  />
+                ) : (
+                  <Typography variant="body1" align="center" sx={{ pt: 8 }}>
+                    No property data available
+                  </Typography>
+                )}
               </Box>
             </CardContent>
           </Card>

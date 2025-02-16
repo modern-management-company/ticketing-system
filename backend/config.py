@@ -48,4 +48,14 @@ class Config:
     STRICT_TRANSPORT_SECURITY = True
     STRICT_TRANSPORT_SECURITY_PRELOAD = True
     STRICT_TRANSPORT_SECURITY_MAX_AGE = 31536000  # 1 year
-    STRICT_TRANSPORT_SECURITY_INCLUDE_SUBDOMAINS = True 
+    STRICT_TRANSPORT_SECURITY_INCLUDE_SUBDOMAINS = True
+
+    # Email configuration - only password required
+    EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', '')  # Gmail app password
+    # Email configuration
+    SMTP_SERVER = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+    SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
+    SMTP_USERNAME = os.environ.get('SMTP_USERNAME', 'modernmanagementhotels@gmail.com')
+    SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+    SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'noreply@modernmanagementhotels.com')
+    ENABLE_EMAIL_NOTIFICATIONS = os.environ.get('ENABLE_EMAIL_NOTIFICATIONS', 'True').lower() == 'true' 

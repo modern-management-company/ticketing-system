@@ -23,12 +23,15 @@ import {
   DialogActions,
   FormControl,
   InputLabel,
-  IconButton
+  IconButton,
+  FormControlLabel,
+  Checkbox
 } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LockResetIcon from '@mui/icons-material/LockReset';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 const ManageUsers = () => {
   const { auth } = useAuth();
@@ -44,13 +47,15 @@ const ManageUsers = () => {
     email: '',
     role: 'user',
     assigned_properties: [],
-    managed_property: null
+    managed_property: null,
+    is_active: true
   });
   const [openPasswordDialog, setOpenPasswordDialog] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [passwordForm, setPasswordForm] = useState({
     newPassword: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    sendEmail: true
   });
 
   useEffect(() => {
@@ -136,7 +141,8 @@ const ManageUsers = () => {
       email: user.email,
       role: user.role,
       assigned_properties: user.assigned_properties.map(p => p.property_id),
-      managed_property: user.managed_property_id || null
+      managed_property: user.managed_property_id || null,
+      is_active: user.is_active
     });
     setOpenUserDialog(true);
   };
@@ -166,18 +172,23 @@ const ManageUsers = () => {
       setError(null);
       setSuccess(null);
 
+      const endpoint = auth.role === 'manager' ? '/users/request' : '/users';
       const payload = {
         ...userFormData,
-        managed_property_id: userFormData.role === 'manager' ? userFormData.managed_property : null
+        property_ids: userFormData.assigned_properties,
+        managed_property_id: userFormData.role === 'manager' ? userFormData.managed_property : null,
+        is_active: userFormData.is_active
       };
 
       if (editingUser) {
         await apiClient.put(`/users/${editingUser.user_id}`, payload);
         setSuccess('User updated successfully');
       } else {
-        const response = await apiClient.post('/users', payload);
-        if (response.data && response.data.user) {
-          setSuccess('User added successfully');
+        const response = await apiClient.post(endpoint, payload);
+        if (response.data) {
+          setSuccess(auth.role === 'manager' 
+            ? 'User request submitted successfully. Waiting for admin approval.' 
+            : 'User added successfully');
         }
       }
 
@@ -190,6 +201,18 @@ const ManageUsers = () => {
     }
   };
 
+  const handleActivateUser = async (userId) => {
+    try {
+      const response = await apiClient.post('/users/activate', { user_id: userId });
+      if (response.data) {
+        setSuccess('User activated successfully. Login credentials have been sent via email.');
+        await fetchData();
+      }
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to activate user');
+    }
+  };
+
   const resetUserForm = () => {
     setEditingUser(null);
     setUserFormData({
@@ -197,7 +220,8 @@ const ManageUsers = () => {
       email: '',
       role: 'user',
       assigned_properties: [],
-      managed_property: null
+      managed_property: null,
+      is_active: true
     });
   };
 
@@ -214,7 +238,8 @@ const ManageUsers = () => {
       }
 
       await apiClient.post(`/users/${selectedUser.user_id}/admin-change-password`, {
-        new_password: passwordForm.newPassword
+        new_password: passwordForm.newPassword,
+        send_email: passwordForm.sendEmail
       });
 
       setSuccess('Password changed successfully');
@@ -229,7 +254,8 @@ const ManageUsers = () => {
   const resetPasswordForm = () => {
     setPasswordForm({
       newPassword: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      sendEmail: true
     });
     setSelectedUser(null);
   };
@@ -254,7 +280,7 @@ const ManageUsers = () => {
         }}
         sx={{ mb: 2 }}
       >
-        Add User
+        {auth.role === 'manager' ? 'Request New User' : 'Add User'}
       </Button>
 
       <TableContainer component={Paper}>
@@ -264,6 +290,7 @@ const ManageUsers = () => {
               <TableCell>Username</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Role</TableCell>
+              <TableCell>Status</TableCell>
               <TableCell>Assigned Properties</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
@@ -279,6 +306,7 @@ const ManageUsers = () => {
                       value={user.role}
                       onChange={(e) => handleRoleChange(user.user_id, e.target.value)}
                       size="small"
+                      disabled={!user.is_active}
                     >
                       <MenuItem value="user">User</MenuItem>
                       <MenuItem value="manager">Manager</MenuItem>
@@ -287,6 +315,13 @@ const ManageUsers = () => {
                   ) : (
                     user.role === 'super_admin' ? 'Admin' : user.role
                   )}
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={user.is_active ? 'Active' : 'Pending'}
+                    color={user.is_active ? 'success' : 'warning'}
+                    variant={user.is_active ? 'filled' : 'outlined'}
+                  />
                 </TableCell>
                 <TableCell>
                   <Select
@@ -310,7 +345,7 @@ const ManageUsers = () => {
                       </Box>
                     )}
                     size="small"
-                    disabled={user.role === 'super_admin'}
+                    disabled={user.role === 'super_admin' || !user.is_active}
                   >
                     {properties.map((property) => (
                       <MenuItem key={property.property_id} value={property.property_id}>
@@ -321,6 +356,15 @@ const ManageUsers = () => {
                 </TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', gap: 1 }}>
+                    {auth.role === 'super_admin' && !user.is_active && (
+                      <IconButton
+                        onClick={() => handleActivateUser(user.user_id)}
+                        color="success"
+                        title="Activate User"
+                      >
+                        <CheckCircleIcon />
+                      </IconButton>
+                    )}
                     <IconButton
                       onClick={() => handleEditUser(user)}
                       color="primary"
@@ -343,7 +387,7 @@ const ManageUsers = () => {
                         setOpenPasswordDialog(true);
                       }}
                       color="secondary"
-                      disabled={user.role === 'super_admin'}
+                      disabled={user.role === 'super_admin' || !user.is_active}
                       title="Change Password"
                     >
                       <LockResetIcon />
@@ -399,6 +443,18 @@ const ManageUsers = () => {
                 <MenuItem value="user">User</MenuItem>
                 <MenuItem value="manager">Manager</MenuItem>
                 <MenuItem value="super_admin">Admin</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={userFormData.is_active}
+                onChange={(e) => setUserFormData({ ...userFormData, is_active: e.target.value })}
+                label="Status"
+              >
+                <MenuItem value={true}>Active</MenuItem>
+                <MenuItem value={false}>Pending</MenuItem>
               </Select>
             </FormControl>
             
@@ -479,6 +535,15 @@ const ManageUsers = () => {
               onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
               fullWidth
               required
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={passwordForm.sendEmail}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, sendEmail: e.target.checked })}
+                />
+              }
+              label="Send password via email"
             />
           </Box>
         </DialogContent>
