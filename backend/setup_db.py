@@ -90,6 +90,16 @@ def setup_database():
         # Create Users
         admin = User(username='admin', email="admin@example.net", password='admin123', role='super_admin')
         
+        # Create Aditya Dixit user
+        aditya = User(
+            username='aditya',
+            email='adityadixit@live.com',
+            password='aditya123',
+            role='user'
+        )
+        db.session.add_all([admin, aditya])
+        db.session.commit()
+        
         # Create manager users (one for each property)
         managers = []
         manager_credentials = [
@@ -181,6 +191,9 @@ def setup_database():
             # Always assign their main property
             user1.assigned_properties.append(prop)
             user2.assigned_properties.append(prop)
+            
+            # Assign all properties to Aditya
+            aditya.assigned_properties.append(prop)
             
             # Assign 1-2 additional random properties
             other_properties = [p for p in properties if p != prop]
