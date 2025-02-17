@@ -1,5 +1,5 @@
 from app import app, db
-from app.models import User, Property, Ticket, Task, TaskAssignment, Room, PropertyTheme, SystemSettings
+from app.models import User, Property, Ticket, Task, TaskAssignment, Room
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
 from sqlalchemy import text
@@ -61,7 +61,7 @@ def setup_database():
                 'name': 'Fairfield Inn & Suites Canton',
                 'address': '5285 Broadmoor Circle NW, Canton, OH 44709',
                 'type': 'Hotel',
-                'status': 'active'
+                'status': 'inactive'
             },
             {
                 'name': 'Residence Inn Canton',
@@ -148,8 +148,8 @@ def setup_database():
         active_properties = [p for p in properties if p.status == 'active']
 
         # Create Rooms for each property
-        room_types = ['Single', 'Double', 'Suite', 'Presidential Suite', 'Conference Room']
-        room_statuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning']
+        room_types = ['Single', 'Double', 'Suite', 'Conference', 'Other'];
+        room_statuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];        floors = [1, 2, 3, 4]
         floors = [1, 2, 3, 4]
 
         rooms = []
@@ -287,16 +287,6 @@ def setup_database():
                 tasks.append(task)
         
         db.session.add_all(tasks)
-        db.session.commit()
-
-        # Create Property Themes
-        themes = [PropertyTheme(property_id=prop.property_id) for prop in properties]
-        db.session.add_all(themes)
-        db.session.commit()
-
-        # Create System Settings
-        system_settings = SystemSettings()
-        db.session.add(system_settings)
         db.session.commit()
 
         print("Database initialized with test data!")

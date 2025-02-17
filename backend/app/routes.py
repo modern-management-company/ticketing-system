@@ -1,6 +1,6 @@
 from flask import request, jsonify, current_app
 from app import app, db
-from app.models import User, Ticket, Property, TaskAssignment, Room, Activity, UserProperty, PropertyTheme, SystemSettings, Task
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task
 from app.services import EmailService
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -589,6 +589,12 @@ def manage_property_room(property_id, room_id):
             return jsonify({"msg": "Room updated successfully"})
 
         elif request.method == 'DELETE':
+            # Check if room has any associated tickets
+            tickets = Ticket.query.filter_by(room_id=room_id).first()
+            if tickets:
+                app.logger.warning(f"Cannot delete room {room_id} as it has associated tickets")
+                return jsonify({"msg": "Cannot delete room that has associated tickets. Please reassign or resolve all tickets first."}), 400
+
             db.session.delete(room)
             db.session.commit()
             app.logger.info(f"Room {room_id} deleted successfully")
@@ -1152,34 +1158,56 @@ def properties():
 @app.route('/properties/<int:property_id>', methods=['GET', 'PUT', 'DELETE'])
 @jwt_required()
 def manage_property(property_id):
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
-    property = Property.query.get_or_404(property_id)
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'message': 'User not found'}), 404
 
-    if request.method == 'GET':
-        return jsonify({
-            'property_id': property.property_id,
-            'name': property.name,
-            'address': property.address,
-            'type': property.type,
-            'status': property.status,
-            'manager_id': property.manager_id
-        })
+        property = Property.query.get_or_404(property_id)
 
-    if current_user.role != 'super_admin':
-        return jsonify({'message': 'Unauthorized'}), 403
+        if request.method == 'GET':
+            return jsonify(property.to_dict())
 
-    if request.method == 'PUT':
-        data = request.get_json()
-        for key, value in data.items():
-            setattr(property, key, value)
-        db.session.commit()
-        return jsonify({'message': 'Property updated successfully'})
+        # Check authorization for PUT and DELETE
+        if current_user.role not in ['super_admin', 'manager']:
+            return jsonify({'message': 'Unauthorized - Only super admins and managers can modify properties'}), 403
+            
+        # For managers, verify they manage this property
+        if current_user.role == 'manager' and property.manager_id != current_user.user_id:
+            return jsonify({'message': 'Unauthorized - You can only modify properties you manage'}), 403
 
-    elif request.method == 'DELETE':
-        db.session.delete(property)
-        db.session.commit()
-        return jsonify({'message': 'Property deleted successfully'})
+        if request.method == 'PUT':
+            data = request.get_json()
+            if not data:
+                return jsonify({'message': 'No data provided'}), 400
+
+            # Update allowed fields
+            allowed_fields = ['name', 'address', 'type', 'status', 'description', 'manager_id']
+            for field in allowed_fields:
+                if field in data:
+                    setattr(property, field, data[field])
+
+            try:
+                db.session.commit()
+                return jsonify({'message': 'Property updated successfully', 'property': property.to_dict()})
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error updating property: {str(e)}")
+                return jsonify({'message': f'Error updating property: {str(e)}'}), 500
+
+        elif request.method == 'DELETE':
+            try:
+                db.session.delete(property)
+                db.session.commit()
+                return jsonify({'message': 'Property deleted successfully'})
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error deleting property: {str(e)}")
+                return jsonify({'message': f'Error deleting property: {str(e)}'}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error in manage_property: {str(e)}")
+        return jsonify({'message': f'Internal server error: {str(e)}'}), 500
 
 @app.route('/rooms', methods=['GET', 'POST'])
 @jwt_required()
@@ -1241,9 +1269,16 @@ def manage_room(room_id):
         return jsonify({'message': 'Room updated successfully'})
 
     elif request.method == 'DELETE':
+        # Check if room has any associated tickets
+        tickets = Ticket.query.filter_by(room_id=room_id).first()
+        if tickets:
+            app.logger.warning(f"Cannot delete room {room_id} as it has associated tickets")
+            return jsonify({"msg": "Cannot delete room that has associated tickets. Please reassign or resolve all tickets first."}), 400
+
         db.session.delete(room)
         db.session.commit()
-        return jsonify({'message': 'Room deleted successfully'})
+        app.logger.info(f"Room {room_id} deleted successfully")
+        return jsonify({"msg": "Room deleted successfully"})
 
 @app.route('/reports/properties', methods=['GET'])
 @jwt_required()
@@ -1962,3 +1997,37 @@ def update_system_settings():
     except Exception as e:
         app.logger.error(f'Error in update_system_settings: {str(e)}')
         return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/tickets/<int:ticket_id>', methods=['DELETE'])
+@jwt_required()
+def delete_ticket(ticket_id):
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+
+        ticket = Ticket.query.get_or_404(ticket_id)
+
+        # Check if user has permission to delete the ticket
+        if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+            return jsonify({"msg": "Unauthorized - You can only delete your own tickets"}), 403
+        elif current_user.role == 'manager':
+            # Managers can only delete tickets from their properties
+            has_access = any(p.property_id == ticket.property_id for p in current_user.managed_properties)
+            if not has_access:
+                return jsonify({"msg": "Unauthorized - You can only delete tickets from your managed properties"}), 403
+
+        # Delete associated task assignments first
+        TaskAssignment.query.filter_by(ticket_id=ticket_id).delete()
+        
+        # Delete the ticket
+        db.session.delete(ticket)
+        db.session.commit()
+        
+        app.logger.info(f"Ticket {ticket_id} deleted successfully by user {current_user.username}")
+        return jsonify({"msg": "Ticket deleted successfully"})
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting ticket: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500

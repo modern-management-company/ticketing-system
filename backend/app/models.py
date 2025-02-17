@@ -185,18 +185,6 @@ class TaskAssignment(db.Model):
     ticket = db.relationship('Ticket', backref=db.backref('task_assignments', lazy=True))
     user = db.relationship('User', backref=db.backref('task_assignments', lazy=True))
 
-class Activity(db.Model):
-    __tablename__ = 'activities'
-    activity_id = db.Column(db.Integer, primary_key=True)
-    type = db.Column(db.String(50), nullable=False)
-    description = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
-    property_id = db.Column(db.Integer, db.ForeignKey('properties.property_id'), nullable=True)
-
-    user = db.relationship('User', backref='activities')
-    property = db.relationship('Property', backref='activities')
-
 class UserProperty(db.Model):
     __tablename__ = 'user_properties'
     user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), primary_key=True)
@@ -228,63 +216,4 @@ class Task(db.Model):
             'assigned_to_id': self.assigned_to_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
-        }
-
-class PropertyTheme(db.Model):
-    __tablename__ = 'property_themes'
-
-    id = db.Column(db.Integer, primary_key=True)
-    property_id = db.Column(db.Integer, db.ForeignKey('properties.property_id'), nullable=False)
-    primary_color = db.Column(db.String(7), nullable=False, default='#1976d2')
-    secondary_color = db.Column(db.String(7), nullable=False, default='#dc004e')
-    background_color = db.Column(db.String(7), nullable=False, default='#ffffff')
-    accent_color = db.Column(db.String(7), nullable=False, default='#f50057')
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    # Relationship
-    property = db.relationship('Property', backref=db.backref('theme', uselist=False))
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'property_id': self.property_id,
-            'colors': {
-                'primary': self.primary_color,
-                'secondary': self.secondary_color,
-                'background': self.background_color,
-                'accent': self.accent_color
-            },
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
-        }
-
-class SystemSettings(db.Model):
-    __tablename__ = 'system_settings'
-
-    id = db.Column(db.Integer, primary_key=True)
-    site_name = db.Column(db.String(100), nullable=False, default='Property Management System')
-    maintenance_mode = db.Column(db.Boolean, nullable=False, default=False)
-    user_registration = db.Column(db.Boolean, nullable=False, default=True)
-    max_file_size = db.Column(db.Integer, nullable=False, default=16)  # in MB
-    session_timeout = db.Column(db.Integer, nullable=False, default=60)  # in minutes
-    default_language = db.Column(db.String(2), nullable=False, default='en')
-    email_notifications = db.Column(db.Boolean, nullable=False, default=True)
-    backup_frequency = db.Column(db.Integer, nullable=False, default=24)  # in hours
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'siteName': self.site_name,
-            'maintenanceMode': self.maintenance_mode,
-            'userRegistration': self.user_registration,
-            'maxFileSize': self.max_file_size,
-            'sessionTimeout': self.session_timeout,
-            'defaultLanguage': self.default_language,
-            'emailNotifications': self.email_notifications,
-            'backupFrequency': self.backup_frequency,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
         }

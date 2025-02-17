@@ -97,11 +97,12 @@ const PropertyManagement = () => {
         description: propertyFormData.description || ''
       };
 
+      let response;
       if (propertyFormData.property_id) {
-        await apiClient.put(`/properties/${propertyFormData.property_id}`, payload);
+        response = await apiClient.put(`/properties/${propertyFormData.property_id}`, payload);
         setSuccess('Property updated successfully');
       } else {
-        await apiClient.post('/properties', payload);
+        response = await apiClient.post('/properties', payload);
         setSuccess('Property created successfully');
       }
       
@@ -110,15 +111,16 @@ const PropertyManagement = () => {
       resetPropertyForm();
     } catch (error) {
       console.error('Failed to save property:', error);
-      setError(error.response?.data?.msg || error.message || 'Failed to save property');
+      setError(error.response?.data?.message || 'Failed to save property');
     }
   };
 
   const handlePropertyEdit = (property) => {
+    console.log('Editing property:', property);
     setPropertyFormData({
       property_id: property.property_id,
-      name: property.name,
-      address: property.address,
+      name: property.name || '',
+      address: property.address || '',
       type: property.type || '',
       status: property.status || 'active',
       description: property.description || ''

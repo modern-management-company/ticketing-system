@@ -67,7 +67,11 @@ const ViewRooms = () => {
       setLoading(true);
       const response = await apiClient.get(`/properties/${selectedProperty}/rooms`);
       if (response.data && Array.isArray(response.data.rooms)) {
-        setRooms(response.data.rooms);
+        const processedRooms = response.data.rooms.map(room => ({
+          ...room,
+          type: room.type || roomTypes[0]
+        }));
+        setRooms(processedRooms);
       } else {
         setRooms([]);
       }
@@ -121,12 +125,21 @@ const ViewRooms = () => {
   const handleDeleteRoom = async (roomId) => {
     if (window.confirm('Are you sure you want to delete this room?')) {
       try {
-        await apiClient.delete(`/properties/${selectedProperty}/rooms/${roomId}`);
-        setSuccess('Room deleted successfully');
-        await fetchRooms();
+        setError(null);
+        setSuccess(null);
+        setLoading(true);
+        
+        const response = await apiClient.delete(`/properties/${selectedProperty}/rooms/${roomId}`);
+        
+        if (response.status === 200) {
+          setSuccess('Room deleted successfully');
+          setRooms(prevRooms => prevRooms.filter(room => room.room_id !== roomId));
+        }
       } catch (error) {
         console.error('Failed to delete room:', error);
-        setError(error.response?.data?.message || 'Failed to delete room');
+        setError(error.response?.data?.msg || 'Failed to delete room');
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -214,7 +227,11 @@ const ViewRooms = () => {
                     <CardActions sx={{ justifyContent: 'flex-end', p: 2 }}>
                       <IconButton
                         onClick={() => {
-                          setRoomFormData(room);
+                          const roomToEdit = {
+                            ...room,
+                            type: room.type || roomTypes[0]
+                          };
+                          setRoomFormData(roomToEdit);
                           setOpenDialog(true);
                         }}
                         color="primary"

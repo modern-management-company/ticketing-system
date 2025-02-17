@@ -23,10 +23,12 @@ import {
   DialogContent,
   DialogActions,
   FormControl,
-  InputLabel
+  InputLabel,
+  IconButton
 } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import PropertySwitcher from './PropertySwitcher';
 
 const ViewTickets = () => {
@@ -50,7 +52,7 @@ const ViewTickets = () => {
   });
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
-  const categories = ['General', 'Maintenance', 'Security', 'Cleaning', 'Other'];
+  const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
 
   // Add this useEffect
   useEffect(() => {
@@ -245,13 +247,17 @@ const ViewTickets = () => {
         room_id: ticket.room_id || ''
       });
     } else {
+      if (!selectedProperty) {
+        setError('Please select a property first');
+        return;
+      }
       setEditingTicket(null);
       setTicketForm({
         title: '',
         description: '',
         priority: 'Low',
         category: 'General',
-        property_id: selectedProperty || '',
+        property_id: selectedProperty,
         room_id: ''
       });
     }
@@ -269,6 +275,28 @@ const ViewTickets = () => {
       property_id: selectedProperty || '',
       room_id: ''
     });
+  };
+
+  const handleDeleteTicket = async (ticketId) => {
+    if (window.confirm('Are you sure you want to delete this ticket?')) {
+      try {
+        setError(null);
+        setMessage(null);
+        setLoading(true);
+        
+        const response = await apiClient.delete(`/tickets/${ticketId}`);
+        
+        if (response.status === 200) {
+          setMessage('Ticket deleted successfully');
+          setTickets(prevTickets => prevTickets.filter(ticket => ticket.ticket_id !== ticketId));
+        }
+      } catch (error) {
+        console.error('Failed to delete ticket:', error);
+        setError(error.response?.data?.msg || 'Failed to delete ticket');
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
   return (
@@ -356,13 +384,27 @@ const ViewTickets = () => {
                   <TableCell>{ticket.category}</TableCell>
                   <TableCell>{ticket.created_by_username}</TableCell>
                   <TableCell>
-                    <Button
-                      startIcon={<EditIcon />}
-                      onClick={() => handleOpenDialog(ticket)}
-                      size="small"
-                    >
-                      Edit
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button
+                        startIcon={<EditIcon />}
+                        onClick={() => handleOpenDialog(ticket)}
+                        size="small"
+                      >
+                        Edit
+                      </Button>
+                      {(auth?.user?.role === 'super_admin' || 
+                        auth?.user?.role === 'manager' || 
+                        ticket.created_by_id === auth?.user?.user_id) && (
+                        <Button
+                          startIcon={<DeleteIcon />}
+                          onClick={() => handleDeleteTicket(ticket.ticket_id)}
+                          size="small"
+                          color="error"
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -378,7 +420,7 @@ const ViewTickets = () => {
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
             <Typography variant="subtitle1" color="textSecondary">
-              Property: {auth?.assigned_properties?.find(p => p.property_id === selectedProperty)?.name || 'No property selected'}
+              Property: {properties.find(p => p.property_id === selectedProperty)?.name || 'No property selected'}
             </Typography>
             <TextField
               label="Title"

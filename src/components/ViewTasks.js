@@ -30,6 +30,7 @@ import {
 } from "@mui/material";
 import { useAuth } from '../context/AuthContext';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import AddIcon from '@mui/icons-material/Add';
@@ -279,6 +280,28 @@ const ViewTasks = () => {
     setSelectedProperty(propertyId);
   };
 
+  const handleDeleteTask = async (task) => {
+    if (window.confirm(`Are you sure you want to delete this task${task.ticket_id ? ' and unlink it from the ticket' : ''}?`)) {
+      try {
+        setError(null);
+        setMessage(null);
+        setLoading(true);
+        
+        const response = await apiClient.delete(`/tasks/${task.task_id}`);
+        
+        if (response.status === 200) {
+          setMessage('Task deleted successfully');
+          setTasks(prevTasks => prevTasks.filter(t => t.task_id !== task.task_id));
+        }
+      } catch (error) {
+        console.error('Failed to delete task:', error);
+        setError(error.response?.data?.msg || 'Failed to delete task');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -345,7 +368,7 @@ const ViewTasks = () => {
                   <TableCell>{task.title}</TableCell>
                   <TableCell>{task.description}</TableCell>
                   <TableCell>
-                    {auth.role !== 'user' ? (
+                    {auth?.user?.role !== 'user' ? (
                       <Select
                         value={task.assigned_to_id || ''}
                         onChange={(e) => handleAssigneeChange(task.task_id, e.target.value)}
@@ -403,6 +426,15 @@ const ViewTasks = () => {
                       >
                         <EditIcon />
                       </IconButton>
+                      {(auth?.user?.role === 'super_admin' || auth?.user?.role === 'manager') && (
+                        <IconButton
+                          onClick={() => handleDeleteTask(task)}
+                          color="error"
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      )}
                     </Box>
                   </TableCell>
                 </TableRow>
