@@ -15,7 +15,11 @@ import {
   List,
   ListItem,
   ListItemText,
-  Paper
+  Paper,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   Chart as ChartJS,
@@ -58,6 +62,7 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedProperty, setSelectedProperty] = useState('all');
 
   const fetchRoomsForProperty = async (propertyId) => {
     try {
@@ -81,7 +86,7 @@ const Dashboard = () => {
       setLoading(true);
       await apiClient.get('/verify-token');
       
-      // Get properties first
+      // Get properties based on user role
       const propertiesRes = await apiClient.get('/properties');
       console.log('Properties response:', propertiesRes.data);
       const properties = propertiesRes.data || [];
@@ -101,15 +106,15 @@ const Dashboard = () => {
             apiClient.get(`/properties/${property.property_id}/rooms`)
           ]);
           
-          console.log(`Data for property ${property.name}:`, {
-            tickets: ticketsRes.data?.tickets,
-            tasks: tasksRes.data?.tasks,
-            rooms: roomsRes.data?.rooms
-          });
+          // Filter tickets based on user role
+          let propertyTickets = ticketsRes.data?.tickets || [];
+          if (auth.role === 'user') {
+            propertyTickets = propertyTickets.filter(ticket => ticket.created_by_id === auth.user_id);
+          }
           
-          // Add property's tickets and tasks to the arrays
-          if (ticketsRes.data?.tickets) {
-            const propertyTickets = ticketsRes.data.tickets.map(ticket => ({
+          // Add property information to tickets and tasks
+          if (propertyTickets.length > 0) {
+            propertyTickets = propertyTickets.map(ticket => ({
               ...ticket,
               property_id: property.property_id,
               property_name: property.name
@@ -158,19 +163,33 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [auth?.token, logout, navigate]);
+  }, [auth?.token, auth?.role, auth?.user_id, logout, navigate]);
 
   useEffect(() => {
     verifyAuthAndFetchData();
   }, [verifyAuthAndFetchData]);
 
+  const getFilteredData = useCallback(() => {
+    let filteredTickets = [...dashboardData.tickets];
+    let filteredTasks = [...dashboardData.tasks];
+
+    // Filter by selected property if not 'all'
+    if (selectedProperty !== 'all') {
+      filteredTickets = filteredTickets.filter(ticket => ticket.property_id === selectedProperty);
+      filteredTasks = filteredTasks.filter(task => task.property_id === selectedProperty);
+    }
+
+    return { filteredTickets, filteredTasks };
+  }, [dashboardData, selectedProperty]);
+
   const getTicketStatusData = () => {
-    console.log('Generating ticket status data with tickets:', dashboardData.tickets);
+    const { filteredTickets } = getFilteredData();
+    console.log('Generating ticket status data with tickets:', filteredTickets);
     
     const statusCounts = {
-      open: dashboardData.tickets.filter(t => t.status?.toLowerCase() === 'open').length || 0,
-      inProgress: dashboardData.tickets.filter(t => t.status?.toLowerCase() === 'in progress').length || 0,
-      completed: dashboardData.tickets.filter(t => t.status?.toLowerCase() === 'completed').length || 0
+      open: filteredTickets.filter(t => t.status?.toLowerCase() === 'open').length || 0,
+      inProgress: filteredTickets.filter(t => t.status?.toLowerCase() === 'in progress').length || 0,
+      completed: filteredTickets.filter(t => t.status?.toLowerCase() === 'completed').length || 0
     };
 
     console.log('Ticket status counts:', statusCounts);
@@ -188,12 +207,13 @@ const Dashboard = () => {
   };
 
   const getTaskStatusData = () => {
-    console.log('Generating task status data with tasks:', dashboardData.tasks);
+    const { filteredTasks } = getFilteredData();
+    console.log('Generating task status data with tasks:', filteredTasks);
     
     const statusCounts = {
-      pending: dashboardData.tasks.filter(t => t.status?.toLowerCase() === 'pending').length || 0,
-      inProgress: dashboardData.tasks.filter(t => t.status?.toLowerCase() === 'in progress').length || 0,
-      completed: dashboardData.tasks.filter(t => t.status?.toLowerCase() === 'completed').length || 0
+      pending: filteredTasks.filter(t => t.status?.toLowerCase() === 'pending').length || 0,
+      inProgress: filteredTasks.filter(t => t.status?.toLowerCase() === 'in progress').length || 0,
+      completed: filteredTasks.filter(t => t.status?.toLowerCase() === 'completed').length || 0
     };
 
     console.log('Task status counts:', statusCounts);
@@ -211,27 +231,30 @@ const Dashboard = () => {
   };
 
   const getPropertyData = () => {
+    const { filteredTickets, filteredTasks } = getFilteredData();
     console.log('Generating property data with:', {
       properties: dashboardData.properties,
-      tasks: dashboardData.tasks,
-      tickets: dashboardData.tickets
+      tasks: filteredTasks,
+      tickets: filteredTickets
     });
 
-    const propertyData = dashboardData.properties.map(property => {
-      const propertyTickets = dashboardData.tickets.filter(t => t.property_id === property.property_id).length || 0;
-      const propertyTasks = dashboardData.tasks.filter(t => t.property_id === property.property_id).length || 0;
-      
-      console.log(`Property ${property.name} stats:`, {
-        tickets: propertyTickets,
-        tasks: propertyTasks
+    const propertyData = dashboardData.properties
+      .filter(property => selectedProperty === 'all' || property.property_id === selectedProperty)
+      .map(property => {
+        const propertyTickets = filteredTickets.filter(t => t.property_id === property.property_id).length || 0;
+        const propertyTasks = filteredTasks.filter(t => t.property_id === property.property_id).length || 0;
+        
+        console.log(`Property ${property.name} stats:`, {
+          tickets: propertyTickets,
+          tasks: propertyTasks
+        });
+
+        return {
+          name: property.name,
+          tickets: propertyTickets,
+          tasks: propertyTasks
+        };
       });
-
-      return {
-        name: property.name,
-        tickets: propertyTickets,
-        tasks: propertyTasks
-      };
-    });
 
     return {
       labels: propertyData.map(p => p.name),
@@ -272,6 +295,25 @@ const Dashboard = () => {
 
   return (
     <Box sx={{ flexGrow: 1, p: 3 }}>
+      {/* Property Filter */}
+      <Box sx={{ mb: 3 }}>
+        <FormControl sx={{ minWidth: 200 }}>
+          <InputLabel>Filter by Property</InputLabel>
+          <Select
+            value={selectedProperty}
+            onChange={(e) => setSelectedProperty(e.target.value)}
+            label="Filter by Property"
+          >
+            <MenuItem value="all">All Properties</MenuItem>
+            {dashboardData.properties.map((property) => (
+              <MenuItem key={property.property_id} value={property.property_id}>
+                {property.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
+
       <Grid container spacing={3}>
         {/* Summary Cards */}
         <Grid item xs={12} md={4}>
