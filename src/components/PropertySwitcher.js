@@ -19,26 +19,30 @@ const PropertySwitcher = ({ onPropertyChange }) => {
       setLoading(true);
       setError(null);
       
-      // Get properties based on user role
       const response = await apiClient.get('/properties');
-      console.log('Properties response:', response.data); // Debug log
+      console.log('Properties response:', response.data);
       
       if (response.data) {
-        const availableProperties = response.data;
-        setProperties(availableProperties);
+        // Filter only active properties
+        const activeProperties = response.data.filter(prop => prop.status === 'active');
+        setProperties(activeProperties);
         
         // Set default property
-        if (availableProperties.length > 0) {
-          // If user has assigned properties, use the first assigned one
+        if (activeProperties.length > 0) {
+          // If user has assigned properties, use the first assigned active one
           if (auth.assigned_properties && auth.assigned_properties.length > 0) {
-            const defaultProperty = auth.assigned_properties[0].property_id;
-            setSelectedProperty(defaultProperty);
-            if (onPropertyChange) {
-              onPropertyChange(defaultProperty);
+            const assignedActiveProperty = auth.assigned_properties.find(p => 
+              activeProperties.some(ap => ap.property_id === p.property_id)
+            );
+            if (assignedActiveProperty) {
+              setSelectedProperty(assignedActiveProperty.property_id);
+              if (onPropertyChange) {
+                onPropertyChange(assignedActiveProperty.property_id);
+              }
             }
           } else {
-            // Otherwise use the first available property
-            const defaultProperty = availableProperties[0].property_id;
+            // Otherwise use the first available active property
+            const defaultProperty = activeProperties[0].property_id;
             setSelectedProperty(defaultProperty);
             if (onPropertyChange) {
               onPropertyChange(defaultProperty);

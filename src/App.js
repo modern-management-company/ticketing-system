@@ -27,6 +27,7 @@ import TicketDetails from './components/TicketDetails';
 import PropertyManagement from './components/PropertyManagement';
 import Unauthorized from './components/Unauthorized';
 import UserProfile from './components/UserProfile';
+import Reports from './components/Reports';
 
 const App = () => {
   return (
@@ -80,6 +81,11 @@ const App = () => {
                 <Route path="users" element={
                   <ProtectedRoute allowedRoles={['super_admin']}>
                     <ManageUsers />
+                  </ProtectedRoute>
+                } />
+                <Route path="reports" element={
+                  <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
+                    <Reports />
                   </ProtectedRoute>
                 } />
               </Route>

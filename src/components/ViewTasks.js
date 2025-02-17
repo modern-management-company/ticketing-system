@@ -35,6 +35,10 @@ import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import AddIcon from '@mui/icons-material/Add';
 import ImportExportIcon from '@mui/icons-material/ImportExport';
 import PropertySwitcher from './PropertySwitcher';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
+import { format } from 'date-fns';
 
 const ViewTasks = () => {
   const navigate = useNavigate();
@@ -54,8 +58,10 @@ const ViewTasks = () => {
     description: '',
     priority: 'Low',
     status: 'pending',
-    assigned_to_id: ''
+    assigned_to_id: '',
+    due_date: null
   });
+  const [openDueDatePicker, setOpenDueDatePicker] = useState(false);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -182,7 +188,8 @@ const ViewTasks = () => {
         description: task.description,
         priority: task.priority,
         status: task.status,
-        assigned_to_id: task.assigned_to_id || ''
+        assigned_to_id: task.assigned_to_id || '',
+        due_date: task.due_date ? new Date(task.due_date) : null
       });
     } else {
       setEditingTask(null);
@@ -191,7 +198,8 @@ const ViewTasks = () => {
         description: '',
         priority: 'Low',
         status: 'pending',
-        assigned_to_id: ''
+        assigned_to_id: '',
+        due_date: null
       });
     }
     setOpenDialog(true);
@@ -205,7 +213,8 @@ const ViewTasks = () => {
       description: '',
       priority: 'Low',
       status: 'pending',
-      assigned_to_id: ''
+      assigned_to_id: '',
+      due_date: null
     });
   };
 
@@ -468,6 +477,27 @@ const ViewTasks = () => {
                 ))}
               </Select>
             </FormControl>
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <TextField
+                fullWidth
+                label="Due Date"
+                value={taskForm.due_date ? format(new Date(taskForm.due_date), 'MM/dd/yyyy') : ''}
+                onClick={() => setOpenDueDatePicker(true)}
+                inputProps={{ readOnly: true }}
+              />
+              <Dialog open={openDueDatePicker} onClose={() => setOpenDueDatePicker(false)}>
+                <DialogContent>
+                  <StaticDatePicker
+                    displayStaticWrapperAs="desktop"
+                    value={taskForm.due_date ? new Date(taskForm.due_date) : null}
+                    onChange={(newValue) => {
+                      setTaskForm({ ...taskForm, due_date: newValue });
+                      setOpenDueDatePicker(false);
+                    }}
+                  />
+                </DialogContent>
+              </Dialog>
+            </LocalizationProvider>
           </Box>
         </DialogContent>
         <DialogActions>

@@ -29,6 +29,7 @@ import {
   Settings as SettingsIcon,
   Palette as ThemeIcon,
   Logout as LogoutIcon,
+  Assessment as ReportIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -89,6 +90,11 @@ const Layout = () => {
         text: 'Users',
         icon: <UsersIcon />,
         path: '/admin/users',
+      },
+      {
+        text: 'Reports',
+        icon: <ReportIcon />,
+        path: '/admin/reports',
       }
     ];
 

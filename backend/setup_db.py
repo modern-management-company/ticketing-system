@@ -36,42 +36,50 @@ def setup_database():
             {
                 'name': 'Wingate by Wyndham',
                 'address': '701 Pike St, Marietta, OH 45750',
-                'type': 'Hotel'
+                'type': 'Hotel',
+                'status': 'inactive'
             },
             {
                 'name': 'Ramada by Wyndham',
                 'address': '4801 W Broad St, Columbus, OH 43228',
-                'type': 'Hotel'
+                'type': 'Hotel',
+                'status': 'inactive'
             },
             {
                 'name': 'Fairfield Inn & Suites Avon',
                 'address': '39050 Colorado Ave, Avon, OH 44011',
-                'type': 'Hotel'
+                'type': 'Hotel',
+                'status': 'inactive'
             },
             {
                 'name': 'Courtyard Akron Fairlawn',
                 'address': '100 Springside Dr, Fairlawn, OH 44333',
-                'type': 'Hotel'
+                'type': 'Hotel',
+                'status': 'inactive'
             },
             {
                 'name': 'Fairfield Inn & Suites Canton',
                 'address': '5285 Broadmoor Circle NW, Canton, OH 44709',
-                'type': 'Hotel'
+                'type': 'Hotel',
+                'status': 'active'
             },
             {
                 'name': 'Residence Inn Canton',
                 'address': '5280 Broadmoor Circle NW, Canton, OH 44709',
-                'type': 'Hotel'
+                'type': 'Hotel',
+                'status': 'active'
             },
             {
                 'name': 'Hampton Inn Mansfield',
                 'address': '1051 N Lexington Springmill Rd, Mansfield, OH 44906',
-                'type': 'Hotel'
+                'type': 'Hotel',
+                'status': 'inactive'
             },
             {
                 'name': 'Fairfield Inn & Suites Mansfield',
                 'address': '1065 N Lexington Springmill Rd, Mansfield, OH 44906',
-                'type': 'Hotel'
+                'type': 'Hotel',
+                'status': 'inactive'
             }
         ]
 
@@ -80,7 +88,8 @@ def setup_database():
             prop = Property(
                 name=hotel['name'],
                 address=hotel['address'],
-                type=hotel['type']
+                type=hotel['type'],
+                status=hotel['status']
             )
             properties.append(prop)
             db.session.add(prop)
@@ -121,14 +130,8 @@ def setup_database():
         # Create regular users (2 users per property)
         users = []
         user_credentials = [
-            ('WBW_U1', 'WBW_U2', 'Wingate by Wyndham'),
-            ('RBW_U1', 'RBW_U2', 'Ramada by Wyndham'),
-            ('FIA_U1', 'FIA_U2', 'Fairfield Inn & Suites Avon'),
-            ('CAF_U1', 'CAF_U2', 'Courtyard Akron Fairlawn'),
             ('FIC_U1', 'FIC_U2', 'Fairfield Inn & Suites Canton'),
-            ('RIC_U1', 'RIC_U2', 'Residence Inn Canton'),
-            ('HIM_U1', 'HIM_U2', 'Hampton Inn Mansfield'),
-            ('FIM_U1', 'FIM_U2', 'Fairfield Inn & Suites Mansfield')
+            ('RIC_U1', 'RIC_U2', 'Residence Inn Canton')
         ]
         
         for user1, user2, _ in user_credentials:
@@ -141,13 +144,16 @@ def setup_database():
         db.session.add_all(all_users)
         db.session.commit()
 
+        # Get only active properties
+        active_properties = [p for p in properties if p.status == 'active']
+
         # Create Rooms for each property
         room_types = ['Single', 'Double', 'Suite', 'Presidential Suite', 'Conference Room']
         room_statuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning']
         floors = [1, 2, 3, 4]
 
         rooms = []
-        for prop in properties:
+        for prop in active_properties:  # Only create rooms for active properties
             # Create 15-20 rooms for each property
             num_rooms = random.randint(15, 20)
             for i in range(num_rooms):
@@ -172,31 +178,28 @@ def setup_database():
         for user in users + managers:
             user.assigned_properties = []
         
-        # Assign all properties to adixit (manager)
-        adixit.assigned_properties = properties
-        for prop in properties:
+        # Assign all active properties to adixit (manager)
+        adixit.assigned_properties = active_properties
+        for prop in active_properties:
             prop.manager_id = adixit.user_id
         
-        # Assign all properties to adidix (regular user)
-        adidix.assigned_properties = properties
+        # Assign all active properties to adidix (regular user)
+        adidix.assigned_properties = active_properties
         
-        # Assign properties to other users (2-3 properties each)
-        for i, prop in enumerate(properties):
+        # Assign properties to other users (one property each)
+        for i, prop in enumerate(active_properties):
             # Get the two users for this property
             user1 = users[i * 2]
             user2 = users[i * 2 + 1]
             
-            # Always assign their main property
+            # Assign their main property
             user1.assigned_properties.append(prop)
             user2.assigned_properties.append(prop)
             
-            # Assign 1-2 additional random properties
-            other_properties = [p for p in properties if p != prop]
-            for user in [user1, user2]:
-                num_extra = random.randint(1, 2)
-                extra_properties = random.sample(other_properties, num_extra)
-                for extra_prop in extra_properties:
-                    user.assigned_properties.append(extra_prop)
+            # Assign the other Canton property as well
+            other_prop = active_properties[1 if i == 0 else 0]
+            user1.assigned_properties.append(other_prop)
+            user2.assigned_properties.append(other_prop)
         
         db.session.commit()
 
@@ -225,7 +228,7 @@ def setup_database():
         categories = ['Maintenance', 'Housekeeping', 'Security', 'IT', 'General']
         
         tickets = []
-        for prop in properties:
+        for prop in active_properties:  # Only create tickets for active properties
             # Create 3-5 tickets for each property
             num_tickets = random.randint(3, 5)
             for _ in range(num_tickets):
@@ -267,7 +270,7 @@ def setup_database():
         ]
 
         tasks = []
-        for prop in properties:
+        for prop in active_properties:  # Only create tasks for active properties
             # Create 3-5 tasks for each property
             num_tasks = random.randint(3, 5)
             for _ in range(num_tasks):

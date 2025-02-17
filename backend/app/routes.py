@@ -1487,6 +1487,17 @@ def get_property_tickets(property_id):
         # Get tickets for the property
         tickets = Ticket.query.filter_by(property_id=property_id).all()
         
+        # For regular users, filter tickets to only show ones they created or are assigned to
+        if current_user.role == 'user':
+            # Get task assignments for the user
+            user_task_assignments = TaskAssignment.query.filter_by(assigned_to_user_id=current_user.user_id).all()
+            assigned_ticket_ids = [task.ticket_id for task in user_task_assignments]
+            
+            # Filter tickets to only show ones created by the user or assigned to them
+            tickets = [ticket for ticket in tickets if 
+                      ticket.user_id == current_user.user_id or 
+                      ticket.ticket_id in assigned_ticket_ids]
+        
         ticket_list = []
         for ticket in tickets:
             creator = User.query.get(ticket.user_id)

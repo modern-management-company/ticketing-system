@@ -39,6 +39,7 @@ const ViewTickets = () => {
   const [editingTicket, setEditingTicket] = useState(null);
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [rooms, setRooms] = useState([]);
+  const [properties, setProperties] = useState([]);
   const [ticketForm, setTicketForm] = useState({
     title: '',
     description: '',
@@ -70,21 +71,85 @@ const ViewTickets = () => {
     }
   }, [selectedProperty]);
 
+  // Add properties fetching
+  useEffect(() => {
+    fetchProperties();
+  }, []);
+
+  const fetchProperties = async () => {
+    try {
+      const response = await apiClient.get('/properties');
+      if (response.data) {
+        // Filter only active properties
+        const activeProperties = response.data.filter(prop => prop.status === 'active');
+        setProperties(activeProperties);
+      }
+    } catch (error) {
+      console.error('Failed to fetch properties:', error);
+      setError('Failed to load properties');
+    }
+  };
+
   const fetchTickets = async () => {
     try {
       if (!auth?.token || !selectedProperty) {
         return;
       }
       setLoading(true);
-      console.log('Fetching tickets for property:', selectedProperty);
+      console.log('Current auth:', JSON.stringify(auth, null, 2));
+      console.log('Current user role:', auth.identity?.role);
+      console.log('Current user ID:', auth.identity?.user_id);
       
-      const response = await apiClient.get(`/properties/${selectedProperty}/tickets`);
-      console.log('Tickets response:', response.data);
+      // Get tickets and task assignments in parallel
+      const [ticketsResponse, tasksResponse] = await Promise.all([
+        apiClient.get(`/properties/${selectedProperty}/tickets`),
+        apiClient.get(`/properties/${selectedProperty}/tasks`)
+      ]);
       
-      if (response.data?.tickets) {
-        setTickets(response.data.tickets);
+      console.log('Tickets response:', JSON.stringify(ticketsResponse.data, null, 2));
+      console.log('Tasks response:', JSON.stringify(tasksResponse.data, null, 2));
+      
+      if (ticketsResponse.data?.tickets) {
+        let filteredTickets = ticketsResponse.data.tickets;
+        
+        // For regular users, only show tickets they created or are assigned to via tasks
+        if (auth.identity?.role === 'user') {
+          console.log('Filtering tickets for user role');
+          console.log('Total tickets before filtering:', filteredTickets.length);
+          
+          // Get all tasks assigned to the user
+          const userTasks = tasksResponse.data?.tasks?.filter(task => 
+            task.assigned_to_id === auth.identity.user_id
+          ) || [];
+          
+          // Get ticket IDs from task assignments
+          const assignedTicketIds = userTasks
+            .filter(task => task.ticket_id) // Only tasks linked to tickets
+            .map(task => task.ticket_id);
+          
+          console.log('User assigned task ticket IDs:', assignedTicketIds);
+          
+          filteredTickets = filteredTickets.filter(ticket => {
+            const isCreator = ticket.user_id === auth.identity.user_id;
+            const isAssignedTask = assignedTicketIds.includes(ticket.ticket_id);
+            
+            console.log(`Ticket ${ticket.ticket_id}:`, {
+              ticket_user_id: ticket.user_id,
+              auth_user_id: auth.identity.user_id,
+              isCreator,
+              isAssignedTask,
+              shouldShow: isCreator || isAssignedTask
+            });
+            
+            return isCreator || isAssignedTask;
+          });
+          
+          console.log('Filtered tickets:', filteredTickets.length);
+        }
+        
+        setTickets(filteredTickets);
       } else {
-        console.warn('No tickets data in response:', response.data);
+        console.warn('No tickets data in response:', ticketsResponse.data);
         setTickets([]);
       }
       setError(null);
@@ -312,6 +377,9 @@ const ViewTickets = () => {
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+            <Typography variant="subtitle1" color="textSecondary">
+              Property: {auth?.assigned_properties?.find(p => p.property_id === selectedProperty)?.name || 'No property selected'}
+            </Typography>
             <TextField
               label="Title"
               value={ticketForm.title}

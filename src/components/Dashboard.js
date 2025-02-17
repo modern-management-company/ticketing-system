@@ -35,6 +35,7 @@ import {
   DoughnutController
 } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import PropertySwitcher from './PropertySwitcher';
 
 // Register ChartJS components
 ChartJS.register(
@@ -86,9 +87,8 @@ const Dashboard = () => {
       setLoading(true);
       await apiClient.get('/verify-token');
       
-      // Get properties based on user role
+      // Get data for selected property or all properties
       const propertiesRes = await apiClient.get('/properties');
-      console.log('Properties response:', propertiesRes.data);
       const properties = propertiesRes.data || [];
       
       // Initialize arrays for tickets and tasks
@@ -96,9 +96,13 @@ const Dashboard = () => {
       let allTasks = [];
       let roomsData = {};
       
+      // Fetch data for selected property or all properties
+      const propertiesToFetch = selectedProperty === 'all' 
+        ? properties.filter(p => p.status === 'active')
+        : properties.filter(p => p.property_id === selectedProperty && p.status === 'active');
+
       // Fetch data for each property
-      for (const property of properties) {
-        console.log(`Fetching data for property: ${property.name}`);
+      for (const property of propertiesToFetch) {
         try {
           const [ticketsRes, tasksRes, roomsRes] = await Promise.all([
             apiClient.get(`/properties/${property.property_id}/tickets`),
@@ -137,17 +141,10 @@ const Dashboard = () => {
         }
       }
 
-      console.log('Final dashboard data:', {
-        tickets: allTickets,
-        tasks: allTasks,
-        properties: properties,
-        rooms: roomsData
-      });
-
       setDashboardData({
         tickets: allTickets,
         tasks: allTasks,
-        properties: properties,
+        properties: propertiesToFetch,
         rooms: roomsData
       });
       setError(null);
@@ -163,7 +160,7 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [auth?.token, auth?.role, auth?.user_id, logout, navigate]);
+  }, [auth?.token, auth?.role, auth?.user_id, selectedProperty, logout, navigate]);
 
   useEffect(() => {
     verifyAuthAndFetchData();
@@ -297,21 +294,7 @@ const Dashboard = () => {
     <Box sx={{ flexGrow: 1, p: 3 }}>
       {/* Property Filter */}
       <Box sx={{ mb: 3 }}>
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Filter by Property</InputLabel>
-          <Select
-            value={selectedProperty}
-            onChange={(e) => setSelectedProperty(e.target.value)}
-            label="Filter by Property"
-          >
-            <MenuItem value="all">All Properties</MenuItem>
-            {dashboardData.properties.map((property) => (
-              <MenuItem key={property.property_id} value={property.property_id}>
-                {property.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <PropertySwitcher onPropertyChange={setSelectedProperty} />
       </Box>
 
       <Grid container spacing={3}>
