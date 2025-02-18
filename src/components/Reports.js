@@ -131,6 +131,7 @@ const Reports = () => {
         return [
           item.ticket_id,
           item.title,
+          item.room_name || 'N/A',
           item.status,
           item.priority,
           item.created_by_username,
@@ -149,7 +150,7 @@ const Reports = () => {
     });
 
     const columns = type === 'tickets' 
-      ? ['ID', 'Title', 'Status', 'Priority', 'Created By', 'Created At']
+      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Created At']
       : ['ID', 'Title', 'Status', 'Priority', 'Assigned To', 'Due Date'];
 
     doc.autoTable({
@@ -229,6 +230,7 @@ const Reports = () => {
                     <TableRow>
                       <TableCell>ID</TableCell>
                       <TableCell>Title</TableCell>
+                      <TableCell>Room</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
                       <TableCell>Created By</TableCell>
@@ -240,6 +242,7 @@ const Reports = () => {
                       <TableRow key={ticket.ticket_id}>
                         <TableCell>{ticket.ticket_id}</TableCell>
                         <TableCell>{ticket.title}</TableCell>
+                        <TableCell>{ticket.room_name || 'N/A'}</TableCell>
                         <TableCell>{ticket.status}</TableCell>
                         <TableCell>{ticket.priority}</TableCell>
                         <TableCell>{ticket.created_by_username}</TableCell>

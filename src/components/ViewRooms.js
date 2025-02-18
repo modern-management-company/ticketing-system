@@ -334,6 +334,21 @@ const ViewRooms = () => {
                       <Typography color="textSecondary">
                         Type: {room.type || 'N/A'}
                       </Typography>
+                      <TextField
+                        label="Type"
+                        value={room.type || ''}
+                        onChange={(e) => {
+                          const updatedRooms = rooms.map(r => 
+                            r.room_id === room.room_id 
+                              ? { ...r, type: e.target.value }
+                              : r
+                          );
+                          setRooms(updatedRooms);
+                        }}
+                        fullWidth
+                        size="small"
+                        margin="dense"
+                      />
                       <Typography color="textSecondary">
                         Floor: {room.floor || 'N/A'}
                       </Typography>

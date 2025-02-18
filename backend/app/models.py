@@ -180,6 +180,7 @@ class Ticket(db.Model):
     status = db.Column(db.String(20), default='open')
     priority = db.Column(db.String(20), nullable=False)
     category = db.Column(db.String(50))
+    subcategory = db.Column(db.String(50))  # Add subcategory field
     user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
     property_id = db.Column(db.Integer, db.ForeignKey('properties.property_id'))
     room_id = db.Column(db.Integer, db.ForeignKey('rooms.room_id'))
@@ -198,10 +199,12 @@ class Ticket(db.Model):
             'status': self.status,
             'priority': self.priority,
             'category': self.category,
+            'subcategory': self.subcategory,
             'room_id': self.room_id,
             'room_name': room.name if room else None,
             'created_by_id': self.user_id,
             'created_by_username': creator.username if creator else 'Unknown',
+            'created_by_group': creator.group if creator else 'Unknown',
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'property_id': self.property_id

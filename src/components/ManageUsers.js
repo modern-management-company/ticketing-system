@@ -134,20 +134,24 @@ const ManageUsers = () => {
 
   const handlePropertyAssignment = async (userId, propertyIds) => {
     try {
-      const response = await apiClient.patch(`/users/${userId}`, {
-        assigned_properties: propertyIds,
-        managed_properties: propertyIds // Only used if user is a manager
+      setError(null);
+      setSuccess(null);
+      setLoading(true);
+
+      const response = await apiClient.post('/assign-property', {
+        user_id: userId,
+        property_ids: propertyIds
       });
 
-      if (response.data?.user) {
-        setUsers(users.map(u =>
-          u.user_id === userId ? response.data.user : u
-        ));
-        setSuccess('Property assignment updated successfully');
+      if (response.data) {
+        setSuccess(response.data.msg);
+        await fetchData(); // Refresh the user list
       }
     } catch (error) {
       console.error('Failed to update property assignments:', error);
-      setError(error.response?.data?.message || 'Failed to update property assignments');
+      setError(error.response?.data?.msg || 'Failed to update property assignments');
+    } finally {
+      setLoading(false);
     }
   };
 

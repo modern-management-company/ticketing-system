@@ -33,52 +33,10 @@ def setup_database():
         # Create Properties
         hotels = [
             {
-                'name': 'Wingate by Wyndham',
-                'address': '701 Pike St, Marietta, OH 45750',
-                'type': 'Hotel',
-                'status': 'inactive'
-            },
-            {
-                'name': 'Ramada by Wyndham',
-                'address': '4801 W Broad St, Columbus, OH 43228',
-                'type': 'Hotel',
-                'status': 'inactive'
-            },
-            {
-                'name': 'Fairfield Inn & Suites Avon',
-                'address': '39050 Colorado Ave, Avon, OH 44011',
-                'type': 'Hotel',
-                'status': 'inactive'
-            },
-            {
-                'name': 'Courtyard Akron Fairlawn',
-                'address': '100 Springside Dr, Fairlawn, OH 44333',
-                'type': 'Hotel',
-                'status': 'inactive'
-            },
-            {
-                'name': 'Fairfield Inn & Suites Canton',
-                'address': '5285 Broadmoor Circle NW, Canton, OH 44709',
-                'type': 'Hotel',
-                'status': 'active'
-            },
-            {
                 'name': 'Residence Inn Canton',
                 'address': '5280 Broadmoor Circle NW, Canton, OH 44709',
                 'type': 'Hotel',
                 'status': 'active'
-            },
-            {
-                'name': 'Hampton Inn Mansfield',
-                'address': '1051 N Lexington Springmill Rd, Mansfield, OH 44906',
-                'type': 'Hotel',
-                'status': 'inactive'
-            },
-            {
-                'name': 'Fairfield Inn & Suites Mansfield',
-                'address': '1065 N Lexington Springmill Rd, Mansfield, OH 44906',
-                'type': 'Hotel',
-                'status': 'inactive'
             }
         ]
 
@@ -141,24 +99,8 @@ def setup_database():
         
         db.session.add_all([admin, basic_user, manager_engineering, manager_frontdesk, manager_housekeeping])
         db.session.commit()
-        
-        # Create regular users (2 users per property)
-        users = []
-        user_credentials = [
-            ('FIC_U1', 'FIC_U2', 'Fairfield Inn & Suites Canton', 'Front Desk', 'Housekeeping'),
-            ('RIC_U1', 'RIC_U2', 'Residence Inn Canton', 'Maintenance', 'Engineering')
-        ]
-        
-        for user1, user2, _, group1, group2 in user_credentials:
-            users.extend([
-                User(username=user1, email=f"{user1.lower()}@example.net", password=f"{user1.lower()}123", role='user', group=group1),
-                User(username=user2, email=f"{user2.lower()}@example.net", password=f"{user2.lower()}123", role='user', group=group2)
-            ])
 
-        db.session.add_all(users)
-        db.session.commit()
-
-        # Get only active properties
+        # Get active properties
         active_properties = [p for p in properties if p.status == 'active']
 
         # Create property manager assignments
@@ -173,141 +115,262 @@ def setup_database():
         
         db.session.commit()
 
-        # Update property assignments for regular users
-        for user in users:
-            user.assigned_properties = []
-        
-        # Assign properties to users
-        for i, prop in enumerate(active_properties):
-            # Get the two users for this property
-            user1 = users[i * 2]
-            user2 = users[i * 2 + 1]
-            
-            # Assign their main property
-            user1.assigned_properties.append(prop)
-            user2.assigned_properties.append(prop)
-            
-            # Assign the other Canton property as well
-            other_prop = active_properties[1 if i == 0 else 0]
-            user1.assigned_properties.append(other_prop)
-            user2.assigned_properties.append(other_prop)
-        
         # Assign all active properties to basic user
         basic_user.assigned_properties = active_properties
 
-        # Create Rooms for each property
-        room_types = ['Single', 'Double', 'Suite', 'Conference', 'Other'];
-        room_statuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];        floors = [1, 2, 3, 4]
-        floors = [1, 2, 3, 4]
+        # Define room types and statuses
+        room_types = {
+            'STDO': 'Studio',
+            'ONBR': 'One Bedroom',
+            'TOBR': 'Two Bedroom',
+            'PUBLIC': 'Public Area'
+        }
 
+        room_statuses = ['Available', 'Out of Order', 'Maintenance', 'Cleaning']
+
+        # Define maintenance subcategories
+        maintenance_subcategories = [
+            'HVAC',
+            'Fireplace',
+            'Hot Water',
+            'Door Locks',
+            'TV',
+            'Plumbing',
+            'Electrical',
+            'Appliances',
+            'Furniture',
+            'Windows',
+            'General'
+        ]
+
+        # Define housekeeping subcategories
+        housekeeping_subcategories = [
+            'Deep Cleaning',
+            'Linens',
+            'Bathroom',
+            'Kitchen',
+            'Carpet/Flooring',
+            'Odor',
+            'Supplies',
+            'General'
+        ]
+
+        # Create rooms for Residence Inn Canton
+        residence_inn = active_properties[0]
+        
+        # Guest Rooms Data
+        guest_rooms_data = [
+            # First Floor
+            {'number': '100', 'type': 'STDO', 'floor': 1},
+            {'number': '101', 'type': 'STDO', 'floor': 1},
+            {'number': '102', 'type': 'ONBR', 'floor': 1, 'issues': ['odor', 'mold smell']},
+            {'number': '103', 'type': 'ONBR', 'floor': 1},
+            {'number': '104', 'type': 'TOBR', 'floor': 1},
+            {'number': '105', 'type': 'TOBR', 'floor': 1, 'issues': ['fireplace', 'door locks']},
+            {'number': '106', 'type': 'STDO', 'floor': 1},
+            {'number': '107', 'type': 'STDO', 'floor': 1},
+            {'number': '109', 'type': 'TOBR', 'floor': 1},
+            {'number': '111', 'type': 'TOBR', 'floor': 1},
+            {'number': '112', 'type': 'ONBR', 'floor': 1},
+            {'number': '113', 'type': 'ONBR', 'floor': 1},
+            {'number': '114', 'type': 'ONBR', 'floor': 1},
+            {'number': '115', 'type': 'ONBR', 'floor': 1},
+            {'number': '116', 'type': 'ONBR', 'floor': 1},
+            {'number': '117', 'type': 'ONBR', 'floor': 1},
+            {'number': '118', 'type': 'ONBR', 'floor': 1},
+            {'number': '119', 'type': 'ONBR', 'floor': 1},
+            {'number': '120', 'type': 'ONBR', 'floor': 1},
+            {'number': '121', 'type': 'ONBR', 'floor': 1, 'issues': ['dishwasher loose', 'drawer broken']},
+            {'number': '122', 'type': 'STDO', 'floor': 1, 'status': 'Out of Order', 'notes': 'USED FOR STORAGE: ETA 1/15/25'},
+            {'number': '123', 'type': 'STDO', 'floor': 1},
+            
+            # Second Floor
+            {'number': '200', 'type': 'STDO', 'floor': 2},
+            {'number': '201', 'type': 'STDO', 'floor': 2, 'issues': ['shower liner', 'floor strip']},
+            {'number': '202', 'type': 'ONBR', 'floor': 2},
+            {'number': '203', 'type': 'ONBR', 'floor': 2},
+            {'number': '204', 'type': 'TOBR', 'floor': 2},
+            {'number': '205', 'type': 'TOBR', 'floor': 2},
+            {'number': '206', 'type': 'STDO', 'floor': 2, 'issues': ['door locks']},
+            {'number': '207', 'type': 'STDO', 'floor': 2},
+            {'number': '209', 'type': 'TOBR', 'floor': 2},
+            {'number': '211', 'type': 'TOBR', 'floor': 2},
+            {'number': '212', 'type': 'ONBR', 'floor': 2},
+            {'number': '213', 'type': 'ONBR', 'floor': 2},
+            {'number': '214', 'type': 'ONBR', 'floor': 2},
+            {'number': '215', 'type': 'ONBR', 'floor': 2, 'issues': ['smoke alarm']},
+            {'number': '216', 'type': 'ONBR', 'floor': 2, 'issues': ['kitchen drawers', 'bathroom door']},
+            {'number': '217', 'type': 'ONBR', 'floor': 2, 'issues': ['door plate']},
+            {'number': '218', 'type': 'ONBR', 'floor': 2, 'issues': ['floor lamp', 'phones']},
+            {'number': '219', 'type': 'ONBR', 'floor': 2, 'issues': ['ceiling patch']},
+            {'number': '220', 'type': 'ONBR', 'floor': 2},
+            {'number': '221', 'type': 'ONBR', 'floor': 2, 'issues': ['hvac']},
+            {'number': '222', 'type': 'STDO', 'floor': 2},
+            {'number': '223', 'type': 'STDO', 'floor': 2},
+            
+            # Third Floor
+            {'number': '300', 'type': 'STDO', 'floor': 3},
+            {'number': '301', 'type': 'STDO', 'floor': 3},
+            {'number': '302', 'type': 'ONBR', 'floor': 3},
+            {'number': '303', 'type': 'ONBR', 'floor': 3},
+            {'number': '304', 'type': 'TOBR', 'floor': 3},
+            {'number': '305', 'type': 'TOBR', 'floor': 3},
+            {'number': '306', 'type': 'STDO', 'floor': 3},
+            {'number': '307', 'type': 'STDO', 'floor': 3},
+            {'number': '309', 'type': 'TOBR', 'floor': 3, 'issues': ['tv']},
+            {'number': '311', 'type': 'TOBR', 'floor': 3},
+            {'number': '312', 'type': 'ONBR', 'floor': 3, 'issues': ['hvac']},
+            {'number': '313', 'type': 'ONBR', 'floor': 3},
+            {'number': '314', 'type': 'ONBR', 'floor': 3},
+            {'number': '315', 'type': 'ONBR', 'floor': 3},
+            {'number': '316', 'type': 'ONBR', 'floor': 3},
+            {'number': '317', 'type': 'ONBR', 'floor': 3},
+            {'number': '318', 'type': 'ONBR', 'floor': 3, 'issues': ['window ac']},
+            {'number': '319', 'type': 'ONBR', 'floor': 3},
+            {'number': '320', 'type': 'ONBR', 'floor': 3},
+            {'number': '321', 'type': 'ONBR', 'floor': 3},
+            {'number': '322', 'type': 'STDO', 'floor': 3},
+            {'number': '323', 'type': 'STDO', 'floor': 3}
+        ]
+
+        # Public Areas Data
+        public_areas_data = [
+            {'name': 'Lobby Men\'s Room', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Lobby Women\'s Room', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Fitness Center', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Pool', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Pool Maintenance Room', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Breakfast Kitchen', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Breakfast Buffet', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Lobby Living Room', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Sales Office', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'GM Office', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Market Storage', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Breakroom', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Laundry room', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Boiler Room', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Business Center', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Dry Storage', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Cold Storage', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Elevator Room', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Elevator - Central', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Stairwell North', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Stairwell SW', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'First Floor 09 Storage', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Second Floor Housekeeping', 'type': 'PUBLIC', 'floor': 2},
+            {'name': 'Guest Laundry', 'type': 'PUBLIC', 'floor': 2},
+            {'name': 'HK Office', 'type': 'PUBLIC', 'floor': 2},
+            {'name': 'Second Floor Linen Closet', 'type': 'PUBLIC', 'floor': 2},
+            {'name': 'Second Floor 09 Storage', 'type': 'PUBLIC', 'floor': 2},
+            {'name': 'Maintenance Office', 'type': 'PUBLIC', 'floor': 2},
+            {'name': 'Third Floor Linen Closet', 'type': 'PUBLIC', 'floor': 3},
+            {'name': 'Third Floor 09 Storage', 'type': 'PUBLIC', 'floor': 3},
+            {'name': 'First Floor Hall', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Second Floor Hall', 'type': 'PUBLIC', 'floor': 2},
+            {'name': 'Third Floor Hall', 'type': 'PUBLIC', 'floor': 3},
+            {'name': 'Outdoor Patio', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Outdoor Walkways', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Parking Lot', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Lobby Ice Maker', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Market', 'type': 'PUBLIC', 'floor': 1},
+            {'name': 'Electrical Room', 'type': 'PUBLIC', 'floor': 1}
+        ]
+
+        # Create all rooms
         rooms = []
-        for prop in active_properties:  # Only create rooms for active properties
-            # Create 15-20 rooms for each property
-            num_rooms = random.randint(15, 20)
-            for i in range(num_rooms):
-                room = Room(
-                    name=f'Room {(i+1):03d}',
-                    property_id=prop.property_id,
-                    type=random.choice(room_types),
-                    floor=random.choice(floors),
-                    status=random.choice(room_statuses),
-                    capacity=random.randint(2, 6),
-                    amenities=['Wi-Fi', 'TV', 'Mini Bar', 'Coffee Maker'],
-                    description=f'Comfortable room with modern amenities',
-                    last_cleaned=datetime.utcnow() - timedelta(days=random.randint(0, 7))
-                )
-                rooms.append(room)
+        room_map = {}  # Map to store room numbers to room objects
         
-        db.session.add_all(rooms)
+        # Create guest rooms
+        for room_data in guest_rooms_data:
+            room = Room(
+                name=f"Room {room_data['number']}",
+                property_id=residence_inn.property_id,
+                type=room_types[room_data['type']],
+                floor=room_data['floor'],
+                status=room_data.get('status', 'Available'),
+                description=room_data.get('notes', ''),
+                capacity=2 if room_data['type'] == 'STDO' else 4 if room_data['type'] == 'ONBR' else 6
+            )
+            rooms.append(room)
+            room_map[room_data['number']] = room
+            db.session.add(room)
+        
+        # Create public areas
+        for area_data in public_areas_data:
+            room = Room(
+                name=area_data['name'],
+                property_id=residence_inn.property_id,
+                type=room_types[area_data['type']],
+                floor=area_data['floor'],
+                status='Available',
+                capacity=0
+            )
+            rooms.append(room)
+            db.session.add(room)
+        
+        # Commit rooms first to get room_ids
+        db.session.commit()
+        
+        # Create tickets for rooms with issues
+        for room_data in guest_rooms_data:
+            if 'issues' in room_data:
+                room = room_map[room_data['number']]
+                for issue in room_data['issues']:
+                    # Determine category and subcategory based on issue
+                    category, subcategory = get_category_and_subcategory(issue)
+                    
+                    ticket = Ticket(
+                        title=f"Room {room_data['number']} - {issue.title()}",
+                        description=f"Issue reported in Room {room_data['number']}: {issue}",
+                        status='open',
+                        priority='High' if room_data.get('status') == 'Out of Order' else 'Medium',
+                        category=category,
+                        subcategory=subcategory,
+                        property_id=residence_inn.property_id,
+                        user_id=manager_engineering.user_id if category == 'Maintenance' else manager_housekeeping.user_id,
+                        room_id=room.room_id
+                    )
+                    db.session.add(ticket)
+        
+        # Commit tickets
         db.session.commit()
 
-        # Create Tickets
-        ticket_titles = [
-            'AC not working', 'Water leak in bathroom', 'Broken furniture',
-            'TV malfunction', 'Noise complaint', 'Plumbing issue',
-            'Heating system problem', 'Electrical outlet not working',
-            'Window won\'t close', 'Door lock malfunction'
-        ]
-        
-        ticket_descriptions = [
-            'Unit is not cooling properly and making strange noises',
-            'Water leaking from ceiling in bathroom',
-            'Chair leg is broken and needs immediate repair',
-            'Television not turning on or showing static',
-            'Loud noises coming from adjacent room',
-            'Toilet is not flushing properly',
-            'Room temperature control not responding',
-            'Electrical outlet sparking when used',
-            'Window stuck open and won\'t close properly',
-            'Key card reader not functioning correctly'
-        ]
-
-        priorities = ['Low', 'Medium', 'High', 'Critical']
-        categories = ['Maintenance', 'Housekeeping', 'Security', 'IT', 'General']
-        
-        tickets = []
-        for prop in active_properties:  # Only create tickets for active properties
-            # Create 3-5 tickets for each property
-            num_tickets = random.randint(3, 5)
-            for _ in range(num_tickets):
-                title_index = random.randint(0, len(ticket_titles)-1)
-                ticket = Ticket(
-                    title=ticket_titles[title_index],
-                    description=ticket_descriptions[title_index],
-                    status=random.choice(['open', 'in progress', 'completed']),
-                    priority=random.choice(priorities),
-                    category=random.choice(categories),
-                    property_id=prop.property_id,
-                    user_id=random.choice(users).user_id,
-                    room_id=random.choice([r.room_id for r in rooms if r.property_id == prop.property_id])
-                )
-                tickets.append(ticket)
-        
-        db.session.add_all(tickets)
-        db.session.commit()
-
-        # Create Tasks
-        task_titles = [
-            'Inspect and repair AC', 'Fix water leak', 'Replace broken furniture',
-            'Repair TV system', 'Investigate noise complaint', 'Resolve plumbing issue',
-            'Service heating system', 'Replace electrical outlet', 'Repair window',
-            'Fix door lock mechanism'
-        ]
-        
-        task_descriptions = [
-            'Complete inspection and repair of AC unit',
-            'Locate and repair source of water leak',
-            'Replace or repair damaged furniture',
-            'Diagnose and fix television system issues',
-            'Investigate and address noise complaints',
-            'Clear blockage and repair plumbing',
-            'Perform maintenance on heating system',
-            'Replace faulty electrical outlet',
-            'Repair window closing mechanism',
-            'Replace or repair door lock system'
-        ]
-
-        tasks = []
-        for prop in active_properties:  # Only create tasks for active properties
-            # Create 3-5 tasks for each property
-            num_tasks = random.randint(3, 5)
-            for _ in range(num_tasks):
-                title_index = random.randint(0, len(task_titles)-1)
-                task = Task(
-                    title=task_titles[title_index],
-                    description=task_descriptions[title_index],
-                    status=random.choice(['pending', 'in progress', 'completed']),
-                    priority=random.choice(priorities),
-                    property_id=prop.property_id,
-                    assigned_to_id=random.choice(users).user_id,
-                    due_date=datetime.utcnow() + timedelta(days=random.randint(1, 14))
-                )
-                tasks.append(task)
-        
-        db.session.add_all(tasks)
-        db.session.commit()
-
-        print("Database initialized with test data!")
+def get_category_and_subcategory(issue):
+    """Helper function to determine category and subcategory based on the issue"""
+    maintenance_issues = {
+        'hvac': ('Maintenance', 'HVAC'),
+        'fireplace': ('Maintenance', 'Fireplace'),
+        'door locks': ('Maintenance', 'Door Locks'),
+        'door plate': ('Maintenance', 'Door Locks'),
+        'tv': ('Maintenance', 'TV'),
+        'dishwasher loose': ('Maintenance', 'Appliances'),
+        'drawer broken': ('Maintenance', 'Furniture'),
+        'floor lamp': ('Maintenance', 'Electrical'),
+        'phones': ('Maintenance', 'Electrical'),
+        'smoke alarm': ('Maintenance', 'Electrical'),
+        'ceiling patch': ('Maintenance', 'General'),
+        'window ac': ('Maintenance', 'HVAC')
+    }
+    
+    housekeeping_issues = {
+        'mold smell': ('Housekeeping', 'Odor'),
+        'odor': ('Housekeeping', 'Odor'),
+        'shower liner': ('Housekeeping', 'Bathroom'),
+        'floor strip': ('Housekeeping', 'Carpet/Flooring'),
+        'bathroom door': ('Housekeeping', 'General'),
+        'kitchen drawers': ('Housekeeping', 'Kitchen')
+    }
+    
+    # Check if issue is in maintenance dictionary
+    if issue.lower() in maintenance_issues:
+        return maintenance_issues[issue.lower()]
+    
+    # Check if issue is in housekeeping dictionary
+    if issue.lower() in housekeeping_issues:
+        return housekeeping_issues[issue.lower()]
+    
+    # Default to maintenance general if not found
+    return ('Maintenance', 'General')
 
 if __name__ == '__main__':
     setup_database() 

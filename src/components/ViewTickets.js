@@ -53,12 +53,24 @@ const ViewTickets = () => {
     description: '',
     priority: 'Low',
     category: 'General',
+    subcategory: '',
     property_id: '',
     room_id: ''
   });
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
+  
+  // Define subcategories for each category
+  const subcategories = {
+    'Maintenance': ['Plumbing', 'Electrical', 'HVAC', 'Structural', 'Appliances', 'Other'],
+    'Cleaning': ['Room Cleaning', 'Common Area', 'Deep Cleaning', 'Laundry', 'Other'],
+    'Security': ['Access Control', 'Surveillance', 'Incident Report', 'Safety Concern', 'Other'],
+    'IT Support': ['Network', 'Hardware', 'Software', 'Account Access', 'Other'],
+    'General': ['General Inquiry', 'Feedback', 'Request', 'Complaint', 'Other'],
+    'Housekeeping': ['Room Cleaning', 'Common Area', 'Deep Cleaning', 'Laundry', 'Other'],
+    'Other': ['General Inquiry', 'Feedback', 'Request', 'Complaint', 'Other']
+  };
 
   const isMobile = useIsMobile();
 
@@ -264,6 +276,7 @@ const ViewTickets = () => {
         description: ticket.description,
         priority: ticket.priority,
         category: ticket.category,
+        subcategory: ticket.subcategory || '',
         property_id: ticket.property_id,
         room_id: ticket.room_id || ''
       });
@@ -278,6 +291,7 @@ const ViewTickets = () => {
         description: '',
         priority: 'Low',
         category: 'General',
+        subcategory: '',
         property_id: selectedProperty,
         room_id: ''
       });
@@ -293,6 +307,7 @@ const ViewTickets = () => {
       description: '',
       priority: 'Low',
       category: 'General',
+      subcategory: '',
       property_id: selectedProperty || '',
       room_id: ''
     });
@@ -359,12 +374,16 @@ const ViewTickets = () => {
           <Grid item xs={6}>
             <Typography variant="subtitle2">Room</Typography>
             <Typography variant="body2">
-              {rooms.find(r => r.room_id === ticket.room_id)?.name || 'N/A'}
+              {ticket.room_name || 'N/A'}
             </Typography>
           </Grid>
           <Grid item xs={6}>
             <Typography variant="subtitle2">Category</Typography>
             <Typography variant="body2">{ticket.category}</Typography>
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Subcategory</Typography>
+            <Typography variant="body2">{ticket.subcategory || 'N/A'}</Typography>
           </Grid>
         </Grid>
 
@@ -376,6 +395,7 @@ const ViewTickets = () => {
               label={ticket.created_by_group || 'N/A'} 
               variant="outlined"
               size="small"
+              color="primary"
             />
           </Box>
         </Box>
@@ -460,6 +480,7 @@ const ViewTickets = () => {
                     <TableCell>Status</TableCell>
                     <TableCell>Priority</TableCell>
                     <TableCell>Category</TableCell>
+                    <TableCell>Subcategory</TableCell>
                     <TableCell>Created By</TableCell>
                     <TableCell>Group</TableCell>
                     <TableCell>Actions</TableCell>
@@ -472,7 +493,7 @@ const ViewTickets = () => {
                       <TableCell>{ticket.title}</TableCell>
                       <TableCell>{ticket.description}</TableCell>
                       <TableCell>
-                        {rooms.find(r => r.room_id === ticket.room_id)?.name || 'N/A'}
+                        {ticket.room_name || 'N/A'}
                       </TableCell>
                       <TableCell>
                         <Chip 
@@ -496,12 +517,14 @@ const ViewTickets = () => {
                         />
                       </TableCell>
                       <TableCell>{ticket.category}</TableCell>
+                      <TableCell>{ticket.subcategory || 'N/A'}</TableCell>
                       <TableCell>{ticket.created_by_username}</TableCell>
                       <TableCell>
                         <Chip 
                           label={ticket.created_by_group || 'N/A'} 
                           variant="outlined"
                           size="small"
+                          color="primary"
                         />
                       </TableCell>
                       <TableCell>
@@ -594,11 +617,28 @@ const ViewTickets = () => {
               <InputLabel>Category</InputLabel>
               <Select
                 value={ticketForm.category}
-                onChange={(e) => setTicketForm({ ...ticketForm, category: e.target.value })}
+                onChange={(e) => setTicketForm({ 
+                  ...ticketForm, 
+                  category: e.target.value,
+                  subcategory: '' // Reset subcategory when category changes
+                })}
                 label="Category"
               >
                 {categories.map((category) => (
                   <MenuItem key={category} value={category}>{category}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Subcategory</InputLabel>
+              <Select
+                value={ticketForm.subcategory}
+                onChange={(e) => setTicketForm({ ...ticketForm, subcategory: e.target.value })}
+                label="Subcategory"
+                disabled={!ticketForm.category}
+              >
+                {subcategories[ticketForm.category]?.map((subcategory) => (
+                  <MenuItem key={subcategory} value={subcategory}>{subcategory}</MenuItem>
                 ))}
               </Select>
             </FormControl>

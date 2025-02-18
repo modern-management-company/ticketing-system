@@ -167,66 +167,90 @@ def login():
 @jwt_required()
 def create_ticket():
     try:
-        current_user = get_user_from_jwt()
-        if not current_user:
-            return jsonify({"msg": "User not found"}), 404
-
         data = request.get_json()
+        required_fields = ['title', 'description', 'priority', 'category', 'property_id']
         
         # Validate required fields
-        required_fields = ['title', 'description', 'priority', 'property_id']
-        if not all(field in data for field in required_fields):
-            return jsonify({"msg": "Missing required fields"}), 400
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'msg': f'Missing required field: {field}'}), 400
 
-        # Get the property
-        property = Property.query.get(data['property_id'])
-        if not property:
-            return jsonify({"msg": "Property not found"}), 404
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
 
-        # Create the ticket
+        # Create new ticket
         new_ticket = Ticket(
             title=data['title'],
             description=data['description'],
             priority=data['priority'],
-            category=data.get('category', 'General'),
-            status='open',
-            user_id=current_user.user_id,
+            category=data['category'],
+            subcategory=data.get('subcategory'),  # Add subcategory support
             property_id=data['property_id'],
+            user_id=current_user.user_id,
             room_id=data.get('room_id')
         )
-        
-        db.session.add(new_ticket)
-        db.session.commit()
 
-        # Get all managers and admins for this property
-        property_managers = User.query.join(PropertyManager).filter(
-            PropertyManager.property_id == property.property_id
-        ).all()
-        
-        super_admins = User.query.filter_by(role='super_admin').all()
-        
-        # Combine unique recipients
-        recipients = list(set(property_managers + super_admins))
+        # If room_id is provided, validate it exists and belongs to the property
+        if data.get('room_id'):
+            room = Room.query.filter_by(
+                room_id=data['room_id'],
+                property_id=data['property_id']
+            ).first()
+            
+            if not room:
+                return jsonify({'msg': 'Invalid room_id or room does not belong to the property'}), 400
 
-        # Send email notifications
-        email_service = EmailService()
-        email_service.send_ticket_notification(
-            ticket=new_ticket,
-            property_name=property.name,
-            recipients=recipients,
-            notification_type="new"
-        )
+            # Update room status based on ticket category
+            if data['category'] == 'Maintenance':
+                room.status = 'Maintenance'
+            elif data['category'] == 'Housekeeping':
+                room.status = 'Cleaning'
+            elif room.status == 'Available':  # Only change if room is available
+                room.status = 'Out of Order'
 
-        return jsonify({
-            "msg": "Ticket created successfully",
-            "ticket": new_ticket.to_dict(),
-            "notifications_sent": len(recipients)
-        }), 201
+        try:
+            db.session.add(new_ticket)
+            db.session.commit()
+
+            # Get property managers and super admins for notifications
+            property_managers = User.query.join(PropertyManager).filter(
+                PropertyManager.property_id == data['property_id']
+            ).all()
+            
+            super_admins = User.query.filter_by(role='super_admin').all()
+            
+            # Combine recipients and remove duplicates
+            recipients = list(set(property_managers + super_admins))
+            
+            # Get property name for notification
+            property_name = Property.query.get(data['property_id']).name
+
+            # Send notifications
+            from app.services.email_service import EmailService
+            email_service = EmailService()
+            notifications_sent = email_service.send_ticket_notification(
+                new_ticket,
+                property_name,
+                recipients,
+                notification_type="new"
+            )
+
+            return jsonify({
+                'msg': 'Ticket created successfully',
+                'ticket': new_ticket.to_dict(),
+                'notifications_sent': notifications_sent > 0
+            }), 201
+
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error creating ticket: {str(e)}")
+            return jsonify({'msg': 'Failed to create ticket'}), 500
 
     except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error creating ticket: {str(e)}")
-        return jsonify({"msg": "Internal server error"}), 500
+        app.logger.error(f"Error in create_ticket: {str(e)}")
+        return jsonify({'msg': 'Internal server error'}), 500
 
 @app.route('/tickets', methods=['GET'])
 @jwt_required()
@@ -557,8 +581,8 @@ def manage_property_room(property_id, room_id):
                 )
 
             return jsonify({
-                "msg": "Room updated successfully",
-                "room": room.to_dict()
+                "msg": "Property updated successfully",
+                "property": property.to_dict()
             }), 200
 
     except Exception as e:
@@ -580,13 +604,26 @@ def assign_task():
         if not ticket or not user:
             return jsonify({'message': 'Invalid ticket or user ID'}), 404
 
+        # Create a new Task first
+        task = Task(
+            title=f"[Ticket #{ticket.ticket_id}] {ticket.title}",
+            description=ticket.description,
+            status='pending',
+            priority=ticket.priority,
+            property_id=ticket.property_id,
+            assigned_to_id=data['user_id']
+        )
+        db.session.add(task)
+        db.session.flush()  # Get the task_id
+
         # Create a new task assignment
-        task = TaskAssignment(
+        task_assignment = TaskAssignment(
+            task_id=task.task_id,
             ticket_id=data['ticket_id'],
             assigned_to_user_id=data['user_id'],
             status='Pending'
         )
-        db.session.add(task)
+        db.session.add(task_assignment)
         db.session.commit()
 
         # Send email notification
@@ -597,17 +634,8 @@ def assign_task():
                 if property:
                     property_name = property.name
 
-            # Create a Task object for email notification
-            task_for_email = Task(
-                task_id=task.task_id,
-                title=f"Ticket #{ticket.ticket_id}: {ticket.title}",
-                description=ticket.description,
-                priority=ticket.priority,
-                property_id=ticket.property_id
-            )
-
             email_service = EmailService()
-            email_sent = email_service.send_task_assignment_notification(user, task_for_email, property_name)
+            email_sent = email_service.send_task_assignment_notification(user, task, property_name)
             app.logger.info(f"Task assignment email {'sent successfully' if email_sent else 'failed to send'} to {user.email}")
         except Exception as e:
             app.logger.error(f"Failed to send task assignment email: {str(e)}")
@@ -620,6 +648,7 @@ def assign_task():
         })
 
     except Exception as e:
+        db.session.rollback()
         app.logger.error(f"Error in assign_task: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500
 
@@ -632,43 +661,57 @@ def get_tasks():
         if not current_user:
             return jsonify({'message': 'User not found'}), 404
 
+        # Base query joining Task and TaskAssignment
+        base_query = db.session.query(Task, TaskAssignment).outerjoin(
+            TaskAssignment, Task.task_id == TaskAssignment.task_id
+        )
+
         # Get tasks based on user role
         if current_user.role == 'super_admin':
-            tasks = TaskAssignment.query.all()
+            tasks_query = base_query
         elif current_user.role == 'manager':
             # Get tasks for properties managed by this manager
-            managed_properties = Property.query.filter_by(manager_id=current_user.user_id).all()
-            property_ids = [p.property_id for p in managed_properties]
-            tasks = TaskAssignment.query.join(Ticket).filter(Ticket.property_id.in_(property_ids)).all()
-        else:
-            # Regular users see tasks in their group and tasks assigned to them
-            tasks = TaskAssignment.query.join(Ticket).filter(
-                db.or_(
-                    Ticket.category == current_user.group,  # Tasks for tickets in user's group
-                    TaskAssignment.assigned_to_user_id == current_user.user_id  # Tasks assigned to user
-                )
+            managed_properties = Property.query.join(PropertyManager).filter(
+                PropertyManager.user_id == current_user.user_id
             ).all()
+            property_ids = [p.property_id for p in managed_properties]
+            tasks_query = base_query.filter(Task.property_id.in_(property_ids))
+        else:
+            # Regular users see tasks assigned to them or in their group
+            tasks_query = base_query.filter(
+                db.or_(
+                    Task.assigned_to_id == current_user.user_id,  # Tasks directly assigned
+                    TaskAssignment.assigned_to_user_id == current_user.user_id  # Tasks assigned through tickets
+                )
+            )
 
-        # Format task data
+        # Execute query and format results
         task_list = []
-        for task in tasks:
-            ticket = Ticket.query.get(task.ticket_id)
-            assigned_user = User.query.get(task.assigned_to_user_id)
-            task_list.append({
-                'task_id': task.task_id,
-                'ticket_id': task.ticket_id,
-                'ticket_title': ticket.title if ticket else 'Unknown',
-                'ticket_priority': ticket.priority if ticket else 'Normal',
-                'ticket_category': ticket.category if ticket else 'Unknown',
-                'status': task.status,
-                'assigned_to_user_id': task.assigned_to_user_id,
-                'assigned_to': assigned_user.username if assigned_user else 'Unassigned'
-            })
+        for task, task_assignment in tasks_query.all():
+            task_data = task.to_dict()
+            
+            # Add task assignment information if exists
+            if task_assignment:
+                ticket = Ticket.query.get(task_assignment.ticket_id)
+                task_data.update({
+                    'ticket_id': task_assignment.ticket_id,
+                    'ticket_title': ticket.title if ticket else None,
+                    'ticket_status': task_assignment.status
+                })
+            
+            # Add assigned user information
+            if task.assigned_to_id:
+                assigned_user = User.query.get(task.assigned_to_id)
+                task_data['assigned_to'] = assigned_user.username if assigned_user else 'Unknown'
+                task_data['assigned_to_group'] = assigned_user.group if assigned_user else None
+            
+            task_list.append(task_data)
         
         return jsonify({'tasks': task_list}), 200
+
     except Exception as e:
         app.logger.error(f"Error in get_tasks: {str(e)}")
-        return jsonify({'message': 'Internal server error'}), 500
+        return jsonify({"msg": "Internal server error"}), 500
 
 @app.route('/tasks/<int:task_id>', methods=['GET', 'PUT', 'PATCH', 'DELETE'])
 @jwt_required()
@@ -949,6 +992,13 @@ def manage_user(user_id):
 
         elif request.method in ['PUT', 'PATCH']:
             data = request.get_json()
+            changes = []  # Track all changes for notification
+            
+            # Store old values for comparison
+            old_role = target_user.role
+            old_group = target_user.group
+            old_status = target_user.is_active
+            old_properties = set(p.property_id for p in target_user.assigned_properties)
             
             # Handle property assignments
             if 'assigned_properties' in data:
@@ -959,133 +1009,88 @@ def manage_user(user_id):
                 for property_id in data['assigned_properties']:
                     user_property = UserProperty(user_id=user_id, property_id=property_id)
                     db.session.add(user_property)
-            
-            # Handle manager property assignments if user is a manager
-            if target_user.role == 'manager' and 'managed_properties' in data:
-                # Clear existing manager assignments
-                PropertyManager.query.filter_by(user_id=user_id).delete()
                 
-                # Add new manager assignments
-                for property_id in data['managed_properties']:
-                    manager_assignment = PropertyManager(user_id=user_id, property_id=property_id)
-                    db.session.add(manager_assignment)
+                # Track property changes
+                new_properties = set(data['assigned_properties'])
+                added_properties = new_properties - old_properties
+                removed_properties = old_properties - new_properties
+                
+                if added_properties:
+                    added_names = [Property.query.get(pid).name for pid in added_properties if Property.query.get(pid)]
+                    changes.append(f"Added to properties: {', '.join(added_names)}")
+                if removed_properties:
+                    removed_names = [Property.query.get(pid).name for pid in removed_properties if Property.query.get(pid)]
+                    changes.append(f"Removed from properties: {', '.join(removed_names)}")
             
-            # Update other fields for PUT requests
-            if request.method == 'PUT':
-                if 'email' in data:
-                    target_user.email = data['email']
-                if 'is_active' in data:
-                    target_user.is_active = data['is_active']
-                if 'role' in data and current_user.role == 'super_admin':
-                    target_user.role = data['role']
-                if 'group' in data:
-                    target_user.group = data['group']
+            # Update other fields
+            if 'email' in data:
+                target_user.email = data['email']
+                changes.append(f"Email updated to: {data['email']}")
+            
+            if 'is_active' in data:
+                target_user.is_active = data['is_active']
+                changes.append(f"Account {data['is_active'] and 'activated' or 'deactivated'}")
+            
+            if 'role' in data and current_user.role == 'super_admin':
+                target_user.role = data['role']
+                changes.append(f"Role changed from {old_role} to {data['role']}")
+            
+            if 'group' in data:
+                target_user.group = data['group']
+                changes.append(f"Group changed from {old_group or 'None'} to {data['group']}")
             
             db.session.commit()
 
-            # Send email notifications for status changes
+            # Send notifications based on changes
             try:
                 email_service = EmailService()
+                admin_emails = [user.email for user in User.query.filter_by(role='super_admin').all()]
                 
-                # Status change notification
-                if 'is_active' in data and old_status != target_user.is_active:
-                    status_message = "activated" if target_user.is_active else "deactivated"
-                    html_content = f"""
-                    <html>
-                        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                                <h2 style="color: #1976d2;">Account Status Update</h2>
-                                <p>Hello {target_user.username},</p>
-                                <p>Your account has been {status_message} by {current_user.username}.</p>
-                                <p>If you have any questions, please contact your administrator.</p>
-                                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
-                                    <p style="color: #666;">Best regards,<br>Property Management System</p>
-                                </div>
-                            </div>
-                        </body>
-                    </html>
-                    """
-                    email_service.send_email(
-                        target_user.email,
-                        f"Account {status_message.capitalize()}",
-                        html_content
-                    )
-
-                # Property assignment changes
-                if 'assigned_properties' in data:
-                    new_properties = set(data['assigned_properties'])
-                    added_properties = new_properties - old_properties
-                    removed_properties = old_properties - new_properties
-                    
-                    if added_properties or removed_properties:
-                        property_changes = []
-                        if added_properties:
-                            added_names = [Property.query.get(pid).name for pid in added_properties if Property.query.get(pid)]
-                            property_changes.append(f"Added to: {', '.join(added_names)}")
-                        if removed_properties:
-                            removed_names = [Property.query.get(pid).name for pid in removed_properties if Property.query.get(pid)]
-                            property_changes.append(f"Removed from: {', '.join(removed_names)}")
-                        
-                        html_content = f"""
-                        <html>
-                            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                                    <h2 style="color: #1976d2;">Property Assignment Update</h2>
-                                    <p>Hello {target_user.username},</p>
-                                    <p>Your property assignments have been updated:</p>
-                                    <ul>
-                                        {"".join(f"<li>{change}</li>" for change in property_changes)}
-                                    </ul>
-                                    <p>Please log in to view your updated property assignments.</p>
-                                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
-                                        <p style="color: #666;">Best regards,<br>Property Management System</p>
-                                    </div>
-                                </div>
-                            </body>
-                        </html>
-                        """
-                        email_service.send_email(
-                            target_user.email,
-                            "Property Assignment Update",
-                            html_content
-                        )
-
+                # Determine notification type based on changes
+                if 'role' in data:
+                    notification_type = 'role_change'
+                elif 'group' in data:
+                    notification_type = 'group_change'
+                elif 'assigned_properties' in data:
+                    notification_type = 'property_assignment'
+                elif 'is_active' in data:
+                    notification_type = 'activation' if data['is_active'] else 'deactivation'
+                else:
+                    notification_type = 'update'
+                
+                email_service.send_user_management_notification(
+                    user=target_user,
+                    changes=changes,
+                    updated_by=current_user.username,
+                    admin_emails=admin_emails,
+                    change_type=notification_type
+                )
             except Exception as e:
-                db.session.rollback()
-                app.logger.error(f"Database error: {str(e)}")
-                return jsonify({'msg': f'Error updating user: {str(e)}'}), 500
+                app.logger.error(f"Failed to send notification email: {str(e)}")
+                # Continue with the update even if email fails
+            
+            return jsonify({'msg': 'User updated successfully', 'changes': changes})
 
         elif request.method == 'DELETE':
             if current_user.role != 'super_admin':
                 return jsonify({'msg': 'Unauthorized'}), 403
             
-            # Send deletion notification before deleting the user
+            # Send deletion notification
             try:
                 email_service = EmailService()
-                html_content = f"""
-                <html>
-                    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                            <h2 style="color: #1976d2;">Account Deletion Notice</h2>
-                            <p>Hello {target_user.username},</p>
-                            <p>Your account has been deleted from the Property Management System by {current_user.username}.</p>
-                            <p>If you believe this was done in error, please contact your administrator.</p>
-                            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
-                                <p style="color: #666;">Best regards,<br>Property Management System</p>
-                            </div>
-                        </div>
-                    </body>
-                </html>
-                """
-                email_service.send_email(
-                    target_user.email,
-                    "Account Deletion Notice",
-                    html_content
+                admin_emails = [user.email for user in User.query.filter_by(role='super_admin').all()]
+                
+                changes = ["Account scheduled for deletion"]
+                email_service.send_user_management_notification(
+                    user=target_user,
+                    changes=changes,
+                    updated_by=current_user.username,
+                    admin_emails=admin_emails,
+                    change_type="deleted"
                 )
             except Exception as e:
                 app.logger.error(f"Failed to send deletion notification email: {str(e)}")
-                # Continue with deletion even if email fails
-                
+            
             db.session.delete(target_user)
             db.session.commit()
             return jsonify({'msg': 'User deleted successfully'})
@@ -2101,84 +2106,135 @@ def get_property_managers(property_id):
 @jwt_required()
 def manage_ticket(ticket_id):
     try:
-        current_user = get_user_from_jwt()
-        if not current_user:
-            return jsonify({"msg": "User not found"}), 404
-
         ticket = Ticket.query.get(ticket_id)
         if not ticket:
-            return jsonify({"msg": "Ticket not found"}), 404
+            return jsonify({'msg': 'Ticket not found'}), 404
 
-        property = Property.query.get(ticket.property_id)
-        if not property:
-            return jsonify({"msg": "Property not found"}), 404
+        if request.method == 'GET':
+            return jsonify(ticket.to_dict()), 200
 
-        if request.method == 'PATCH':
+        elif request.method == 'PATCH':
             data = request.get_json()
-            old_status = ticket.status
-            
-            # Update ticket fields
-            for field in ['title', 'description', 'priority', 'category', 'status', 'room_id']:
+            changes = []  # Track changes for notification
+
+            # Update basic fields if provided
+            for field in ['title', 'description', 'priority', 'category', 'subcategory', 'status']:
                 if field in data:
-                    setattr(ticket, field, data[field])
+                    old_value = getattr(ticket, field)
+                    new_value = data[field]
+                    if old_value != new_value:
+                        setattr(ticket, field, new_value)
+                        changes.append(f"{field.title()}: {old_value} → {new_value}")
 
-            db.session.commit()
+            # Handle room_id update
+            if 'room_id' in data:
+                old_room = Room.query.get(ticket.room_id) if ticket.room_id else None
+                new_room = Room.query.get(data['room_id']) if data['room_id'] else None
 
-            # Get notification recipients
-            property_managers = User.query.join(PropertyManager).filter(
-                PropertyManager.property_id == property.property_id
-            ).all()
-            super_admins = User.query.filter_by(role='super_admin').all()
-            recipients = list(set(property_managers + super_admins))
+                if old_room != new_room:
+                    # Update old room status if exists
+                    if old_room:
+                        old_room.status = 'Available'
+                    
+                    # Update new room status if exists
+                    if new_room:
+                        if ticket.category == 'Maintenance':
+                            new_room.status = 'Maintenance'
+                        elif ticket.category == 'Housekeeping':
+                            new_room.status = 'Cleaning'
+                        else:
+                            new_room.status = 'Out of Order'
+                    
+                    ticket.room_id = data['room_id']
+                    changes.append(f"Room: {old_room.name if old_room else 'None'} → {new_room.name if new_room else 'None'}")
 
-            # Send email notifications
-            email_service = EmailService()
-            notification_type = "status_change" if 'status' in data else "update"
-            email_service.send_ticket_notification(
-                ticket=ticket,
-                property_name=property.name,
-                recipients=recipients,
-                notification_type=notification_type
-            )
+            try:
+                db.session.commit()
 
-            return jsonify({
-                "msg": "Ticket updated successfully",
-                "ticket": ticket.to_dict(),
-                "notifications_sent": len(recipients)
-            }), 200
+                # Send notifications if there are changes
+                if changes:
+                    # Get property managers and super admins
+                    property_managers = User.query.join(PropertyManager).filter(
+                        PropertyManager.property_id == ticket.property_id
+                    ).all()
+                    super_admins = User.query.filter_by(role='super_admin').all()
+                    recipients = list(set(property_managers + super_admins))
+
+                    # Get property name
+                    property_name = Property.query.get(ticket.property_id).name
+
+                    # Get current user for update attribution
+                    current_user = get_user_from_jwt()
+                    updated_by = f"{current_user.username} ({current_user.group})" if current_user else "Unknown"
+
+                    # Send notification
+                    from app.services.email_service import EmailService
+                    email_service = EmailService()
+                    email_service.send_ticket_notification(
+                        ticket,
+                        property_name,
+                        recipients,
+                        notification_type="update",
+                        changes=changes,
+                        updated_by=updated_by
+                    )
+
+                return jsonify({
+                    'msg': 'Ticket updated successfully',
+                    'ticket': ticket.to_dict(),
+                    'changes': changes
+                }), 200
+
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error updating ticket: {str(e)}")
+                return jsonify({'msg': 'Failed to update ticket'}), 500
 
         elif request.method == 'DELETE':
-            # Notify before deleting
-            property_managers = User.query.join(PropertyManager).filter(
-                PropertyManager.property_id == property.property_id
-            ).all()
-            super_admins = User.query.filter_by(role='super_admin').all()
-            recipients = list(set(property_managers + super_admins))
+            try:
+                # Get property managers and super admins before deleting
+                property_managers = User.query.join(PropertyManager).filter(
+                    PropertyManager.property_id == ticket.property_id
+                ).all()
+                super_admins = User.query.filter_by(role='super_admin').all()
+                recipients = list(set(property_managers + super_admins))
 
-            email_service = EmailService()
-            email_service.send_admin_alert(
-                subject=f"Ticket Deleted: {ticket.title}",
-                message=f"""
-                    <p>A ticket has been deleted:</p>
-                    <p><strong>Ticket ID:</strong> {ticket.ticket_id}</p>
-                    <p><strong>Title:</strong> {ticket.title}</p>
-                    <p><strong>Property:</strong> {property.name}</p>
-                    <p><strong>Deleted By:</strong> {current_user.username}</p>
-                """,
-                admin_emails=[user.email for user in recipients]
-            )
+                # Get property name
+                property_name = Property.query.get(ticket.property_id).name
 
-            db.session.delete(ticket)
-            db.session.commit()
+                # Store ticket info for notification
+                ticket_info = ticket.to_dict()
 
-            return jsonify({"msg": "Ticket deleted successfully"}), 200
+                # Update room status if ticket was associated with a room
+                if ticket.room_id:
+                    room = Room.query.get(ticket.room_id)
+                    if room:
+                        room.status = 'Available'
 
-        return jsonify(ticket.to_dict()), 200
+                # Delete the ticket
+                db.session.delete(ticket)
+                db.session.commit()
+
+                # Send deletion notification
+                from app.services.email_service import EmailService
+                email_service = EmailService()
+                email_service.send_ticket_notification(
+                    ticket_info,
+                    property_name,
+                    recipients,
+                    notification_type="deleted"
+                )
+
+                return jsonify({'msg': 'Ticket deleted successfully'}), 200
+
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error deleting ticket: {str(e)}")
+                return jsonify({'msg': 'Failed to delete ticket'}), 500
 
     except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error managing ticket: {str(e)}")
-        return jsonify({"msg": "Internal server error"}), 500
+        app.logger.error(f"Error in manage_ticket: {str(e)}")
+        return jsonify({'msg': 'Internal server error'}), 500
 
 @app.route('/properties/<int:property_id>/rooms/upload', methods=['POST'])
 @jwt_required()
@@ -2309,3 +2365,222 @@ def request_password_reset():
         db.session.rollback()
         app.logger.error(f"Error requesting password reset: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/api/test-email', methods=['POST'])
+@jwt_required()
+def test_email():
+    """Test the email service configuration and send a test email."""
+    try:
+        # Get the current user
+        current_user = get_jwt_identity()
+        user = User.query.get(current_user['user_id'])
+        
+        if not user or user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can test email service'}), 403
+
+        # Create email service instance
+        email_service = EmailService()
+        
+        # Log configuration details
+        app.logger.info("="*50)
+        app.logger.info("Email Service Test")
+        app.logger.info("Configuration:")
+        app.logger.info(f"SMTP_SERVER: {app.config.get('SMTP_SERVER', 'smtp.gmail.com')}")
+        app.logger.info(f"SMTP_PORT: {app.config.get('SMTP_PORT', 587)}")
+        app.logger.info(f"SMTP_USERNAME: {app.config.get('SMTP_USERNAME', 'modernmanagementhotels@gmail.com')}")
+        app.logger.info(f"EMAIL_PASSWORD is set: {'Yes' if app.config.get('EMAIL_PASSWORD') else 'No'}")
+        app.logger.info(f"Test email will be sent to: {user.email}")
+        app.logger.info("="*50)
+
+        # Create test email content
+        subject = "Email Service Test"
+        html_content = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #1976d2;">Email Service Test</h2>
+                    <p>Hello {user.username},</p>
+                    <p>This is a test email to verify the email service functionality.</p>
+                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <p><strong>Test Details:</strong></p>
+                        <ul>
+                            <li>Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}</li>
+                            <li>Sent by: {user.username} (ID: {user.user_id})</li>
+                            <li>User Role: {user.role}</li>
+                            <li>User Group: {user.group or 'N/A'}</li>
+                        </ul>
+                    </div>
+                    <p>If you received this email, the email service is working correctly.</p>
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                        <p style="color: #666;">Best regards,<br>Property Management System</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+
+        # Attempt to send the test email
+        success = email_service.send_email(user.email, subject, html_content)
+        
+        if success:
+            app.logger.info("✓ Test email sent successfully")
+            return jsonify({
+                'message': 'Test email sent successfully',
+                'recipient': user.email,
+                'timestamp': datetime.utcnow().isoformat()
+            }), 200
+        else:
+            app.logger.error("❌ Failed to send test email")
+            return jsonify({
+                'error': 'Failed to send test email',
+                'details': 'Check server logs for more information'
+            }), 500
+
+    except Exception as e:
+        app.logger.error(f"❌ Error in test_email endpoint: {str(e)}")
+        app.logger.error(f"Error type: {type(e).__name__}")
+        return jsonify({
+            'error': 'Internal server error',
+            'details': str(e)
+        }), 500
+
+@app.route('/api/test-all-emails', methods=['POST'])
+@jwt_required()
+def test_all_emails():
+    """Test endpoint to verify all email functionality"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized access'}), 403
+
+        email_service = EmailService()
+        results = []
+
+        # Test 1: Basic Email
+        basic_result = email_service.send_email(
+            current_user.email,
+            "Test Basic Email",
+            "<html><body><h1>Basic Test Email</h1><p>This is a test of the basic email function.</p></body></html>"
+        )
+        results.append({"test": "Basic Email", "success": basic_result})
+
+        # Test 2: Task Assignment
+        from app.models import Task, Property
+        test_task = Task(
+            title="Test Task",
+            description="Test task description",
+            status="pending",
+            priority="High",
+            due_date=datetime.utcnow() + timedelta(days=1),
+            property_id=1
+        )
+        test_property = Property.query.first()
+        task_result = email_service.send_task_assignment_notification(
+            current_user,
+            test_task,
+            test_property.name if test_property else "Test Property"
+        )
+        results.append({"test": "Task Assignment", "success": task_result > 0})
+
+        # Test 3: Task Update
+        update_result = email_service.send_task_update_notification(
+            current_user,
+            test_task,
+            test_property.name if test_property else "Test Property"
+        )
+        results.append({"test": "Task Update", "success": update_result > 0})
+
+        # Test 4: Task Reminder
+        reminder_result = email_service.send_task_reminder(
+            current_user,
+            test_task,
+            test_property.name if test_property else "Test Property"
+        )
+        results.append({"test": "Task Reminder", "success": reminder_result})
+
+        # Test 5: User Registration
+        registration_result = email_service.send_user_registration_email(
+            current_user,
+            "test_password",
+            current_user
+        )
+        results.append({"test": "User Registration", "success": registration_result})
+
+        # Test 6: Ticket Notification
+        from app.models import Ticket
+        test_ticket = Ticket(
+            title="Test Ticket",
+            description="Test ticket description",
+            status="open",
+            priority="High",
+            category="Maintenance",
+            user_id=current_user.user_id,
+            property_id=test_property.property_id if test_property else 1
+        )
+        ticket_result = email_service.send_ticket_notification(
+            test_ticket,
+            test_property.name if test_property else "Test Property",
+            [current_user]
+        )
+        results.append({"test": "Ticket Notification", "success": ticket_result > 0})
+
+        # Test 7: Room Status
+        from app.models import Room
+        test_room = Room(
+            name="Test Room",
+            property_id=test_property.property_id if test_property else 1,
+            type="Standard",
+            floor=1,
+            status="Available"
+        )
+        room_result = email_service.send_room_status_notification(
+            test_room,
+            test_property.name if test_property else "Test Property",
+            [current_user]
+        )
+        results.append({"test": "Room Status", "success": True})  # This function doesn't return a result
+
+        # Test 8: Property Status
+        property_result = email_service.send_property_status_notification(
+            test_property if test_property else Property(name="Test Property", status="active"),
+            [current_user]
+        )
+        results.append({"test": "Property Status", "success": True})  # This function doesn't return a result
+
+        # Test 9: Password Reset
+        reset_result = email_service.send_password_reset_notification(
+            current_user,
+            reset_token="test_token"
+        )
+        results.append({"test": "Password Reset", "success": reset_result})
+
+        # Test 10: Admin Alert
+        admin_result = email_service.send_admin_alert(
+            "Test Admin Alert",
+            "This is a test admin alert message",
+            [current_user.email]
+        )
+        results.append({"test": "Admin Alert", "success": True})  # This function doesn't return a result
+
+        # Test 11: User Management
+        management_result = email_service.send_user_management_notification(
+            current_user,
+            ["Role changed from user to admin"],
+            "Test Admin",
+            [current_user.email]
+        )
+        results.append({"test": "User Management", "success": management_result > 0})
+
+        # Calculate overall success
+        total_tests = len(results)
+        successful_tests = sum(1 for r in results if r['success'])
+
+        return jsonify({
+            'message': f'Email tests completed: {successful_tests}/{total_tests} successful',
+            'results': results,
+            'recipient': current_user.email
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error in test_all_emails: {str(e)}")
+        return jsonify({'error': f'Error testing emails: {str(e)}'}), 500
