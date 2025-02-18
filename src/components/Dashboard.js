@@ -104,10 +104,11 @@ const Dashboard = () => {
       // Fetch data for each property
       for (const property of propertiesToFetch) {
         try {
-          const [ticketsRes, tasksRes, roomsRes] = await Promise.all([
+          const [ticketsRes, tasksRes, roomsRes, managersRes] = await Promise.all([
             apiClient.get(`/properties/${property.property_id}/tickets`),
             apiClient.get(`/properties/${property.property_id}/tasks`),
-            apiClient.get(`/properties/${property.property_id}/rooms`)
+            apiClient.get(`/properties/${property.property_id}/rooms`),
+            apiClient.get(`/properties/${property.property_id}/managers`)
           ]);
           
           // Filter tickets based on user role
@@ -136,6 +137,9 @@ const Dashboard = () => {
           }
           
           roomsData[property.property_id] = roomsRes.data?.rooms || [];
+          
+          // Add managers to property data
+          property.managers = managersRes.data?.managers || [];
         } catch (error) {
           console.error(`Error fetching data for property ${property.name}:`, error);
         }

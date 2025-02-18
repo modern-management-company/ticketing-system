@@ -50,7 +50,11 @@ const ViewRooms = () => {
   const roomStatuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];
 
   useEffect(() => {
-    console.log('Auth context:', auth);
+    console.log('Full Auth context:', auth);
+    console.log('User role:', auth?.user?.role);
+    console.log('User group:', auth?.user?.group);
+    console.log('Is manager:', auth?.user?.role === 'manager' || auth?.user?.role === 'super_admin');
+    console.log('Is maintenance/engineering:', ['Maintenance', 'Engineering'].includes(auth?.user?.group));
   }, [auth]);
 
   const isManager = auth?.user?.role === 'manager' || auth?.user?.role === 'super_admin';
@@ -246,7 +250,7 @@ const ViewRooms = () => {
                       </Typography>
                     </Box>
                   </CardContent>
-                  {isManager && (
+                  {(isManager || auth?.user?.role === 'super_admin' || ['Maintenance', 'Engineering'].includes(auth?.user?.group)) && (
                     <CardActions sx={{ justifyContent: 'flex-end', p: 2 }}>
                       <IconButton
                         onClick={() => {

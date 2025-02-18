@@ -179,7 +179,7 @@ const Navbar = () => {
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Chip
-            label={`${auth.user?.username} (${auth.role})`}
+            label={`${auth.user?.username} (${auth.role}${auth.user?.group ? ` - ${auth.user.group}` : ''})`}
             color="secondary"
             sx={{ mr: 1 }}
           />

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import apiClient from "./apiClient"; 
+import apiClient from "./apiClient";
 import {
   Box,
   Typography,
@@ -25,13 +25,15 @@ import {
   InputLabel,
   IconButton,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  Tooltip
 } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import GroupIcon from '@mui/icons-material/Group';
 
 const ManageUsers = () => {
   const { auth } = useAuth();
@@ -41,13 +43,15 @@ const ManageUsers = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [openUserDialog, setOpenUserDialog] = useState(false);
+  const [openGroupDialog, setOpenGroupDialog] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [userFormData, setUserFormData] = useState({
     username: '',
     email: '',
+    password: '',
     role: 'user',
+    group: '',
     assigned_properties: [],
-    managed_property: null,
     is_active: true
   });
   const [openPasswordDialog, setOpenPasswordDialog] = useState(false);
@@ -57,6 +61,9 @@ const ManageUsers = () => {
     confirmPassword: '',
     sendEmail: true
   });
+
+  const roles = ['user', 'manager', 'super_admin'];
+  const groups = ['Front Desk', 'Maintenance', 'Housekeeping', 'Engineering', 'Executive'];
 
   useEffect(() => {
     fetchData();
@@ -99,35 +106,45 @@ const ManageUsers = () => {
     if (auth.role !== 'super_admin') return;
 
     try {
-      await apiClient.patch(`/users/${userId}`, { role: newRole });
-      setUsers(users.map(user => 
-        user.user_id === userId ? { ...user, role: newRole } : user
-      ));
-      setSuccess('User role updated successfully');
+      const response = await apiClient.patch(`/users/${userId}`, { role: newRole });
+      if (response.data?.user) {
+        setUsers(users.map(user =>
+          user.user_id === userId ? response.data.user : user
+        ));
+        setSuccess('User role updated successfully');
+      }
     } catch (error) {
       setError('Failed to update user role');
     }
   };
 
+  const handleGroupChange = async (userId, newGroup) => {
+    try {
+      const response = await apiClient.patch(`/users/${userId}`, { group: newGroup });
+      if (response.data?.user) {
+        setUsers(users.map(user =>
+          user.user_id === userId ? response.data.user : user
+        ));
+        setSuccess('User group updated successfully');
+      }
+    } catch (error) {
+      setError('Failed to update user group');
+    }
+  };
+
   const handlePropertyAssignment = async (userId, propertyIds) => {
     try {
-      const user = users.find(u => u.user_id === userId);
-      if (!user) return;
-
-      // For managers, only allow one property
-      if (user.role === 'manager' && propertyIds.length > 1) {
-        setError('Managers can only be assigned to one property');
-        return;
-      }
-
-      await apiClient.post('/assign-property', {
-        user_id: userId,
-        property_ids: propertyIds,
-        is_manager: user.role === 'manager'
+      const response = await apiClient.patch(`/users/${userId}`, {
+        assigned_properties: propertyIds,
+        managed_properties: propertyIds // Only used if user is a manager
       });
-      
-      await fetchData(); // Refresh data
-      setSuccess('Property assignments updated successfully');
+
+      if (response.data?.user) {
+        setUsers(users.map(u =>
+          u.user_id === userId ? response.data.user : u
+        ));
+        setSuccess('Property assignment updated successfully');
+      }
     } catch (error) {
       console.error('Failed to update property assignments:', error);
       setError(error.response?.data?.message || 'Failed to update property assignments');
@@ -139,12 +156,18 @@ const ManageUsers = () => {
     setUserFormData({
       username: user.username,
       email: user.email,
+      password: '',
       role: user.role,
+      group: user.group || '',
       assigned_properties: user.assigned_properties.map(p => p.property_id),
-      managed_property: user.managed_property_id || null,
       is_active: user.is_active
     });
     setOpenUserDialog(true);
+  };
+
+  const handleOpenGroupDialog = (user) => {
+    setSelectedUser(user);
+    setOpenGroupDialog(true);
   };
 
   const handleDeleteUser = async (userId) => {
@@ -172,29 +195,25 @@ const ManageUsers = () => {
       setError(null);
       setSuccess(null);
 
-      const endpoint = auth.role === 'manager' ? '/users/request' : '/users';
       const payload = {
         ...userFormData,
         property_ids: userFormData.assigned_properties,
-        managed_property_id: userFormData.role === 'manager' ? userFormData.managed_property : null,
         is_active: userFormData.is_active
       };
 
+      let response;
       if (editingUser) {
-        await apiClient.put(`/users/${editingUser.user_id}`, payload);
-        setSuccess('User updated successfully');
+        response = await apiClient.put(`/users/${editingUser.user_id}`, payload);
       } else {
-        const response = await apiClient.post(endpoint, payload);
-        if (response.data) {
-          setSuccess(auth.role === 'manager' 
-            ? 'User request submitted successfully. Waiting for admin approval.' 
-            : 'User added successfully');
-        }
+        response = await apiClient.post('/users', payload);
       }
 
-      await fetchData();
-      setOpenUserDialog(false);
-      resetUserForm();
+      if (response.data?.user) {
+        setSuccess(editingUser ? 'User updated successfully' : 'User added successfully');
+        await fetchData();
+        setOpenUserDialog(false);
+        resetUserForm();
+      }
     } catch (error) {
       console.error('Failed to save user:', error);
       setError(error.response?.data?.message || 'Failed to save user');
@@ -203,8 +222,8 @@ const ManageUsers = () => {
 
   const handleActivateUser = async (userId) => {
     try {
-      const response = await apiClient.post('/users/activate', { user_id: userId });
-      if (response.data) {
+      const response = await apiClient.patch(`/users/${userId}`, { is_active: true });
+      if (response.data?.user) {
         setSuccess('User activated successfully. Login credentials have been sent via email.');
         await fetchData();
       }
@@ -218,9 +237,10 @@ const ManageUsers = () => {
     setUserFormData({
       username: '',
       email: '',
+      password: '',
       role: 'user',
+      group: '',
       assigned_properties: [],
-      managed_property: null,
       is_active: true
     });
   };
@@ -270,7 +290,7 @@ const ManageUsers = () => {
       </Typography>
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      
+
       <Button
         variant="contained"
         color="primary"
@@ -280,7 +300,7 @@ const ManageUsers = () => {
         }}
         sx={{ mb: 2 }}
       >
-        {auth.role === 'manager' ? 'Request New User' : 'Add User'}
+        Add User
       </Button>
 
       <TableContainer component={Paper}>
@@ -290,6 +310,7 @@ const ManageUsers = () => {
               <TableCell>Username</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Role</TableCell>
+              <TableCell>Group</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Assigned Properties</TableCell>
               <TableCell>Actions</TableCell>
@@ -308,13 +329,27 @@ const ManageUsers = () => {
                       size="small"
                       disabled={!user.is_active}
                     >
-                      <MenuItem value="user">User</MenuItem>
-                      <MenuItem value="manager">Manager</MenuItem>
-                      <MenuItem value="super_admin">Admin</MenuItem>
+                      {roles.map((role) => (
+                        <MenuItem key={role} value={role}>
+                          {role.charAt(0).toUpperCase() + role.slice(1)}
+                        </MenuItem>
+                      ))}
                     </Select>
                   ) : (
-                    user.role === 'super_admin' ? 'Admin' : user.role
+                    user.role.charAt(0).toUpperCase() + user.role.slice(1)
                   )}
+                </TableCell>
+                <TableCell>
+                  <Tooltip title="Click to change group">
+                    <Chip
+                      label={user.group || 'No Group'}
+                      onClick={() => handleOpenGroupDialog(user)}
+                      icon={<GroupIcon />}
+                      color={user.group ? 'primary' : 'default'}
+                      variant={user.group ? 'filled' : 'outlined'}
+                      disabled={!user.is_active || user.role === 'super_admin'}
+                    />
+                  </Tooltip>
                 </TableCell>
                 <TableCell>
                   <Chip
@@ -337,8 +372,8 @@ const ManageUsers = () => {
                               key={propertyId}
                               label={property ? property.name : 'Unknown'}
                               size="small"
-                              color={user.role === 'manager' && property?.property_id === user.managed_property_id ? 'primary' : 'default'}
-                              variant={user.role === 'manager' && property?.property_id === user.managed_property_id ? 'filled' : 'outlined'}
+                              color={user.role === 'manager' ? 'primary' : 'default'}
+                              variant={user.role === 'manager' ? 'filled' : 'outlined'}
                             />
                           );
                         })}
@@ -357,41 +392,45 @@ const ManageUsers = () => {
                 <TableCell>
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     {auth.role === 'super_admin' && !user.is_active && (
-                      <IconButton
-                        onClick={() => handleActivateUser(user.user_id)}
-                        color="success"
-                        title="Activate User"
-                      >
-                        <CheckCircleIcon />
-                      </IconButton>
+                      <Tooltip title="Activate User">
+                        <IconButton
+                          onClick={() => handleActivateUser(user.user_id)}
+                          color="success"
+                        >
+                          <CheckCircleIcon />
+                        </IconButton>
+                      </Tooltip>
                     )}
-                    <IconButton
-                      onClick={() => handleEditUser(user)}
-                      color="primary"
-                      disabled={user.role === 'super_admin'}
-                      title="Edit User"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      onClick={() => handleDeleteUser(user.user_id)}
-                      color="error"
-                      disabled={user.role === 'super_admin'}
-                      title="Delete User"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                    <IconButton
-                      onClick={() => {
-                        setSelectedUser(user);
-                        setOpenPasswordDialog(true);
-                      }}
-                      color="secondary"
-                      disabled={user.role === 'super_admin' || !user.is_active}
-                      title="Change Password"
-                    >
-                      <LockResetIcon />
-                    </IconButton>
+                    <Tooltip title="Edit User">
+                      <IconButton
+                        onClick={() => handleEditUser(user)}
+                        color="primary"
+                        disabled={user.role === 'super_admin'}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Delete User">
+                      <IconButton
+                        onClick={() => handleDeleteUser(user.user_id)}
+                        color="error"
+                        disabled={user.role === 'super_admin'}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Change Password">
+                      <IconButton
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setOpenPasswordDialog(true);
+                        }}
+                        color="secondary"
+                        disabled={user.role === 'super_admin' || !user.is_active}
+                      >
+                        <LockResetIcon />
+                      </IconButton>
+                    </Tooltip>
                   </Box>
                 </TableCell>
               </TableRow>
@@ -400,6 +439,7 @@ const ManageUsers = () => {
         </Table>
       </TableContainer>
 
+      {/* User Dialog */}
       <Dialog open={openUserDialog} onClose={() => setOpenUserDialog(false)}>
         <DialogTitle>
           {editingUser ? 'Edit User' : 'Add New User'}
@@ -424,6 +464,17 @@ const ManageUsers = () => {
               margin="normal"
               required
             />
+            {!editingUser && (
+              <TextField
+                fullWidth
+                label="Password"
+                type="password"
+                value={userFormData.password}
+                onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
+                margin="normal"
+                required
+              />
+            )}
             <FormControl fullWidth margin="normal">
               <InputLabel>Role</InputLabel>
               <Select
@@ -433,19 +484,35 @@ const ManageUsers = () => {
                   setUserFormData({
                     ...userFormData,
                     role: newRole,
-                    // Clear property assignments when switching roles
-                    assigned_properties: newRole === 'manager' ? [] : userFormData.assigned_properties,
-                    managed_property: newRole === 'manager' ? userFormData.managed_property : null
+                    assigned_properties: newRole === 'manager' ? [] : userFormData.assigned_properties
                   });
                 }}
                 label="Role"
               >
-                <MenuItem value="user">User</MenuItem>
-                <MenuItem value="manager">Manager</MenuItem>
-                <MenuItem value="super_admin">Admin</MenuItem>
+                {roles.map((role) => (
+                  <MenuItem key={role} value={role}>
+                    {role.charAt(0).toUpperCase() + role.slice(1)}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
-
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Group</InputLabel>
+              <Select
+                value={userFormData.group}
+                onChange={(e) => setUserFormData({ ...userFormData, group: e.target.value })}
+                label="Group"
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {groups.map((group) => (
+                  <MenuItem key={group} value={group}>
+                    {group}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <FormControl fullWidth margin="normal">
               <InputLabel>Status</InputLabel>
               <Select
@@ -457,26 +524,27 @@ const ManageUsers = () => {
                 <MenuItem value={false}>Pending</MenuItem>
               </Select>
             </FormControl>
-            
+
             {userFormData.role !== 'super_admin' && (
               <FormControl fullWidth margin="normal">
                 <InputLabel>Assign Properties</InputLabel>
                 <Select
-                  multiple={userFormData.role !== 'manager'}
+                  multiple
                   value={userFormData.assigned_properties}
                   onChange={(e) => {
                     const newValue = Array.isArray(e.target.value) ? e.target.value : [e.target.value];
                     setUserFormData({
                       ...userFormData,
-                      assigned_properties: userFormData.role === 'manager' ? [newValue[newValue.length - 1]] : newValue
+                      assigned_properties: newValue
                     });
                   }}
                   renderValue={(selected) => (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {(Array.isArray(selected) ? selected : [selected]).map((value) => (
+                      {selected.map((value) => (
                         <Chip
                           key={value}
                           label={properties.find(p => p.property_id === value)?.name}
+                          size="small"
                           color={userFormData.role === 'manager' ? 'primary' : 'default'}
                           variant={userFormData.role === 'manager' ? 'filled' : 'outlined'}
                         />
@@ -508,8 +576,43 @@ const ManageUsers = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog 
-        open={openPasswordDialog} 
+      {/* Group Dialog */}
+      <Dialog
+        open={openGroupDialog}
+        onClose={() => setOpenGroupDialog(false)}
+      >
+        <DialogTitle>
+          Change Group for {selectedUser?.username}
+        </DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel>Group</InputLabel>
+            <Select
+              value={selectedUser?.group || ''}
+              onChange={(e) => handleGroupChange(selectedUser?.user_id, e.target.value)}
+              label="Group"
+            >
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+              {groups.map((group) => (
+                <MenuItem key={group} value={group}>
+                  {group}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenGroupDialog(false)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Password Dialog */}
+      <Dialog
+        open={openPasswordDialog}
         onClose={() => {
           setOpenPasswordDialog(false);
           resetPasswordForm();
@@ -554,9 +657,9 @@ const ManageUsers = () => {
           }}>
             Cancel
           </Button>
-          <Button 
+          <Button
             onClick={handleChangePassword}
-            variant="contained" 
+            variant="contained"
             color="primary"
           >
             Change Password

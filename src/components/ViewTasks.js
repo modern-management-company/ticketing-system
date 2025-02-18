@@ -63,6 +63,7 @@ const ViewTasks = () => {
     due_date: null
   });
   const [openDueDatePicker, setOpenDueDatePicker] = useState(false);
+  const [managers, setManagers] = useState([]);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -78,11 +79,11 @@ const ViewTasks = () => {
   useEffect(() => {
     if (selectedProperty) {
       console.log('Selected property changed, fetching data...');
-      fetchData();
+      fetchTasks();
     }
   }, [selectedProperty]);
 
-  const fetchData = async () => {
+  const fetchTasks = async () => {
     try {
       if (!auth?.token || !selectedProperty) {
         return;
@@ -91,15 +92,17 @@ const ViewTasks = () => {
       setLoading(true);
       console.log('Fetching data for property:', selectedProperty);
 
-      const [tasksResponse, usersResponse, ticketsResponse] = await Promise.all([
+      const [tasksResponse, usersResponse, ticketsResponse, managersResponse] = await Promise.all([
         apiClient.get(`/properties/${selectedProperty}/tasks`),
         apiClient.get(`/properties/${selectedProperty}/users`),
-        apiClient.get(`/properties/${selectedProperty}/tickets`)
+        apiClient.get(`/properties/${selectedProperty}/tickets`),
+        apiClient.get(`/properties/${selectedProperty}/managers`)
       ]);
 
       console.log('Tasks response:', tasksResponse.data);
       console.log('Users response:', usersResponse.data);
       console.log('Tickets response:', ticketsResponse.data);
+      console.log('Managers response:', managersResponse.data);
 
       if (tasksResponse.data?.tasks) {
         setTasks(tasksResponse.data.tasks);
@@ -120,6 +123,13 @@ const ViewTasks = () => {
       } else {
         console.warn('No tickets data in response');
         setTickets([]);
+      }
+
+      if (managersResponse.data?.managers) {
+        setManagers(managersResponse.data.managers);
+      } else {
+        console.warn('No managers data in response');
+        setManagers([]);
       }
 
       setError(null);
@@ -172,7 +182,7 @@ const ViewTasks = () => {
         console.log('Task creation response:', response.data);
         setMessage('Task created successfully');
       }
-      await fetchData();
+      await fetchTasks();
       handleCloseDialog();
     } catch (error) {
       console.error('Failed to save task:', error);
@@ -280,18 +290,18 @@ const ViewTasks = () => {
     setSelectedProperty(propertyId);
   };
 
-  const handleDeleteTask = async (task) => {
-    if (window.confirm(`Are you sure you want to delete this task${task.ticket_id ? ' and unlink it from the ticket' : ''}?`)) {
+  const handleDeleteTask = async (taskId) => {
+    if (window.confirm(`Are you sure you want to delete this task?`)) {
       try {
         setError(null);
         setMessage(null);
         setLoading(true);
         
-        const response = await apiClient.delete(`/tasks/${task.task_id}`);
+        const response = await apiClient.delete(`/tasks/${taskId}`);
         
         if (response.status === 200) {
           setMessage('Task deleted successfully');
-          setTasks(prevTasks => prevTasks.filter(t => t.task_id !== task.task_id));
+          setTasks(prevTasks => prevTasks.filter(t => t.task_id !== taskId));
         }
       } catch (error) {
         console.error('Failed to delete task:', error);
@@ -352,12 +362,14 @@ const ViewTasks = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Task ID</TableCell>
+                <TableCell>ID</TableCell>
                 <TableCell>Title</TableCell>
                 <TableCell>Description</TableCell>
-                <TableCell>Assigned To</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Priority</TableCell>
+                <TableCell>Due Date</TableCell>
+                <TableCell>Assigned To</TableCell>
+                <TableCell>Group</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -368,30 +380,14 @@ const ViewTasks = () => {
                   <TableCell>{task.title}</TableCell>
                   <TableCell>{task.description}</TableCell>
                   <TableCell>
-                    {auth?.user?.role !== 'user' ? (
-                      <Select
-                        value={task.assigned_to_id || ''}
-                        onChange={(e) => handleAssigneeChange(task.task_id, e.target.value)}
-                        size="small"
-                        sx={{ minWidth: 120 }}
-                      >
-                        <MenuItem value="">
-                          <em>Unassigned</em>
-                        </MenuItem>
-                        {users.map(user => (
-                          <MenuItem key={user.user_id} value={user.user_id}>
-                            {user.username}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    ) : (
-                      users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unassigned'
-                    )}
-                  </TableCell>
-                  <TableCell>
                     <Chip 
                       label={task.status}
-                      color={getStatusColor(task.status)}
+                      color={
+                        task.status.toLowerCase() === 'pending' ? 'warning' :
+                        task.status.toLowerCase() === 'in progress' ? 'info' :
+                        task.status.toLowerCase() === 'completed' ? 'success' :
+                        'default'
+                      }
                     />
                   </TableCell>
                   <TableCell>
@@ -406,34 +402,37 @@ const ViewTasks = () => {
                     />
                   </TableCell>
                   <TableCell>
+                    {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}
+                  </TableCell>
+                  <TableCell>
+                    {users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unassigned'}
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={users.find(u => u.user_id === task.assigned_to_id)?.group || 'N/A'} 
+                      variant="outlined"
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Select
-                        value={task.status}
-                        onChange={(e) => handleStatusChange(task.task_id, e.target.value)}
-                        size="small"
-                        sx={{ minWidth: 120 }}
-                      >
-                        {statuses.map(status => (
-                          <MenuItem key={status} value={status}>
-                            {status.charAt(0).toUpperCase() + status.slice(1)}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                      <IconButton
+                      <Button
+                        startIcon={<EditIcon />}
                         onClick={() => handleOpenDialog(task)}
-                        color="primary"
                         size="small"
                       >
-                        <EditIcon />
-                      </IconButton>
-                      {(auth?.user?.role === 'super_admin' || auth?.user?.role === 'manager') && (
-                        <IconButton
-                          onClick={() => handleDeleteTask(task)}
-                          color="error"
+                        Edit
+                      </Button>
+                      {(auth?.user?.role === 'super_admin' || 
+                        managers.some(m => m.user_id === auth?.user?.user_id)) && (
+                        <Button
+                          startIcon={<DeleteIcon />}
+                          onClick={() => handleDeleteTask(task.task_id)}
                           size="small"
+                          color="error"
                         >
-                          <DeleteIcon />
-                        </IconButton>
+                          Delete
+                        </Button>
                       )}
                     </Box>
                   </TableCell>
@@ -469,16 +468,16 @@ const ViewTasks = () => {
             <FormControl fullWidth>
               <InputLabel>Assigned To</InputLabel>
               <Select
-                value={taskForm.assigned_to_id}
+                value={taskForm.assigned_to_id || ''}
                 onChange={(e) => setTaskForm({ ...taskForm, assigned_to_id: e.target.value })}
                 label="Assigned To"
               >
                 <MenuItem value="">
-                  <em>Unassigned</em>
+                  <em>None</em>
                 </MenuItem>
                 {users.map((user) => (
                   <MenuItem key={user.user_id} value={user.user_id}>
-                    {user.username}
+                    {user.username} ({user.group || 'No Group'})
                   </MenuItem>
                 ))}
               </Select>

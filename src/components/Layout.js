@@ -154,6 +154,11 @@ const Layout = () => {
         <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
           Role: {auth.user.role}
         </Typography>
+        {auth.user.group && (
+          <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
+            Group: {auth.user.group}
+          </Typography>
+        )}
         <Button
           fullWidth
           variant="outlined"

@@ -1,6 +1,6 @@
 from flask import request, jsonify, current_app
 from app import app, db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager
 from app.services import EmailService
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -451,7 +451,10 @@ def get_property_rooms(property_id):
         if current_user.role == 'super_admin':
             property = Property.query.get(property_id)
         elif current_user.role == 'manager':
-            property = Property.query.filter_by(property_id=property_id, manager_id=current_user.user_id).first()
+            property = Property.query.filter(
+                Property.property_id == property_id,
+                Property.managers.any(user_id=current_user.user_id)
+            ).first()
         else:
             property = Property.query.join(UserProperty).filter(
                 Property.property_id == property_id,
@@ -464,13 +467,7 @@ def get_property_rooms(property_id):
 
         rooms = Room.query.filter_by(property_id=property_id).all()
         return jsonify({
-            'rooms': [{
-                'room_id': room.room_id,
-                'name': room.name,
-                'type': room.type,
-                'floor': room.floor,
-                'status': room.status
-            } for room in rooms]
+            'rooms': [room.to_dict() for room in rooms]
         }), 200
 
     except Exception as e:
@@ -544,7 +541,11 @@ def manage_property_room(property_id, room_id):
         if current_user.role == 'super_admin':
             property = Property.query.get(property_id)
         elif current_user.role == 'manager':
-            property = Property.query.filter_by(property_id=property_id, manager_id=current_user.user_id).first()
+            # Use the PropertyManager relationship to check if user manages this property
+            property = Property.query.filter(
+                Property.property_id == property_id,
+                Property.managers.any(user_id=current_user.user_id)
+            ).first()
         else:
             property = Property.query.join(UserProperty).filter(
                 Property.property_id == property_id,
@@ -560,13 +561,7 @@ def manage_property_room(property_id, room_id):
             return jsonify({"msg": "Room not found"}), 404
 
         if request.method == 'GET':
-            return jsonify({
-                'room_id': room.room_id,
-                'name': room.name,
-                'type': room.type,
-                'floor': room.floor,
-                'status': room.status
-            })
+            return jsonify(room.to_dict())
 
         # Only managers and super_admins can modify rooms
         if current_user.role not in ['super_admin', 'manager']:
@@ -586,7 +581,7 @@ def manage_property_room(property_id, room_id):
 
             db.session.commit()
             app.logger.info(f"Room {room_id} updated successfully")
-            return jsonify({"msg": "Room updated successfully"})
+            return jsonify({"msg": "Room updated successfully", "room": room.to_dict()})
 
         elif request.method == 'DELETE':
             # Check if room has any associated tickets
@@ -680,8 +675,13 @@ def get_tasks():
             property_ids = [p.property_id for p in managed_properties]
             tasks = TaskAssignment.query.join(Ticket).filter(Ticket.property_id.in_(property_ids)).all()
         else:
-            # Regular users see tasks assigned to them
-            tasks = TaskAssignment.query.filter_by(assigned_to_user_id=current_user.user_id).all()
+            # Regular users see tasks in their group and tasks assigned to them
+            tasks = TaskAssignment.query.join(Ticket).filter(
+                db.or_(
+                    Ticket.category == current_user.group,  # Tasks for tickets in user's group
+                    TaskAssignment.assigned_to_user_id == current_user.user_id  # Tasks assigned to user
+                )
+            ).all()
 
         # Format task data
         task_list = []
@@ -693,6 +693,7 @@ def get_tasks():
                 'ticket_id': task.ticket_id,
                 'ticket_title': ticket.title if ticket else 'Unknown',
                 'ticket_priority': ticket.priority if ticket else 'Normal',
+                'ticket_category': ticket.category if ticket else 'Unknown',
                 'status': task.status,
                 'assigned_to_user_id': task.assigned_to_user_id,
                 'assigned_to': assigned_user.username if assigned_user else 'Unassigned'
@@ -964,7 +965,7 @@ def get_users():
         app.logger.error(f"Error in get_users: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500
 
-@app.route('/users/<int:user_id>', methods=['GET', 'PUT', 'DELETE'])
+@app.route('/users/<int:user_id>', methods=['GET', 'PUT', 'PATCH', 'DELETE'])
 @jwt_required()
 def manage_user(user_id):
     try:
@@ -980,22 +981,39 @@ def manage_user(user_id):
         if request.method == 'GET':
             return jsonify(target_user.to_dict())
 
-        elif request.method == 'PUT':
+        elif request.method in ['PUT', 'PATCH']:
             data = request.get_json()
-            old_status = target_user.is_active
-            old_properties = set(p.property_id for p in target_user.assigned_properties)
             
-            # Only super_admin can change roles
-            if current_user.role == 'super_admin' and 'role' in data:
-                target_user.role = data['role']
+            # Handle property assignments
+            if 'assigned_properties' in data:
+                # Clear existing property assignments
+                UserProperty.query.filter_by(user_id=user_id).delete()
+                
+                # Add new property assignments
+                for property_id in data['assigned_properties']:
+                    user_property = UserProperty(user_id=user_id, property_id=property_id)
+                    db.session.add(user_property)
             
-            # Update other fields
-            if 'email' in data:
-                target_user.email = data['email']
-            if 'is_active' in data:
-                target_user.is_active = data['is_active']
-            if 'manager_id' in data and current_user.role == 'super_admin':
-                target_user.manager_id = data['manager_id']
+            # Handle manager property assignments if user is a manager
+            if target_user.role == 'manager' and 'managed_properties' in data:
+                # Clear existing manager assignments
+                PropertyManager.query.filter_by(user_id=user_id).delete()
+                
+                # Add new manager assignments
+                for property_id in data['managed_properties']:
+                    manager_assignment = PropertyManager(user_id=user_id, property_id=property_id)
+                    db.session.add(manager_assignment)
+            
+            # Update other fields for PUT requests
+            if request.method == 'PUT':
+                if 'email' in data:
+                    target_user.email = data['email']
+                if 'is_active' in data:
+                    target_user.is_active = data['is_active']
+                if 'role' in data and current_user.role == 'super_admin':
+                    target_user.role = data['role']
+                if 'group' in data:
+                    target_user.group = data['group']
             
             db.session.commit()
 
@@ -1067,11 +1085,9 @@ def manage_user(user_id):
                         )
 
             except Exception as e:
-                app.logger.error(f"Failed to send notification email: {str(e)}")
-                # Continue without failing the request
-
-            app.logger.info(f"User {target_user.username} updated by {current_user.username}")
-            return jsonify({'msg': 'User updated successfully'})
+                db.session.rollback()
+                app.logger.error(f"Database error: {str(e)}")
+                return jsonify({'msg': f'Error updating user: {str(e)}'}), 500
 
         elif request.method == 'DELETE':
             if current_user.role != 'super_admin':
@@ -1106,7 +1122,6 @@ def manage_user(user_id):
                 
             db.session.delete(target_user)
             db.session.commit()
-            app.logger.info(f"User {target_user.username} deleted by {current_user.username}")
             return jsonify({'msg': 'User deleted successfully'})
 
     except Exception as e:
@@ -1124,9 +1139,9 @@ def properties():
         if current_user.role == 'super_admin':
             properties = Property.query.all()
         elif current_user.role == 'manager':
-            properties = Property.query.filter_by(property_id=current_user.managed_property_id).all()
+            properties = Property.query.filter(Property.managers.any(user_id=current_user_id)).all()
         else:
-            properties = Property.query.filter_by(property_id=current_user.assigned_property_id).all()
+            properties = current_user.assigned_properties
 
         return jsonify({
             'properties': [{
@@ -1135,7 +1150,7 @@ def properties():
                 'address': p.address,
                 'type': p.type,
                 'status': p.status,
-                'manager_id': p.manager_id
+                'managers': [{'user_id': m.user_id, 'username': m.username} for m in p.managers]
             } for p in properties]
         })
 
@@ -1148,8 +1163,7 @@ def properties():
             name=data['name'],
             address=data['address'],
             type=data['type'],
-            status=data.get('status', 'active'),
-            manager_id=data.get('manager_id')
+            status=data.get('status', 'active')
         )
         db.session.add(new_property)
         db.session.commit()
@@ -1173,7 +1187,7 @@ def manage_property(property_id):
             return jsonify({'message': 'Unauthorized - Only super admins and managers can modify properties'}), 403
             
         # For managers, verify they manage this property
-        if current_user.role == 'manager' and property.manager_id != current_user.user_id:
+        if current_user.role == 'manager' and not any(m.user_id == current_user.user_id for m in property.managers):
             return jsonify({'message': 'Unauthorized - You can only modify properties you manage'}), 403
 
         if request.method == 'PUT':
@@ -1182,7 +1196,7 @@ def manage_property(property_id):
                 return jsonify({'message': 'No data provided'}), 400
 
             # Update allowed fields
-            allowed_fields = ['name', 'address', 'type', 'status', 'description', 'manager_id']
+            allowed_fields = ['name', 'address', 'type', 'status', 'description']
             for field in allowed_fields:
                 if field in data:
                     setattr(property, field, data[field])
@@ -1219,9 +1233,9 @@ def rooms():
         if current_user.role == 'super_admin':
             rooms = Room.query.all()
         elif current_user.role == 'manager':
-            rooms = Room.query.join(Property).filter(Property.property_id == current_user.managed_property_id).all()
+            rooms = Room.query.join(Property).filter(Property.managers.any(user_id=current_user_id)).all()
         else:
-            rooms = Room.query.filter_by(property_id=current_user.assigned_property_id).all()
+            rooms = Room.query.filter(Room.property_id.in_([p.property_id for p in current_user.assigned_properties])).all()
 
         return jsonify({
             'rooms': [{
@@ -1290,7 +1304,7 @@ def property_report():
         'address': prop.address,
         'type': prop.type,
         'status': prop.status,
-        'manager_id': prop.manager_id
+        'managers': [{'user_id': m.user_id, 'username': m.username} for m in prop.managers]
     } for prop in properties]
     return jsonify({'properties': property_data})
 
@@ -1341,34 +1355,58 @@ def switch_property():
 @app.route('/assign-property', methods=['POST'])
 @jwt_required()
 def assign_property():
-    current_user = get_jwt_identity()
-    if current_user['role'] not in ['super_admin', 'manager']:
-        return jsonify({'message': 'Unauthorized'}), 403
-
-    data = request.get_json()
-    user_id = data.get('user_id')
-    property_ids = data.get('property_ids', [])
-
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({'message': 'User not found'}), 404
-
-    # Clear existing property assignments
-    UserProperty.query.filter_by(user_id=user_id).delete()
-
-    # Add new property assignments
-    for property_id in property_ids:
-        property = Property.query.get(property_id)
-        if property:
-            user_property = UserProperty(user_id=user_id, property_id=property_id)
-            db.session.add(user_property)
-
     try:
-        db.session.commit()
-        return jsonify({'message': 'Property assignments updated successfully'})
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'message': 'User not found'}), 404
+
+        if current_user.role not in ['super_admin', 'manager']:
+            return jsonify({'message': 'Unauthorized'}), 403
+
+        data = request.get_json()
+        user_id = data.get('user_id')
+        property_ids = data.get('property_ids', [])
+        is_manager_assignment = data.get('is_manager_assignment', False)
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+
+        # For manager assignments, verify the assigner has permission
+        if is_manager_assignment and current_user.role != 'super_admin':
+            return jsonify({'message': 'Only super admins can assign manager properties'}), 403
+
+        # Clear existing property assignments based on type
+        if is_manager_assignment:
+            PropertyManager.query.filter_by(user_id=user_id).delete()
+        else:
+            UserProperty.query.filter_by(user_id=user_id).delete()
+
+        # Add new property assignments
+        for property_id in property_ids:
+            property = Property.query.get(property_id)
+            if property:
+                if is_manager_assignment:
+                    manager_assignment = PropertyManager(user_id=user_id, property_id=property_id)
+                    db.session.add(manager_assignment)
+                else:
+                    user_property = UserProperty(user_id=user_id, property_id=property_id)
+                    db.session.add(user_property)
+
+        try:
+            db.session.commit()
+            return jsonify({
+                'message': f"{'Manager' if is_manager_assignment else 'User'} property assignments updated successfully",
+                'user': user.to_dict()
+            })
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating property assignments: {str(e)}")
+            return jsonify({'message': f'Error updating property assignments: {str(e)}'}), 500
+
     except Exception as e:
-        db.session.rollback()
-        return jsonify({'message': f'Error updating property assignments: {str(e)}'}), 500
+        app.logger.error(f"Error in assign_property: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
 
 @app.route('/remove-property-assignment', methods=['POST'])
 @jwt_required()
@@ -1428,13 +1466,10 @@ def get_managed_properties(user_id):
     if not user or user.role != 'manager':
         return jsonify({'message': 'User not found or not a manager'}), 404
 
-    if user.managed_property:
-        properties = [user.managed_property]
-    else:
-        properties = []
+    managed_properties = Property.query.filter(Property.managers.any(user_id=user_id)).all()
 
     return jsonify({
-        'properties': [{'property_id': p.property_id, 'name': p.name} for p in properties]
+        'properties': [{'property_id': p.property_id, 'name': p.name} for p in managed_properties]
     })
 
 @app.route('/users/<int:user_id>/assigned-properties', methods=['GET'])
@@ -1472,27 +1507,29 @@ def get_property_users(property_id):
             UserProperty.property_id == property_id
         ).all()
 
-        # Get the property manager
-        manager = User.query.get(property.manager_id) if property.manager_id else None
+        # Get the property managers
+        managers = property.managers
         
-        # Combine manager and assigned users, avoiding duplicates
+        # Combine managers and assigned users, avoiding duplicates
         all_users = []
-        if manager:
+        for manager in managers:
             all_users.append({
                 'user_id': manager.user_id,
                 'username': manager.username,
                 'role': manager.role,
-                'email': manager.email
+                'email': manager.email,
+                'group': manager.group
             })
 
         for user in assigned_users:
-            # Only add if not already in the list (avoid duplicate manager)
+            # Only add if not already in the list (avoid duplicate managers)
             if not any(u['user_id'] == user.user_id for u in all_users):
                 all_users.append({
                     'user_id': user.user_id,
                     'username': user.username,
                     'role': user.role,
-                    'email': user.email
+                    'email': user.email,
+                    'group': user.group
                 })
 
         return jsonify({'users': all_users}), 200
@@ -1522,16 +1559,12 @@ def get_property_tickets(property_id):
         # Get tickets for the property
         tickets = Ticket.query.filter_by(property_id=property_id).all()
         
-        # For regular users, filter tickets to only show ones they created or are assigned to
+        # For regular users, filter tickets based on their group
         if current_user.role == 'user':
-            # Get task assignments for the user
-            user_task_assignments = TaskAssignment.query.filter_by(assigned_to_user_id=current_user.user_id).all()
-            assigned_ticket_ids = [task.ticket_id for task in user_task_assignments]
-            
-            # Filter tickets to only show ones created by the user or assigned to them
+            # Filter tickets based on user's group
             tickets = [ticket for ticket in tickets if 
-                      ticket.user_id == current_user.user_id or 
-                      ticket.ticket_id in assigned_ticket_ids]
+                      ticket.category == current_user.group or  # Show tickets in user's group
+                      ticket.user_id == current_user.user_id]   # Also show tickets created by the user
         
         ticket_list = []
         for ticket in tickets:
@@ -2030,4 +2063,107 @@ def delete_ticket(ticket_id):
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error deleting ticket: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/properties/<int:property_id>/managers', methods=['GET'])
+@jwt_required()
+def get_property_managers(property_id):
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+
+        property = Property.query.get_or_404(property_id)
+        if not property:
+            return jsonify({"msg": "Property not found"}), 404
+
+        # Get all managers for this property
+        managers = property.managers.all()
+
+        return jsonify({
+            'managers': [{
+                'user_id': manager.user_id,
+                'username': manager.username,
+                'email': manager.email,
+                'role': manager.role,
+                'group': manager.group
+            } for manager in managers]
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error in get_property_managers: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/tickets/<int:ticket_id>', methods=['GET', 'PATCH', 'DELETE'])
+@jwt_required()
+def manage_ticket(ticket_id):
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+
+        ticket = Ticket.query.get_or_404(ticket_id)
+
+        if request.method == 'GET':
+            return jsonify(ticket.to_dict())
+
+        elif request.method == 'PATCH':
+            # Check if user has permission to update the ticket
+            if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+                return jsonify({"msg": "Unauthorized - You can only update your own tickets"}), 403
+            elif current_user.role == 'manager':
+                # Managers can only update tickets from their properties
+                has_access = any(p.property_id == ticket.property_id for p in current_user.managed_properties)
+                if not has_access:
+                    return jsonify({"msg": "Unauthorized - You can only update tickets from your managed properties"}), 403
+
+            data = request.get_json()
+            
+            # Update allowed fields
+            if 'title' in data:
+                ticket.title = data['title']
+            if 'description' in data:
+                ticket.description = data['description']
+            if 'priority' in data:
+                ticket.priority = data['priority']
+            if 'category' in data:
+                ticket.category = data['category']
+            if 'status' in data:
+                ticket.status = data['status']
+            if 'room_id' in data:
+                # Verify room belongs to the same property
+                if data['room_id']:
+                    room = Room.query.filter_by(room_id=data['room_id'], property_id=ticket.property_id).first()
+                    if not room:
+                        return jsonify({'msg': 'Invalid room for this property'}), 400
+                ticket.room_id = data['room_id']
+
+            db.session.commit()
+            return jsonify({
+                "msg": "Ticket updated successfully",
+                "ticket": ticket.to_dict()
+            })
+
+        elif request.method == 'DELETE':
+            # Check if user has permission to delete the ticket
+            if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+                return jsonify({"msg": "Unauthorized - You can only delete your own tickets"}), 403
+            elif current_user.role == 'manager':
+                # Managers can only delete tickets from their properties
+                has_access = any(p.property_id == ticket.property_id for p in current_user.managed_properties)
+                if not has_access:
+                    return jsonify({"msg": "Unauthorized - You can only delete tickets from your managed properties"}), 403
+
+            # Delete associated task assignments first
+            TaskAssignment.query.filter_by(ticket_id=ticket_id).delete()
+            
+            # Delete the ticket
+            db.session.delete(ticket)
+            db.session.commit()
+            
+            return jsonify({"msg": "Ticket deleted successfully"})
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error managing ticket: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500

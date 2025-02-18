@@ -10,6 +10,7 @@ class User(db.Model):
     password = db.Column(db.String(200), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     role = db.Column(db.String(20), default='user')  # user, manager, super_admin
+    group = db.Column(db.String(50))  # Added group field
     manager_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
@@ -21,9 +22,9 @@ class User(db.Model):
                                  foreign_keys=[manager_id])
     
     managed_properties = db.relationship('Property',
-                                       backref='manager',
-                                       lazy='dynamic',
-                                       foreign_keys='Property.manager_id')
+                                       secondary='property_managers',
+                                       backref=db.backref('managers', lazy='dynamic'),
+                                       lazy='dynamic')
     
     assigned_properties = db.relationship('Property',
                                         secondary='user_properties',
@@ -35,12 +36,13 @@ class User(db.Model):
                                    lazy='dynamic',
                                    foreign_keys='Task.assigned_to_id')
 
-    def __init__(self, username, email, password, role='user', manager_id=None):
+    def __init__(self, username, email, password, role='user', manager_id=None, group=None):
         self.username = username
         self.email = email
         self.set_password(password)
         self.role = role
         self.manager_id = manager_id
+        self.group = group
 
     def set_password(self, password):
         self.password = generate_password_hash(password)
@@ -55,6 +57,7 @@ class User(db.Model):
             'username': self.username,
             'role': self.role,
             'email': self.email,
+            'group': self.group,
             'assigned_properties': [
                 {
                     'property_id': prop.property_id,
@@ -84,6 +87,7 @@ class User(db.Model):
             'username': self.username,
             'email': self.email,
             'role': self.role,
+            'group': self.group,
             'manager_id': self.manager_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None,
@@ -96,7 +100,16 @@ class User(db.Model):
                     'type': prop.type,
                     'status': prop.status
                 } for prop in self.assigned_properties
-            ]
+            ],
+            'managed_properties': [
+                {
+                    'property_id': prop.property_id,
+                    'name': prop.name,
+                    'address': prop.address,
+                    'type': prop.type,
+                    'status': prop.status
+                } for prop in self.managed_properties
+            ] if self.role == 'manager' else []
         }
 
     def __repr__(self):
@@ -110,7 +123,6 @@ class Property(db.Model):
     type = db.Column(db.String(50))
     status = db.Column(db.String(20), default='active')
     description = db.Column(db.Text)
-    manager_id = db.Column(db.Integer, db.ForeignKey('users.user_id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     rooms = db.relationship('Room', backref='property', lazy=True)
@@ -126,7 +138,6 @@ class Property(db.Model):
             'type': self.type,
             'status': self.status,
             'description': self.description,
-            'manager_id': self.manager_id,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -175,6 +186,27 @@ class Ticket(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
+    def to_dict(self):
+        """Convert ticket object to dictionary"""
+        creator = User.query.get(self.user_id)
+        room = Room.query.get(self.room_id) if self.room_id else None
+        
+        return {
+            'ticket_id': self.ticket_id,
+            'title': self.title,
+            'description': self.description,
+            'status': self.status,
+            'priority': self.priority,
+            'category': self.category,
+            'room_id': self.room_id,
+            'room_name': room.name if room else None,
+            'created_by_id': self.user_id,
+            'created_by_username': creator.username if creator else 'Unknown',
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'property_id': self.property_id
+        }
+
 class TaskAssignment(db.Model):
     __tablename__ = 'task_assignments'
     task_id = db.Column(db.Integer, primary_key=True)
@@ -217,3 +249,9 @@ class Task(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
+class PropertyManager(db.Model):
+    __tablename__ = 'property_managers'
+    property_id = db.Column(db.Integer, db.ForeignKey('properties.property_id'), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), primary_key=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

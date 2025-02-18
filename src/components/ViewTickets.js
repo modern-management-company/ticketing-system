@@ -42,6 +42,7 @@ const ViewTickets = () => {
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [properties, setProperties] = useState([]);
+  const [managers, setManagers] = useState([]);
   const [ticketForm, setTicketForm] = useState({
     title: '',
     description: '',
@@ -70,6 +71,7 @@ const ViewTickets = () => {
       console.log('Selected property changed, fetching data...');
       fetchTickets();
       fetchRooms();
+      fetchManagers();
     }
   }, [selectedProperty]);
 
@@ -181,6 +183,18 @@ const ViewTickets = () => {
     } catch (error) {
       console.error('Failed to fetch rooms:', error);
       console.error('Error response:', error.response?.data);
+    }
+  };
+
+  const fetchManagers = async () => {
+    try {
+      if (!selectedProperty) return;
+      const response = await apiClient.get(`/properties/${selectedProperty}/managers`);
+      if (response.data?.managers) {
+        setManagers(response.data.managers);
+      }
+    } catch (error) {
+      console.error('Failed to fetch managers:', error);
     }
   };
 
@@ -348,6 +362,7 @@ const ViewTickets = () => {
                 <TableCell>Priority</TableCell>
                 <TableCell>Category</TableCell>
                 <TableCell>Created By</TableCell>
+                <TableCell>Group</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -384,6 +399,13 @@ const ViewTickets = () => {
                   <TableCell>{ticket.category}</TableCell>
                   <TableCell>{ticket.created_by_username}</TableCell>
                   <TableCell>
+                    <Chip 
+                      label={ticket.created_by_group || 'N/A'} 
+                      variant="outlined"
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       <Button
                         startIcon={<EditIcon />}
@@ -393,7 +415,7 @@ const ViewTickets = () => {
                         Edit
                       </Button>
                       {(auth?.user?.role === 'super_admin' || 
-                        auth?.user?.role === 'manager' || 
+                        managers.some(m => m.user_id === auth?.user?.user_id) || 
                         ticket.created_by_id === auth?.user?.user_id) && (
                         <Button
                           startIcon={<DeleteIcon />}

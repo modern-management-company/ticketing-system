@@ -1,5 +1,5 @@
 from app import app, db
-from app.models import User, Property, Ticket, Task, TaskAssignment, Room
+from app.models import User, Property, Ticket, Task, TaskAssignment, Room, PropertyManager
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
 from sqlalchemy import text
@@ -14,8 +14,7 @@ def clear_database():
         db.session.execute(text('DROP TABLE IF EXISTS tickets CASCADE'))
         db.session.execute(text('DROP TABLE IF EXISTS rooms CASCADE'))
         db.session.execute(text('DROP TABLE IF EXISTS user_properties CASCADE'))
-        db.session.execute(text('DROP TABLE IF EXISTS property_themes CASCADE'))
-        db.session.execute(text('DROP TABLE IF EXISTS system_settings CASCADE'))
+        db.session.execute(text('DROP TABLE IF EXISTS property_managers CASCADE'))
         db.session.execute(text('DROP TABLE IF EXISTS properties CASCADE'))
         db.session.execute(text('DROP TABLE IF EXISTS users CASCADE'))
         db.session.commit()
@@ -61,7 +60,7 @@ def setup_database():
                 'name': 'Fairfield Inn & Suites Canton',
                 'address': '5285 Broadmoor Circle NW, Canton, OH 44709',
                 'type': 'Hotel',
-                'status': 'inactive'
+                'status': 'active'
             },
             {
                 'name': 'Residence Inn Canton',
@@ -102,15 +101,25 @@ def setup_database():
             username='aditya',
             email='adityadixit@live.com',
             password='aditya123',
-            role='super_admin'
+            role='super_admin',
+            group='Executive'
         )
         
-        # Create Manager - Adixit
+        # Create Managers
         adixit = User(
             username='adixit',
             email='adixit@nyu.edu',
             password='adixit123',
-            role='manager'
+            role='manager',
+            group='Executive'
+        )
+        
+        manager2 = User(
+            username='manager2',
+            email='manager2@example.com',
+            password='manager2123',
+            role='manager',
+            group='Executive'
         )
         
         # Create Regular User - Adidix
@@ -118,34 +127,65 @@ def setup_database():
             username='adidix',
             email='aditya@adityadixit.com',
             password='adidix123',
-            role='user'
+            role='user',
+            group='Front Desk'
         )
         
-        db.session.add_all([aditya, adixit, adidix])
+        db.session.add_all([aditya, adixit, manager2, adidix])
         db.session.commit()
-        
-        # Create manager users (one for each property)
-        managers = [adixit]  # Start with adixit as the first manager
         
         # Create regular users (2 users per property)
         users = []
         user_credentials = [
-            ('FIC_U1', 'FIC_U2', 'Fairfield Inn & Suites Canton'),
-            ('RIC_U1', 'RIC_U2', 'Residence Inn Canton')
+            ('FIC_U1', 'FIC_U2', 'Fairfield Inn & Suites Canton', 'Front Desk', 'Housekeeping'),
+            ('RIC_U1', 'RIC_U2', 'Residence Inn Canton', 'Maintenance', 'Engineering')
         ]
         
-        for user1, user2, _ in user_credentials:
+        for user1, user2, _, group1, group2 in user_credentials:
             users.extend([
-                User(username=user1, email=f"{user1.lower()}@example.net", password=f"{user1.lower()}123", role='user'),
-                User(username=user2, email=f"{user2.lower()}@example.net", password=f"{user2.lower()}123", role='user')
+                User(username=user1, email=f"{user1.lower()}@example.net", password=f"{user1.lower()}123", role='user', group=group1),
+                User(username=user2, email=f"{user2.lower()}@example.net", password=f"{user2.lower()}123", role='user', group=group2)
             ])
 
-        all_users = [aditya] + managers + users
-        db.session.add_all(all_users)
+        db.session.add_all(users)
         db.session.commit()
 
         # Get only active properties
         active_properties = [p for p in properties if p.status == 'active']
+
+        # Create property manager assignments
+        for prop in active_properties:
+            # Assign both managers to each active property
+            for manager in [adixit, manager2]:
+                prop_manager = PropertyManager(
+                    property_id=prop.property_id,
+                    user_id=manager.user_id
+                )
+                db.session.add(prop_manager)
+        
+        db.session.commit()
+
+        # Update property assignments for regular users
+        for user in users:
+            user.assigned_properties = []
+        
+        # Assign properties to users
+        for i, prop in enumerate(active_properties):
+            # Get the two users for this property
+            user1 = users[i * 2]
+            user2 = users[i * 2 + 1]
+            
+            # Assign their main property
+            user1.assigned_properties.append(prop)
+            user2.assigned_properties.append(prop)
+            
+            # Assign the other Canton property as well
+            other_prop = active_properties[1 if i == 0 else 0]
+            user1.assigned_properties.append(other_prop)
+            user2.assigned_properties.append(other_prop)
+        
+        # Assign all active properties to adidix (regular user)
+        adidix.assigned_properties = active_properties
 
         # Create Rooms for each property
         room_types = ['Single', 'Double', 'Suite', 'Conference', 'Other'];
@@ -171,36 +211,6 @@ def setup_database():
                 rooms.append(room)
         
         db.session.add_all(rooms)
-        db.session.commit()
-
-        # Update property assignments
-        # First, clear any existing assignments
-        for user in users + managers:
-            user.assigned_properties = []
-        
-        # Assign all active properties to adixit (manager)
-        adixit.assigned_properties = active_properties
-        for prop in active_properties:
-            prop.manager_id = adixit.user_id
-        
-        # Assign all active properties to adidix (regular user)
-        adidix.assigned_properties = active_properties
-        
-        # Assign properties to other users (one property each)
-        for i, prop in enumerate(active_properties):
-            # Get the two users for this property
-            user1 = users[i * 2]
-            user2 = users[i * 2 + 1]
-            
-            # Assign their main property
-            user1.assigned_properties.append(prop)
-            user2.assigned_properties.append(prop)
-            
-            # Assign the other Canton property as well
-            other_prop = active_properties[1 if i == 0 else 0]
-            user1.assigned_properties.append(other_prop)
-            user2.assigned_properties.append(other_prop)
-        
         db.session.commit()
 
         # Create Tickets
