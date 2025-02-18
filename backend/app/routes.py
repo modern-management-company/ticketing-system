@@ -171,128 +171,56 @@ def create_ticket():
         if not current_user:
             return jsonify({"msg": "User not found"}), 404
 
-        data = request.json
-        if not data or not data.get('title') or not data.get('description') or not data.get('priority') or not data.get('property_id'):
-            return jsonify({'msg': 'Invalid input'}), 400
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['title', 'description', 'priority', 'property_id']
+        if not all(field in data for field in required_fields):
+            return jsonify({"msg": "Missing required fields"}), 400
 
-        # Verify user has access to the property
-        property_id = data.get('property_id')
-        if current_user.role == 'user':
-            has_access = any(p.property_id == property_id for p in current_user.assigned_properties)
-            if not has_access:
-                return jsonify({'msg': 'Unauthorized access to property'}), 403
-
-        # Get the property and its managers
-        property = Property.query.get(property_id)
+        # Get the property
+        property = Property.query.get(data['property_id'])
         if not property:
-            app.logger.error(f"Property not found: {property_id}")
-            return jsonify({'msg': 'Property not found'}), 404
-        
-        app.logger.info(f"Property found: {property.name} (ID: {property.property_id})")
-        
-        # Get all managers for this property
-        managers = User.query.join(UserProperty).filter(
-            UserProperty.property_id == property_id,
-            User.role == 'manager'
-        ).all()
-
-        if managers:
-            app.logger.info(f"Found {len(managers)} managers for property {property.name}")
-            for manager in managers:
-                app.logger.info(f"Manager found: {manager.username} (Email: {manager.email})")
-        else:
-            app.logger.warning(f"No managers found for property {property.name}")
-
-        # Verify room belongs to property if room_id is provided
-        room_id = data.get('room_id')
-        room = None
-        if room_id:
-            room = Room.query.filter_by(room_id=room_id, property_id=property_id).first()
-            if not room:
-                return jsonify({'msg': 'Invalid room for this property'}), 400
+            return jsonify({"msg": "Property not found"}), 404
 
         # Create the ticket
-        ticket = Ticket(
+        new_ticket = Ticket(
             title=data['title'],
             description=data['description'],
             priority=data['priority'],
             category=data.get('category', 'General'),
+            status='open',
             user_id=current_user.user_id,
-            property_id=property_id,
-            room_id=room_id
+            property_id=data['property_id'],
+            room_id=data.get('room_id')
         )
-        db.session.add(ticket)
-        db.session.commit()
         
-        app.logger.info(f"Ticket created successfully: ID {ticket.ticket_id}")
+        db.session.add(new_ticket)
+        db.session.commit()
+
+        # Get all managers and admins for this property
+        property_managers = User.query.join(PropertyManager).filter(
+            PropertyManager.property_id == property.property_id
+        ).all()
+        
+        super_admins = User.query.filter_by(role='super_admin').all()
+        
+        # Combine unique recipients
+        recipients = list(set(property_managers + super_admins))
 
         # Send email notifications
-        try:
-            email_service = EmailService()
-            app.logger.info("Email service initialized for ticket notifications")
-            
-            # Prepare the ticket details for the email
-            room_info = f"Room: {room.name}" if room else "No specific room"
-            html_content = f"""
-            <html>
-                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                        <h2 style="color: #1976d2;">New Ticket Created</h2>
-                        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                            <p><strong>Title:</strong> {ticket.title}</p>
-                            <p><strong>Description:</strong> {ticket.description}</p>
-                            <p><strong>Priority:</strong> <span style="color: {email_service._get_priority_color(ticket.priority)};">{ticket.priority}</span></p>
-                            <p><strong>Category:</strong> {ticket.category}</p>
-                            <p><strong>Property:</strong> {property.name}</p>
-                            <p><strong>{room_info}</strong></p>
-                            <p><strong>Created By:</strong> {current_user.username}</p>
-                        </div>
-                        <p>Please log in to the system to view more details and take necessary actions.</p>
-                        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
-                            <p style="color: #666;">Best regards,<br>Property Management System</p>
-                        </div>
-                    </div>
-                </body>
-            </html>
-            """
-
-            # Send to all property managers
-            for manager in managers:
-                if manager.user_id != current_user.user_id:  # Don't send to manager if they created the ticket
-                    app.logger.info(f"Attempting to send email to manager {manager.username} ({manager.email})")
-                    email_sent = email_service.send_email(
-                        manager.email,
-                        f"New Ticket Created - {ticket.title}",
-                        html_content
-                    )
-                    if email_sent:
-                        app.logger.info(f"✓ Email sent successfully to manager {manager.username}")
-                    else:
-                        app.logger.error(f"❌ Failed to send email to manager {manager.username}")
-
-            # Send to ticket creator if they're not a manager
-            if current_user.role != 'manager':
-                app.logger.info(f"Attempting to send email to creator {current_user.username} ({current_user.email})")
-                email_sent = email_service.send_email(
-                    current_user.email,
-                    f"Ticket Created Successfully - {ticket.title}",
-                    html_content
-                )
-                if email_sent:
-                    app.logger.info(f"✓ Email sent successfully to creator {current_user.username}")
-                else:
-                    app.logger.error(f"❌ Failed to send email to creator {current_user.username}")
-
-        except Exception as e:
-            app.logger.error(f"Failed to send ticket notification email(s): {str(e)}")
-            app.logger.error(f"Error type: {type(e).__name__}")
-            app.logger.error(f"Error details: {str(e)}")
-            # Don't return error, just log it since the ticket was created successfully
+        email_service = EmailService()
+        email_service.send_ticket_notification(
+            ticket=new_ticket,
+            property_name=property.name,
+            recipients=recipients,
+            notification_type="new"
+        )
 
         return jsonify({
-            'msg': 'Ticket created successfully',
-            'ticket': ticket.ticket_id,
-            'notifications_sent': True
+            "msg": "Ticket created successfully",
+            "ticket": new_ticket.to_dict(),
+            "notifications_sent": len(recipients)
         }), 201
 
     except Exception as e:
@@ -528,7 +456,7 @@ def create_property_room(property_id):
         app.logger.error(f"Error creating room: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500
 
-@app.route('/properties/<int:property_id>/rooms/<int:room_id>', methods=['GET', 'PUT', 'DELETE'])
+@app.route('/properties/<int:property_id>/rooms/<int:room_id>', methods=['GET', 'PUT', 'DELETE', 'PATCH'])
 @jwt_required()
 def manage_property_room(property_id, room_id):
     try:
@@ -594,6 +522,44 @@ def manage_property_room(property_id, room_id):
             db.session.commit()
             app.logger.info(f"Room {room_id} deleted successfully")
             return jsonify({"msg": "Room deleted successfully"})
+
+        elif request.method == 'PATCH':
+            data = request.get_json()
+            old_status = room.status
+
+            # Update room fields
+            for field in ['name', 'type', 'floor', 'status', 'capacity', 'description']:
+                if field in data:
+                    setattr(room, field, data[field])
+
+            db.session.commit()
+
+            # Send notifications if status was changed
+            if 'status' in data and old_status != room.status:
+                # Get all managers and admins for this property
+                property_managers = User.query.join(PropertyManager).filter(
+                    PropertyManager.property_id == property.property_id
+                ).all()
+                
+                super_admins = User.query.filter_by(role='super_admin').all()
+                
+                # Combine unique recipients
+                recipients = list(set(property_managers + super_admins))
+
+                # Send email notifications
+                email_service = EmailService()
+                email_service.send_room_status_notification(
+                    room=room,
+                    property_name=property.name,
+                    old_status=old_status,
+                    new_status=room.status,
+                    recipients=recipients
+                )
+
+            return jsonify({
+                "msg": "Room updated successfully",
+                "room": room.to_dict()
+            }), 200
 
     except Exception as e:
         db.session.rollback()
@@ -1169,7 +1135,7 @@ def properties():
         db.session.commit()
         return jsonify({'message': 'Property created successfully', 'property_id': new_property.property_id}), 201
 
-@app.route('/properties/<int:property_id>', methods=['GET', 'PUT', 'DELETE'])
+@app.route('/properties/<int:property_id>', methods=['GET', 'PUT', 'DELETE', 'PATCH'])
 @jwt_required()
 def manage_property(property_id):
     try:
@@ -1218,6 +1184,43 @@ def manage_property(property_id):
                 db.session.rollback()
                 app.logger.error(f"Error deleting property: {str(e)}")
                 return jsonify({'message': f'Error deleting property: {str(e)}'}), 500
+
+        elif request.method == 'PATCH':
+            data = request.get_json()
+            old_status = property.status
+
+            # Update property fields
+            for field in ['name', 'address', 'status', 'description']:
+                if field in data:
+                    setattr(property, field, data[field])
+
+            db.session.commit()
+
+            # Send notifications if status was changed
+            if 'status' in data and old_status != property.status:
+                # Get all managers for this property
+                property_managers = User.query.join(PropertyManager).filter(
+                    PropertyManager.property_id == property.property_id
+                ).all()
+                
+                super_admins = User.query.filter_by(role='super_admin').all()
+                
+                # Combine unique recipients
+                recipients = list(set(property_managers + super_admins))
+
+                # Send email notifications
+                email_service = EmailService()
+                email_service.send_property_status_notification(
+                    property=property,
+                    old_status=old_status,
+                    new_status=property.status,
+                    recipients=recipients
+                )
+
+            return jsonify({
+                "msg": "Property updated successfully",
+                "property": property.to_dict()
+            }), 200
 
     except Exception as e:
         app.logger.error(f"Error in manage_property: {str(e)}")
@@ -2102,66 +2105,75 @@ def manage_ticket(ticket_id):
         if not current_user:
             return jsonify({"msg": "User not found"}), 404
 
-        ticket = Ticket.query.get_or_404(ticket_id)
+        ticket = Ticket.query.get(ticket_id)
+        if not ticket:
+            return jsonify({"msg": "Ticket not found"}), 404
 
-        if request.method == 'GET':
-            return jsonify(ticket.to_dict())
+        property = Property.query.get(ticket.property_id)
+        if not property:
+            return jsonify({"msg": "Property not found"}), 404
 
-        elif request.method == 'PATCH':
-            # Check if user has permission to update the ticket
-            if current_user.role == 'user' and ticket.user_id != current_user.user_id:
-                return jsonify({"msg": "Unauthorized - You can only update your own tickets"}), 403
-            elif current_user.role == 'manager':
-                # Managers can only update tickets from their properties
-                has_access = any(p.property_id == ticket.property_id for p in current_user.managed_properties)
-                if not has_access:
-                    return jsonify({"msg": "Unauthorized - You can only update tickets from your managed properties"}), 403
-
+        if request.method == 'PATCH':
             data = request.get_json()
+            old_status = ticket.status
             
-            # Update allowed fields
-            if 'title' in data:
-                ticket.title = data['title']
-            if 'description' in data:
-                ticket.description = data['description']
-            if 'priority' in data:
-                ticket.priority = data['priority']
-            if 'category' in data:
-                ticket.category = data['category']
-            if 'status' in data:
-                ticket.status = data['status']
-            if 'room_id' in data:
-                # Verify room belongs to the same property
-                if data['room_id']:
-                    room = Room.query.filter_by(room_id=data['room_id'], property_id=ticket.property_id).first()
-                    if not room:
-                        return jsonify({'msg': 'Invalid room for this property'}), 400
-                ticket.room_id = data['room_id']
+            # Update ticket fields
+            for field in ['title', 'description', 'priority', 'category', 'status', 'room_id']:
+                if field in data:
+                    setattr(ticket, field, data[field])
 
             db.session.commit()
+
+            # Get notification recipients
+            property_managers = User.query.join(PropertyManager).filter(
+                PropertyManager.property_id == property.property_id
+            ).all()
+            super_admins = User.query.filter_by(role='super_admin').all()
+            recipients = list(set(property_managers + super_admins))
+
+            # Send email notifications
+            email_service = EmailService()
+            notification_type = "status_change" if 'status' in data else "update"
+            email_service.send_ticket_notification(
+                ticket=ticket,
+                property_name=property.name,
+                recipients=recipients,
+                notification_type=notification_type
+            )
+
             return jsonify({
                 "msg": "Ticket updated successfully",
-                "ticket": ticket.to_dict()
-            })
+                "ticket": ticket.to_dict(),
+                "notifications_sent": len(recipients)
+            }), 200
 
         elif request.method == 'DELETE':
-            # Check if user has permission to delete the ticket
-            if current_user.role == 'user' and ticket.user_id != current_user.user_id:
-                return jsonify({"msg": "Unauthorized - You can only delete your own tickets"}), 403
-            elif current_user.role == 'manager':
-                # Managers can only delete tickets from their properties
-                has_access = any(p.property_id == ticket.property_id for p in current_user.managed_properties)
-                if not has_access:
-                    return jsonify({"msg": "Unauthorized - You can only delete tickets from your managed properties"}), 403
+            # Notify before deleting
+            property_managers = User.query.join(PropertyManager).filter(
+                PropertyManager.property_id == property.property_id
+            ).all()
+            super_admins = User.query.filter_by(role='super_admin').all()
+            recipients = list(set(property_managers + super_admins))
 
-            # Delete associated task assignments first
-            TaskAssignment.query.filter_by(ticket_id=ticket_id).delete()
-            
-            # Delete the ticket
+            email_service = EmailService()
+            email_service.send_admin_alert(
+                subject=f"Ticket Deleted: {ticket.title}",
+                message=f"""
+                    <p>A ticket has been deleted:</p>
+                    <p><strong>Ticket ID:</strong> {ticket.ticket_id}</p>
+                    <p><strong>Title:</strong> {ticket.title}</p>
+                    <p><strong>Property:</strong> {property.name}</p>
+                    <p><strong>Deleted By:</strong> {current_user.username}</p>
+                """,
+                admin_emails=[user.email for user in recipients]
+            )
+
             db.session.delete(ticket)
             db.session.commit()
-            
-            return jsonify({"msg": "Ticket deleted successfully"})
+
+            return jsonify({"msg": "Ticket deleted successfully"}), 200
+
+        return jsonify(ticket.to_dict()), 200
 
     except Exception as e:
         db.session.rollback()
@@ -2177,116 +2189,123 @@ def upload_rooms(property_id):
             app.logger.error("User not found from JWT")
             return jsonify({"msg": "User not found"}), 404
 
-        # Check if user has permission to manage this property
-        if current_user.role == 'super_admin':
-            property = Property.query.get(property_id)
-        elif current_user.role == 'manager':
-            property = Property.query.filter(
-                Property.property_id == property_id,
-                Property.managers.any(user_id=current_user.user_id)
-            ).first()
-        else:
-            app.logger.warning(f"Unauthorized room upload attempt by user {current_user.user_id}")
+        # Add your upload logic here
+        # For example, you can use Flask's file upload handling
+        # to handle the file upload request
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"msg": "No file uploaded"}), 400
+
+        # Save the file to a specific directory
+        file_path = os.path.join('uploads', file.filename)
+        file.save(file_path)
+
+        return jsonify({"msg": "File uploaded successfully"}), 200
+
+    except Exception as e:
+        app.logger.error(f"Error uploading file: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/auth/reset-password', methods=['POST'])
+@jwt_required()
+def reset_password():
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+
+        data = request.get_json()
+        if not data or 'user_id' not in data or 'new_password' not in data:
+            return jsonify({"msg": "Missing required fields"}), 400
+
+        # Only super_admin and managers can reset other users' passwords
+        if current_user.role not in ['super_admin', 'manager'] and str(current_user.user_id) != str(data['user_id']):
             return jsonify({"msg": "Unauthorized"}), 403
 
-        if not property:
-            app.logger.warning(f"Property {property_id} not found or access denied")
-            return jsonify({"msg": "Property not found or access denied"}), 404
+        target_user = User.query.get(data['user_id'])
+        if not target_user:
+            return jsonify({"msg": "Target user not found"}), 404
 
-        if 'file' not in request.files:
-            return jsonify({"msg": "No file provided"}), 400
+        # Hash the new password
+        target_user.password = generate_password_hash(data['new_password'])
+        db.session.commit()
 
-        file = request.files['file']
-        if not file.filename.endswith('.csv'):
-            return jsonify({"msg": "Please upload a CSV file"}), 400
-
-        # Read and process CSV file
-        import csv
-        from io import StringIO
+        # Send email notifications
+        email_service = EmailService()
         
-        # Read the file content
-        content = file.read().decode('utf-8')
-        csv_data = csv.reader(StringIO(content))
-        
-        # Get headers
-        headers = next(csv_data)
-        expected_headers = ['name', 'type', 'floor', 'status', 'capacity', 'description']
-        
-        # Validate headers
-        if not all(header in headers for header in expected_headers):
-            return jsonify({
-                "msg": "Invalid CSV format. Please use the template provided.",
-                "expected_headers": expected_headers
-            }), 400
+        # Notify the user whose password was reset
+        email_service.send_password_reset_notification(
+            user=target_user,
+            reset_by=current_user,
+            is_self_reset=(str(current_user.user_id) == str(data['user_id']))
+        )
 
-        # Process rows
-        rooms_added = 0
-        rooms_updated = 0
-        errors = []
+        # If reset by admin/manager, send admin alert
+        if str(current_user.user_id) != str(data['user_id']):
+            super_admins = User.query.filter_by(role='super_admin').all()
+            admin_emails = [admin.email for admin in super_admins]
+            if admin_emails:
+                email_service.send_admin_alert(
+                    subject="Password Reset Alert",
+                    message=f"""
+                        <p>A password reset was performed:</p>
+                        <p><strong>User:</strong> {target_user.username}</p>
+                        <p><strong>Reset By:</strong> {current_user.username}</p>
+                        <p><strong>Time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                    """,
+                    admin_emails=admin_emails
+                )
 
-        for row_num, row in enumerate(csv_data, start=2):  # start=2 because row 1 is headers
-            try:
-                # Create a dictionary from the row data
-                room_data = dict(zip(headers, row))
-                
-                # Validate required fields
-                if not room_data.get('name'):
-                    errors.append(f"Row {row_num}: Room name is required")
-                    continue
-
-                # Check if room already exists
-                existing_room = Room.query.filter_by(
-                    name=room_data['name'],
-                    property_id=property_id
-                ).first()
-
-                if existing_room:
-                    # Update existing room
-                    existing_room.type = room_data.get('type', existing_room.type)
-                    existing_room.floor = int(room_data.get('floor')) if room_data.get('floor') else existing_room.floor
-                    existing_room.status = room_data.get('status', existing_room.status)
-                    existing_room.capacity = int(room_data.get('capacity')) if room_data.get('capacity') else existing_room.capacity
-                    existing_room.description = room_data.get('description', existing_room.description)
-                    rooms_updated += 1
-                else:
-                    # Create new room
-                    new_room = Room(
-                        name=room_data['name'],
-                        property_id=property_id,
-                        type=room_data.get('type', 'standard'),
-                        floor=int(room_data.get('floor', 1)),
-                        status=room_data.get('status', 'Available'),
-                        capacity=int(room_data.get('capacity', 0)),
-                        description=room_data.get('description', '')
-                    )
-                    db.session.add(new_room)
-                    rooms_added += 1
-
-            except Exception as e:
-                errors.append(f"Row {row_num}: {str(e)}")
-                continue
-
-        # Commit changes if there are no errors
-        if not errors:
-            try:
-                db.session.commit()
-                return jsonify({
-                    "msg": f"Successfully processed CSV file. Added {rooms_added} rooms and updated {rooms_updated} rooms.",
-                    "rooms_added": rooms_added,
-                    "rooms_updated": rooms_updated
-                }), 200
-            except Exception as e:
-                db.session.rollback()
-                app.logger.error(f"Error committing room changes: {str(e)}")
-                return jsonify({"msg": "Error saving rooms to database"}), 500
-        else:
-            db.session.rollback()
-            return jsonify({
-                "msg": "Errors occurred while processing CSV file",
-                "errors": errors
-            }), 400
+        return jsonify({"msg": "Password reset successful"}), 200
 
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Error processing room upload: {str(e)}")
+        app.logger.error(f"Error resetting password: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/auth/request-reset', methods=['POST'])
+def request_password_reset():
+    try:
+        data = request.get_json()
+        if not data or 'email' not in data:
+            return jsonify({"msg": "Email is required"}), 400
+
+        user = User.query.filter_by(email=data['email']).first()
+        if not user:
+            # Return success even if user not found to prevent email enumeration
+            return jsonify({"msg": "If the email exists, a reset link will be sent"}), 200
+
+        # Generate a reset token
+        reset_token = generate_password_reset_token()
+        user.reset_token = reset_token
+        user.reset_token_expires = datetime.now() + timedelta(hours=1)
+        db.session.commit()
+
+        # Send reset email
+        email_service = EmailService()
+        email_service.send_password_reset_link(
+            user=user,
+            reset_token=reset_token
+        )
+
+        # Send admin alert
+        super_admins = User.query.filter_by(role='super_admin').all()
+        admin_emails = [admin.email for admin in super_admins]
+        if admin_emails:
+            email_service.send_admin_alert(
+                subject="Password Reset Request",
+                message=f"""
+                    <p>A password reset was requested:</p>
+                    <p><strong>User:</strong> {user.username}</p>
+                    <p><strong>Email:</strong> {user.email}</p>
+                    <p><strong>Time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                """,
+                admin_emails=admin_emails
+            )
+
+        return jsonify({"msg": "If the email exists, a reset link will be sent"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error requesting password reset: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500

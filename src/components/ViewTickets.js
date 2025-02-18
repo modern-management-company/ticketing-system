@@ -24,12 +24,17 @@ import {
   DialogActions,
   FormControl,
   InputLabel,
-  IconButton
+  IconButton,
+  Card,
+  CardContent,
+  CardActions,
+  Grid
 } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PropertySwitcher from './PropertySwitcher';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 const ViewTickets = () => {
   const { auth } = useAuth();
@@ -54,6 +59,8 @@ const ViewTickets = () => {
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
+
+  const isMobile = useIsMobile();
 
   // Add this useEffect
   useEffect(() => {
@@ -313,6 +320,90 @@ const ViewTickets = () => {
     }
   };
 
+  const TicketCard = ({ ticket }) => (
+    <Card sx={{ mb: 2 }}>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>{ticket.title}</Typography>
+        <Typography color="textSecondary" gutterBottom>ID: {ticket.ticket_id}</Typography>
+        <Typography variant="body2" paragraph>{ticket.description}</Typography>
+        
+        <Grid container spacing={1} sx={{ mb: 1 }}>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Status</Typography>
+            <Chip 
+              label={ticket.status}
+              color={
+                ticket.status.toLowerCase() === 'open' ? 'error' :
+                ticket.status.toLowerCase() === 'in progress' ? 'warning' :
+                'success'
+              }
+              size="small"
+            />
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Priority</Typography>
+            <Chip 
+              label={ticket.priority}
+              color={
+                ticket.priority === 'Critical' ? 'error' :
+                ticket.priority === 'High' ? 'warning' :
+                ticket.priority === 'Medium' ? 'info' :
+                'success'
+              }
+              size="small"
+            />
+          </Grid>
+        </Grid>
+
+        <Grid container spacing={1}>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Room</Typography>
+            <Typography variant="body2">
+              {rooms.find(r => r.room_id === ticket.room_id)?.name || 'N/A'}
+            </Typography>
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Category</Typography>
+            <Typography variant="body2">{ticket.category}</Typography>
+          </Grid>
+        </Grid>
+
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="subtitle2">Created By</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2">{ticket.created_by_username}</Typography>
+            <Chip 
+              label={ticket.created_by_group || 'N/A'} 
+              variant="outlined"
+              size="small"
+            />
+          </Box>
+        </Box>
+      </CardContent>
+      <CardActions>
+        <Button
+          startIcon={<EditIcon />}
+          onClick={() => handleOpenDialog(ticket)}
+          size="small"
+        >
+          Edit
+        </Button>
+        {(auth?.user?.role === 'super_admin' || 
+          managers.some(m => m.user_id === auth?.user?.user_id) || 
+          ticket.created_by_id === auth?.user?.user_id) && (
+          <Button
+            startIcon={<DeleteIcon />}
+            onClick={() => handleDeleteTicket(ticket.ticket_id)}
+            size="small"
+            color="error"
+          >
+            Delete
+          </Button>
+        )}
+      </CardActions>
+    </Card>
+  );
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -350,89 +441,99 @@ const ViewTickets = () => {
           <CircularProgress />
         </Box>
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>Title</TableCell>
-                <TableCell>Description</TableCell>
-                <TableCell>Room</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Priority</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell>Created By</TableCell>
-                <TableCell>Group</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+        <>
+          {isMobile ? (
+            <Box sx={{ mt: 2 }}>
               {tickets.map((ticket) => (
-                <TableRow key={ticket.ticket_id}>
-                  <TableCell>{ticket.ticket_id}</TableCell>
-                  <TableCell>{ticket.title}</TableCell>
-                  <TableCell>{ticket.description}</TableCell>
-                  <TableCell>
-                    {rooms.find(r => r.room_id === ticket.room_id)?.name || 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={ticket.status}
-                      color={
-                        ticket.status.toLowerCase() === 'open' ? 'error' :
-                        ticket.status.toLowerCase() === 'in progress' ? 'warning' :
-                        'success'
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={ticket.priority}
-                      color={
-                        ticket.priority === 'Critical' ? 'error' :
-                        ticket.priority === 'High' ? 'warning' :
-                        ticket.priority === 'Medium' ? 'info' :
-                        'success'
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>{ticket.category}</TableCell>
-                  <TableCell>{ticket.created_by_username}</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={ticket.created_by_group || 'N/A'} 
-                      variant="outlined"
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Button
-                        startIcon={<EditIcon />}
-                        onClick={() => handleOpenDialog(ticket)}
-                        size="small"
-                      >
-                        Edit
-                      </Button>
-                      {(auth?.user?.role === 'super_admin' || 
-                        managers.some(m => m.user_id === auth?.user?.user_id) || 
-                        ticket.created_by_id === auth?.user?.user_id) && (
-                        <Button
-                          startIcon={<DeleteIcon />}
-                          onClick={() => handleDeleteTicket(ticket.ticket_id)}
-                          size="small"
-                          color="error"
-                        >
-                          Delete
-                        </Button>
-                      )}
-                    </Box>
-                  </TableCell>
-                </TableRow>
+                <TicketCard key={ticket.ticket_id} ticket={ticket} />
               ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            </Box>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>ID</TableCell>
+                    <TableCell>Title</TableCell>
+                    <TableCell>Description</TableCell>
+                    <TableCell>Room</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Priority</TableCell>
+                    <TableCell>Category</TableCell>
+                    <TableCell>Created By</TableCell>
+                    <TableCell>Group</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {tickets.map((ticket) => (
+                    <TableRow key={ticket.ticket_id}>
+                      <TableCell>{ticket.ticket_id}</TableCell>
+                      <TableCell>{ticket.title}</TableCell>
+                      <TableCell>{ticket.description}</TableCell>
+                      <TableCell>
+                        {rooms.find(r => r.room_id === ticket.room_id)?.name || 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={ticket.status}
+                          color={
+                            ticket.status.toLowerCase() === 'open' ? 'error' :
+                            ticket.status.toLowerCase() === 'in progress' ? 'warning' :
+                            'success'
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={ticket.priority}
+                          color={
+                            ticket.priority === 'Critical' ? 'error' :
+                            ticket.priority === 'High' ? 'warning' :
+                            ticket.priority === 'Medium' ? 'info' :
+                            'success'
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>{ticket.category}</TableCell>
+                      <TableCell>{ticket.created_by_username}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={ticket.created_by_group || 'N/A'} 
+                          variant="outlined"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Button
+                            startIcon={<EditIcon />}
+                            onClick={() => handleOpenDialog(ticket)}
+                            size="small"
+                          >
+                            Edit
+                          </Button>
+                          {(auth?.user?.role === 'super_admin' || 
+                            managers.some(m => m.user_id === auth?.user?.user_id) || 
+                            ticket.created_by_id === auth?.user?.user_id) && (
+                            <Button
+                              startIcon={<DeleteIcon />}
+                              onClick={() => handleDeleteTicket(ticket.ticket_id)}
+                              size="small"
+                              color="error"
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </>
       )}
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>

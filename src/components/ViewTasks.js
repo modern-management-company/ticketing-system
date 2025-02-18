@@ -26,7 +26,10 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Tooltip
+  Tooltip,
+  Card,
+  CardContent,
+  CardActions
 } from "@mui/material";
 import { useAuth } from '../context/AuthContext';
 import EditIcon from '@mui/icons-material/Edit';
@@ -40,6 +43,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
 import { format } from 'date-fns';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 const ViewTasks = () => {
   const navigate = useNavigate();
@@ -64,6 +68,7 @@ const ViewTasks = () => {
   });
   const [openDueDatePicker, setOpenDueDatePicker] = useState(false);
   const [managers, setManagers] = useState([]);
+  const isMobile = useIsMobile();
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -312,6 +317,75 @@ const ViewTasks = () => {
     }
   };
 
+  const TaskCard = ({ task }) => (
+    <Card sx={{ mb: 2 }}>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>{task.title}</Typography>
+        <Typography color="textSecondary" gutterBottom>ID: {task.task_id}</Typography>
+        <Typography variant="body2" paragraph>{task.description}</Typography>
+        
+        <Grid container spacing={1} sx={{ mb: 1 }}>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Status</Typography>
+            <Chip 
+              label={task.status}
+              color={getStatusColor(task.status)}
+              size="small"
+            />
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Priority</Typography>
+            <Chip 
+              label={task.priority}
+              color={
+                task.priority === 'Critical' ? 'error' :
+                task.priority === 'High' ? 'warning' :
+                task.priority === 'Medium' ? 'info' :
+                'success'
+              }
+              size="small"
+            />
+          </Grid>
+        </Grid>
+
+        <Grid container spacing={1}>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Assigned To</Typography>
+            <Typography variant="body2">
+              {users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unassigned'}
+            </Typography>
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Due Date</Typography>
+            <Typography variant="body2">
+              {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}
+            </Typography>
+          </Grid>
+        </Grid>
+      </CardContent>
+      <CardActions>
+        <Button
+          startIcon={<EditIcon />}
+          onClick={() => handleOpenDialog(task)}
+          size="small"
+        >
+          Edit
+        </Button>
+        {(auth?.user?.role === 'super_admin' || 
+          managers.some(m => m.user_id === auth?.user?.user_id)) && (
+          <Button
+            startIcon={<DeleteIcon />}
+            onClick={() => handleDeleteTask(task.task_id)}
+            size="small"
+            color="error"
+          >
+            Delete
+          </Button>
+        )}
+      </CardActions>
+    </Card>
+  );
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -358,89 +432,99 @@ const ViewTasks = () => {
           <CircularProgress />
         </Box>
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>Title</TableCell>
-                <TableCell>Description</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Priority</TableCell>
-                <TableCell>Due Date</TableCell>
-                <TableCell>Assigned To</TableCell>
-                <TableCell>Group</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+        <>
+          {isMobile ? (
+            <Box sx={{ mt: 2 }}>
               {tasks.map((task) => (
-                <TableRow key={task.task_id}>
-                  <TableCell>{task.task_id}</TableCell>
-                  <TableCell>{task.title}</TableCell>
-                  <TableCell>{task.description}</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={task.status}
-                      color={
-                        task.status.toLowerCase() === 'pending' ? 'warning' :
-                        task.status.toLowerCase() === 'in progress' ? 'info' :
-                        task.status.toLowerCase() === 'completed' ? 'success' :
-                        'default'
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={task.priority}
-                      color={
-                        task.priority === 'Critical' ? 'error' :
-                        task.priority === 'High' ? 'warning' :
-                        task.priority === 'Medium' ? 'info' :
-                        'success'
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    {users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unassigned'}
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={users.find(u => u.user_id === task.assigned_to_id)?.group || 'N/A'} 
-                      variant="outlined"
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Button
-                        startIcon={<EditIcon />}
-                        onClick={() => handleOpenDialog(task)}
-                        size="small"
-                      >
-                        Edit
-                      </Button>
-                      {(auth?.user?.role === 'super_admin' || 
-                        managers.some(m => m.user_id === auth?.user?.user_id)) && (
-                        <Button
-                          startIcon={<DeleteIcon />}
-                          onClick={() => handleDeleteTask(task.task_id)}
-                          size="small"
-                          color="error"
-                        >
-                          Delete
-                        </Button>
-                      )}
-                    </Box>
-                  </TableCell>
-                </TableRow>
+                <TaskCard key={task.task_id} task={task} />
               ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            </Box>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>ID</TableCell>
+                    <TableCell>Title</TableCell>
+                    <TableCell>Description</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Priority</TableCell>
+                    <TableCell>Due Date</TableCell>
+                    <TableCell>Assigned To</TableCell>
+                    <TableCell>Group</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {tasks.map((task) => (
+                    <TableRow key={task.task_id}>
+                      <TableCell>{task.task_id}</TableCell>
+                      <TableCell>{task.title}</TableCell>
+                      <TableCell>{task.description}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={task.status}
+                          color={
+                            task.status.toLowerCase() === 'pending' ? 'warning' :
+                            task.status.toLowerCase() === 'in progress' ? 'info' :
+                            task.status.toLowerCase() === 'completed' ? 'success' :
+                            'default'
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={task.priority}
+                          color={
+                            task.priority === 'Critical' ? 'error' :
+                            task.priority === 'High' ? 'warning' :
+                            task.priority === 'Medium' ? 'info' :
+                            'success'
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        {users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unassigned'}
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={users.find(u => u.user_id === task.assigned_to_id)?.group || 'N/A'} 
+                          variant="outlined"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Button
+                            startIcon={<EditIcon />}
+                            onClick={() => handleOpenDialog(task)}
+                            size="small"
+                          >
+                            Edit
+                          </Button>
+                          {(auth?.user?.role === 'super_admin' || 
+                            managers.some(m => m.user_id === auth?.user?.user_id)) && (
+                            <Button
+                              startIcon={<DeleteIcon />}
+                              onClick={() => handleDeleteTask(task.task_id)}
+                              size="small"
+                              color="error"
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </>
       )}
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>

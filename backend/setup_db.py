@@ -96,42 +96,50 @@ def setup_database():
         db.session.commit()
 
         # Create Users
-        # Create Super Admin - Aditya
-        aditya = User(
-            username='aditya',
-            email='adityadixit@live.com',
-            password='aditya123',
+        # Create Super Admin
+        admin = User(
+            username='admin',
+            email='admin@modernhotels.management',
+            password='admin@123',
             role='super_admin',
             group='Executive'
         )
         
-        # Create Managers
-        adixit = User(
-            username='adixit',
-            email='adixit@nyu.edu',
-            password='adixit123',
-            role='manager',
-            group='Executive'
-        )
-        
-        manager2 = User(
-            username='manager2',
-            email='manager2@example.com',
-            password='manager2123',
-            role='manager',
-            group='Executive'
-        )
-        
-        # Create Regular User - Adidix
-        adidix = User(
-            username='adidix',
-            email='aditya@adityadixit.com',
-            password='adidix123',
+        # Create Basic User
+        basic_user = User(
+            username='user',
+            email='user@modernhotels.management',
+            password='basic@123',
             role='user',
             group='Front Desk'
         )
         
-        db.session.add_all([aditya, adixit, manager2, adidix])
+        # Create Department Managers
+        manager_engineering = User(
+            username='manager.engineering',
+            email='manager.engineering@modernhotels.management',
+            password='engineering@123',
+            role='manager',
+            group='Engineering'
+        )
+        
+        manager_frontdesk = User(
+            username='manager.frontdesk',
+            email='manager.frontdesk@modernhotels.management',
+            password='frontdesk@123',
+            role='manager',
+            group='Front Desk'
+        )
+        
+        manager_housekeeping = User(
+            username='manager.housekeeping',
+            email='manager.housekeeping@modernhotels.management',
+            password='housekeeping@123',
+            role='manager',
+            group='Housekeeping'
+        )
+        
+        db.session.add_all([admin, basic_user, manager_engineering, manager_frontdesk, manager_housekeeping])
         db.session.commit()
         
         # Create regular users (2 users per property)
@@ -155,8 +163,8 @@ def setup_database():
 
         # Create property manager assignments
         for prop in active_properties:
-            # Assign both managers to each active property
-            for manager in [adixit, manager2]:
+            # Assign managers based on their groups
+            for manager in [manager_engineering, manager_frontdesk, manager_housekeeping]:
                 prop_manager = PropertyManager(
                     property_id=prop.property_id,
                     user_id=manager.user_id
@@ -184,8 +192,8 @@ def setup_database():
             user1.assigned_properties.append(other_prop)
             user2.assigned_properties.append(other_prop)
         
-        # Assign all active properties to adidix (regular user)
-        adidix.assigned_properties = active_properties
+        # Assign all active properties to basic user
+        basic_user.assigned_properties = active_properties
 
         # Create Rooms for each property
         room_types = ['Single', 'Double', 'Suite', 'Conference', 'Other'];
