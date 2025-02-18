@@ -34,6 +34,7 @@ const ViewRooms = () => {
   const { auth } = useAuth();
   const [rooms, setRooms] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(null);
+  const [selectedFloor, setSelectedFloor] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -62,7 +63,7 @@ const ViewRooms = () => {
 
   const fetchRooms = async () => {
     if (!selectedProperty) return;
-    
+
     try {
       setLoading(true);
       const response = await apiClient.get(`/properties/${selectedProperty}/rooms`);
@@ -91,7 +92,7 @@ const ViewRooms = () => {
     try {
       setError(null);
       setSuccess(null);
-      
+
       if (!roomFormData.name) {
         setError('Room name is required');
         return;
@@ -128,9 +129,9 @@ const ViewRooms = () => {
         setError(null);
         setSuccess(null);
         setLoading(true);
-        
+
         const response = await apiClient.delete(`/properties/${selectedProperty}/rooms/${roomId}`);
-        
+
         if (response.status === 200) {
           setSuccess('Room deleted successfully');
           setRooms(prevRooms => prevRooms.filter(room => room.room_id !== roomId));
@@ -153,12 +154,34 @@ const ViewRooms = () => {
     });
   };
 
+  const getUniqueFloors = () => {
+    const floors = rooms.map(room => room.floor).filter(floor => floor !== null && floor !== undefined);
+    return [...new Set(floors)].sort((a, b) => a - b);
+  };
+
+  const filteredRooms = rooms.filter(room =>
+    selectedFloor === 'all' || room.floor === selectedFloor
+  );
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Room Management</Typography>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
+          <FormControl sx={{ minWidth: 120 }}>
+            <InputLabel>Floor</InputLabel>
+            <Select
+              value={selectedFloor}
+              onChange={(e) => setSelectedFloor(e.target.value)}
+              label="Floor"
+            >
+              <MenuItem value="all">All Floors</MenuItem>
+              {getUniqueFloors().map(floor => (
+                <MenuItem key={floor} value={floor}>Floor {floor}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           {selectedProperty && isManager && (
             <Button
               variant="contained"
@@ -179,10 +202,10 @@ const ViewRooms = () => {
           <CircularProgress />
         ) : (
           <Grid container spacing={3}>
-            {rooms.map((room) => (
+            {filteredRooms.map((room) => (
               <Grid item xs={12} sm={6} md={4} lg={3} key={room.room_id}>
-                <Card 
-                  sx={{ 
+                <Card
+                  sx={{
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
@@ -190,21 +213,21 @@ const ViewRooms = () => {
                   }}
                 >
                   <CardContent sx={{ flexGrow: 1 }}>
-                    <Box sx={{ 
-                      position: 'absolute', 
-                      top: 10, 
+                    <Box sx={{
+                      position: 'absolute',
+                      top: 10,
                       right: 10,
                       display: 'flex',
                       gap: 1
                     }}>
-                      <Chip 
-                        label={room.status} 
+                      <Chip
+                        label={room.status}
                         size="small"
                         color={
                           room.status === 'Available' ? 'success' :
-                          room.status === 'Occupied' ? 'error' :
-                          room.status === 'Maintenance' ? 'warning' :
-                          'default'
+                            room.status === 'Occupied' ? 'error' :
+                              room.status === 'Maintenance' ? 'warning' :
+                                'default'
                         }
                       />
                     </Box>
