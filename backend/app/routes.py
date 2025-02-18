@@ -2167,3 +2167,126 @@ def manage_ticket(ticket_id):
         db.session.rollback()
         app.logger.error(f"Error managing ticket: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/properties/<int:property_id>/rooms/upload', methods=['POST'])
+@jwt_required()
+def upload_rooms(property_id):
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            app.logger.error("User not found from JWT")
+            return jsonify({"msg": "User not found"}), 404
+
+        # Check if user has permission to manage this property
+        if current_user.role == 'super_admin':
+            property = Property.query.get(property_id)
+        elif current_user.role == 'manager':
+            property = Property.query.filter(
+                Property.property_id == property_id,
+                Property.managers.any(user_id=current_user.user_id)
+            ).first()
+        else:
+            app.logger.warning(f"Unauthorized room upload attempt by user {current_user.user_id}")
+            return jsonify({"msg": "Unauthorized"}), 403
+
+        if not property:
+            app.logger.warning(f"Property {property_id} not found or access denied")
+            return jsonify({"msg": "Property not found or access denied"}), 404
+
+        if 'file' not in request.files:
+            return jsonify({"msg": "No file provided"}), 400
+
+        file = request.files['file']
+        if not file.filename.endswith('.csv'):
+            return jsonify({"msg": "Please upload a CSV file"}), 400
+
+        # Read and process CSV file
+        import csv
+        from io import StringIO
+        
+        # Read the file content
+        content = file.read().decode('utf-8')
+        csv_data = csv.reader(StringIO(content))
+        
+        # Get headers
+        headers = next(csv_data)
+        expected_headers = ['name', 'type', 'floor', 'status', 'capacity', 'description']
+        
+        # Validate headers
+        if not all(header in headers for header in expected_headers):
+            return jsonify({
+                "msg": "Invalid CSV format. Please use the template provided.",
+                "expected_headers": expected_headers
+            }), 400
+
+        # Process rows
+        rooms_added = 0
+        rooms_updated = 0
+        errors = []
+
+        for row_num, row in enumerate(csv_data, start=2):  # start=2 because row 1 is headers
+            try:
+                # Create a dictionary from the row data
+                room_data = dict(zip(headers, row))
+                
+                # Validate required fields
+                if not room_data.get('name'):
+                    errors.append(f"Row {row_num}: Room name is required")
+                    continue
+
+                # Check if room already exists
+                existing_room = Room.query.filter_by(
+                    name=room_data['name'],
+                    property_id=property_id
+                ).first()
+
+                if existing_room:
+                    # Update existing room
+                    existing_room.type = room_data.get('type', existing_room.type)
+                    existing_room.floor = int(room_data.get('floor')) if room_data.get('floor') else existing_room.floor
+                    existing_room.status = room_data.get('status', existing_room.status)
+                    existing_room.capacity = int(room_data.get('capacity')) if room_data.get('capacity') else existing_room.capacity
+                    existing_room.description = room_data.get('description', existing_room.description)
+                    rooms_updated += 1
+                else:
+                    # Create new room
+                    new_room = Room(
+                        name=room_data['name'],
+                        property_id=property_id,
+                        type=room_data.get('type', 'standard'),
+                        floor=int(room_data.get('floor', 1)),
+                        status=room_data.get('status', 'Available'),
+                        capacity=int(room_data.get('capacity', 0)),
+                        description=room_data.get('description', '')
+                    )
+                    db.session.add(new_room)
+                    rooms_added += 1
+
+            except Exception as e:
+                errors.append(f"Row {row_num}: {str(e)}")
+                continue
+
+        # Commit changes if there are no errors
+        if not errors:
+            try:
+                db.session.commit()
+                return jsonify({
+                    "msg": f"Successfully processed CSV file. Added {rooms_added} rooms and updated {rooms_updated} rooms.",
+                    "rooms_added": rooms_added,
+                    "rooms_updated": rooms_updated
+                }), 200
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error committing room changes: {str(e)}")
+                return jsonify({"msg": "Error saving rooms to database"}), 500
+        else:
+            db.session.rollback()
+            return jsonify({
+                "msg": "Errors occurred while processing CSV file",
+                "errors": errors
+            }), 400
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error processing room upload: {str(e)}")
+        return jsonify({"msg": "Internal server error"}), 500

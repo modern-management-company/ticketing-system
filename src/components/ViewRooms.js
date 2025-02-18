@@ -29,6 +29,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 import PropertySwitcher from './PropertySwitcher';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 
 const ViewRooms = () => {
   const { auth } = useAuth();
@@ -45,6 +48,9 @@ const ViewRooms = () => {
     floor: '',
     status: 'Available'
   });
+  const [uploadError, setUploadError] = useState(null);
+  const [uploadSuccess, setUploadSuccess] = useState(null);
+  const fileInputRef = React.useRef();
 
   const roomTypes = ['Single', 'Double', 'Suite', 'Conference', 'Other'];
   const roomStatuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];
@@ -167,6 +173,64 @@ const ViewRooms = () => {
     selectedFloor === 'all' || room.floor === selectedFloor
   );
 
+  const downloadTemplate = () => {
+    const headers = ['name', 'type', 'floor', 'status', 'capacity', 'description'];
+    const sampleData = [
+      'Room 101,Single,1,Available,2,Standard single room',
+      'Room 102,Double,1,Available,4,Spacious double room',
+      'Conference A,Conference,2,Available,20,Large conference room'
+    ];
+    
+    const csvContent = [headers.join(','), ...sampleData].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'rooms_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (file.type !== 'text/csv') {
+      setUploadError('Please upload a CSV file');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('property_id', selectedProperty);
+
+    try {
+      setUploadError(null);
+      setUploadSuccess(null);
+      setLoading(true);
+
+      const response = await apiClient.post(`/properties/${selectedProperty}/rooms/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      setUploadSuccess(response.data.msg);
+      await fetchRooms();
+    } catch (error) {
+      console.error('Failed to upload rooms:', error);
+      setUploadError(error.response?.data?.msg || 'Failed to upload rooms');
+    } finally {
+      setLoading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -187,19 +251,44 @@ const ViewRooms = () => {
             </Select>
           </FormControl>
           {selectedProperty && isManager && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setOpenDialog(true)}
-            >
-              Add Room
-            </Button>
+            <>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setOpenDialog(true)}
+              >
+                Add Room
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<FileDownloadIcon />}
+                onClick={downloadTemplate}
+              >
+                Download Template
+              </Button>
+              <Button
+                variant="outlined"
+                component="label"
+                startIcon={<CloudUploadIcon />}
+              >
+                Upload CSV
+                <input
+                  type="file"
+                  hidden
+                  accept=".csv"
+                  onChange={handleFileUpload}
+                  ref={fileInputRef}
+                />
+              </Button>
+            </>
           )}
         </Box>
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+      {uploadError && <Alert severity="error" sx={{ mb: 2 }}>{uploadError}</Alert>}
+      {uploadSuccess && <Alert severity="success" sx={{ mb: 2 }}>{uploadSuccess}</Alert>}
 
       {selectedProperty ? (
         loading ? (
