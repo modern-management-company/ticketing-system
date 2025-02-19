@@ -214,11 +214,44 @@ def create_ticket():
             db.session.add(new_ticket)
             db.session.commit()
 
-            # Get property managers and super admins for notifications
+            # Find the appropriate manager based on category
+            category = data['category']
             property_managers = User.query.join(PropertyManager).filter(
                 PropertyManager.property_id == data['property_id']
             ).all()
-            
+
+            assigned_manager = None
+            for manager in property_managers:
+                if (category == 'Maintenance' and manager.group == 'Engineering') or \
+                   (category == 'Housekeeping' and manager.group == 'Housekeeping') or \
+                   (category == 'General' and manager.group == 'Front Desk'):
+                    assigned_manager = manager
+                    break
+
+            if assigned_manager:
+                # Create and assign a task
+                task = Task(
+                    title=f"Task for Ticket: {data['title']}",
+                    description=f"Auto-generated task for ticket. Category: {category}\nDescription: {data['description']}",
+                    status='pending',
+                    priority=data['priority'],
+                    property_id=data['property_id'],
+                    assigned_to_id=assigned_manager.user_id
+                )
+                db.session.add(task)
+                db.session.flush()  # This will populate the task_id
+                
+                # Create task assignment
+                task_assignment = TaskAssignment(
+                    task_id=task.task_id,
+                    ticket_id=new_ticket.ticket_id,
+                    assigned_to_user_id=assigned_manager.user_id,
+                    status='Pending'
+                )
+                db.session.add(task_assignment)
+                db.session.commit()
+
+            # Get property managers and super admins for notifications
             super_admins = User.query.filter_by(role='super_admin').all()
             
             # Combine recipients and remove duplicates
@@ -237,11 +270,21 @@ def create_ticket():
                 notification_type="new"
             )
 
-            return jsonify({
+            response_data = {
                 'msg': 'Ticket created successfully',
                 'ticket': new_ticket.to_dict(),
                 'notifications_sent': notifications_sent > 0
-            }), 201
+            }
+            
+            if assigned_manager:
+                response_data['task_created'] = True
+                response_data['assigned_to'] = {
+                    'user_id': assigned_manager.user_id,
+                    'username': assigned_manager.username,
+                    'group': assigned_manager.group
+                }
+
+            return jsonify(response_data), 201
 
         except Exception as e:
             db.session.rollback()
@@ -604,12 +647,17 @@ def assign_task():
         if not ticket or not user:
             return jsonify({'message': 'Invalid ticket or user ID'}), 404
 
+        # Map ticket status to task status
+        task_status = 'completed' if ticket.status == 'completed' else \
+                     'in progress' if ticket.status == 'in progress' else \
+                     'pending'
+
         # Create a new Task first
         task = Task(
             title=f"[Ticket #{ticket.ticket_id}] {ticket.title}",
             description=ticket.description,
-            status='pending',
-            priority=ticket.priority,
+            status=task_status,  # Use mapped status
+            priority=ticket.priority,  # Sync priority with ticket
             property_id=ticket.property_id,
             assigned_to_id=data['user_id']
         )
@@ -621,7 +669,7 @@ def assign_task():
             task_id=task.task_id,
             ticket_id=data['ticket_id'],
             assigned_to_user_id=data['user_id'],
-            status='Pending'
+            status=task_status  # Use mapped status
         )
         db.session.add(task_assignment)
         db.session.commit()
@@ -734,8 +782,12 @@ def manage_task(task_id):
             task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
             task_data = task.to_dict()
             if task_assignment:
-                task_data['ticket_id'] = task_assignment.ticket_id
-                task_data['ticket_status'] = task_assignment.status
+                ticket = Ticket.query.get(task_assignment.ticket_id)
+                task_data.update({
+                    'ticket_id': task_assignment.ticket_id,
+                    'ticket_status': ticket.status if ticket else task_assignment.status,
+                    'ticket_priority': ticket.priority if ticket else None
+                })
             return jsonify(task_data)
 
         elif request.method in ['PUT', 'PATCH']:
@@ -745,8 +797,10 @@ def manage_task(task_id):
 
             app.logger.info(f"Updating task {task_id} with data: {data}")
 
-            # Store old assignee for notification purposes
+            # Store old values for notification purposes
             old_assignee_id = task.assigned_to_id
+            old_status = task.status
+            old_priority = task.priority
 
             # Update task fields
             if 'title' in data:
@@ -755,17 +809,27 @@ def manage_task(task_id):
                 task.description = data['description']
             if 'status' in data:
                 task.status = data['status']
-                # Update associated task assignment status
+                # Update associated task assignment and ticket
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
                     task_assignment.status = data['status']
-                    # Update ticket status if task is completed
-                    if data['status'] == 'completed':
-                        ticket = Ticket.query.get(task_assignment.ticket_id)
-                        if ticket:
+                    ticket = Ticket.query.get(task_assignment.ticket_id)
+                    if ticket:
+                        # Map task status to ticket status
+                        if data['status'] == 'completed':
                             ticket.status = 'completed'
+                        elif data['status'] == 'in progress':
+                            ticket.status = 'in progress'
+                        elif data['status'] == 'pending':
+                            ticket.status = 'open'
             if 'priority' in data:
                 task.priority = data['priority']
+                # Update associated ticket priority
+                task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
+                if task_assignment:
+                    ticket = Ticket.query.get(task_assignment.ticket_id)
+                    if ticket:
+                        ticket.priority = data['priority']
             if 'assigned_to_id' in data:
                 task.assigned_to_id = data['assigned_to_id']
                 # Update task assignment if exists
@@ -905,21 +969,24 @@ def create_task():
         db.session.add(task)
         db.session.flush()  # Flush to get the task_id
 
-        # If this task is imported from a ticket, create task assignment
+        # If this task is imported from a ticket, create task assignment and sync status/priority
         if 'ticket_id' in data:
             ticket = Ticket.query.get(data['ticket_id'])
             if ticket:
+                # Map ticket status to task status
+                task_status = 'completed' if ticket.status == 'completed' else \
+                            'in progress' if ticket.status == 'in progress' else \
+                            'pending'
+                task.status = task_status
+                task.priority = ticket.priority  # Sync priority with ticket
+
                 task_assignment = TaskAssignment(
                     task_id=task.task_id,
                     ticket_id=data['ticket_id'],
                     assigned_to_user_id=data.get('assigned_to_id'),
-                    status=data.get('status', 'Pending')
+                    status=task_status
                 )
                 db.session.add(task_assignment)
-
-                # Update the ticket status if needed
-                if data.get('status') == 'completed':
-                    ticket.status = 'completed'
 
         db.session.commit()
 
@@ -2120,13 +2187,49 @@ def manage_ticket(ticket_id):
             changes = []  # Track changes for notification
 
             # Update basic fields if provided
-            for field in ['title', 'description', 'priority', 'category', 'subcategory', 'status']:
+            for field in ['title', 'description', 'category', 'subcategory']:
                 if field in data:
                     old_value = getattr(ticket, field)
                     new_value = data[field]
                     if old_value != new_value:
                         setattr(ticket, field, new_value)
                         changes.append(f"{field.title()}: {old_value} → {new_value}")
+
+            # Handle status and priority updates with task synchronization
+            if 'status' in data:
+                old_status = ticket.status
+                new_status = data['status']
+                if old_status != new_status:
+                    ticket.status = new_status
+                    changes.append(f"Status: {old_status} → {new_status}")
+                    
+                    # Update associated task status
+                    task_assignment = TaskAssignment.query.filter_by(ticket_id=ticket_id).first()
+                    if task_assignment:
+                        task = Task.query.get(task_assignment.task_id)
+                        if task:
+                            # Map ticket status to task status
+                            if new_status == 'completed':
+                                task.status = 'completed'
+                            elif new_status == 'in progress':
+                                task.status = 'in progress'
+                            elif new_status == 'open':
+                                task.status = 'pending'
+                            task_assignment.status = task.status
+
+            if 'priority' in data:
+                old_priority = ticket.priority
+                new_priority = data['priority']
+                if old_priority != new_priority:
+                    ticket.priority = new_priority
+                    changes.append(f"Priority: {old_priority} → {new_priority}")
+                    
+                    # Update associated task priority
+                    task_assignment = TaskAssignment.query.filter_by(ticket_id=ticket_id).first()
+                    if task_assignment:
+                        task = Task.query.get(task_assignment.task_id)
+                        if task:
+                            task.priority = new_priority
 
             # Handle room_id update
             if 'room_id' in data:
