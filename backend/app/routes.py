@@ -186,10 +186,10 @@ def create_ticket():
             description=data['description'],
             priority=data['priority'],
             category=data['category'],
-            subcategory=data.get('subcategory'),  # Add subcategory support
+            subcategory=data.get('subcategory'),  # Optional field
             property_id=data['property_id'],
             user_id=current_user.user_id,
-            room_id=data.get('room_id')
+            room_id=data.get('room_id')  # Optional field
         )
 
         # If room_id is provided, validate it exists and belongs to the property
@@ -1586,10 +1586,12 @@ def get_property_tickets(property_id):
                 'status': ticket.status,
                 'priority': ticket.priority,
                 'category': ticket.category,
+                'subcategory': ticket.subcategory,  # Add subcategory to response
                 'room_id': ticket.room_id,
                 'room_name': room.name if room else None,
                 'created_by_id': ticket.user_id,
                 'created_by_username': creator.username if creator else 'Unknown',
+                'created_by_group': creator.group if creator else 'Unknown',
                 'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
                 'property_id': ticket.property_id
             })

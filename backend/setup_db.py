@@ -115,8 +115,12 @@ def setup_database():
         
         db.session.commit()
 
-        # Assign all active properties to basic user
-        basic_user.assigned_properties = active_properties
+        # Assign all active properties to all users
+        all_users = [basic_user, manager_engineering, manager_frontdesk, manager_housekeeping]
+        for user in all_users:
+            user.assigned_properties = active_properties
+
+        db.session.commit()
 
         # Define room types and statuses
         room_types = {
@@ -310,7 +314,7 @@ def setup_database():
         
         # Commit rooms first to get room_ids
         db.session.commit()
-        
+
         # Create tickets for rooms with issues
         for room_data in guest_rooms_data:
             if 'issues' in room_data:
@@ -349,16 +353,16 @@ def get_category_and_subcategory(issue):
         'phones': ('Maintenance', 'Electrical'),
         'smoke alarm': ('Maintenance', 'Electrical'),
         'ceiling patch': ('Maintenance', 'General'),
-        'window ac': ('Maintenance', 'HVAC')
+        'window ac': ('Maintenance', 'HVAC'),
+        'kitchen drawers': ('Maintenance', 'Furniture'),
+        'bathroom door': ('Maintenance', 'Door Locks')
     }
     
     housekeeping_issues = {
         'mold smell': ('Housekeeping', 'Odor'),
         'odor': ('Housekeeping', 'Odor'),
         'shower liner': ('Housekeeping', 'Bathroom'),
-        'floor strip': ('Housekeeping', 'Carpet/Flooring'),
-        'bathroom door': ('Housekeeping', 'General'),
-        'kitchen drawers': ('Housekeeping', 'Kitchen')
+        'floor strip': ('Housekeeping', 'Carpet/Flooring')
     }
     
     # Check if issue is in maintenance dictionary

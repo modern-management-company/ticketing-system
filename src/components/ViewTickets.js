@@ -28,13 +28,15 @@ import {
   Card,
   CardContent,
   CardActions,
-  Grid
+  Grid,
+  TableSortLabel
 } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PropertySwitcher from './PropertySwitcher';
 import { useIsMobile } from '../hooks/useIsMobile';
+import CloseIcon from '@mui/icons-material/Close';
 
 const ViewTickets = () => {
   const { auth } = useAuth();
@@ -57,6 +59,8 @@ const ViewTickets = () => {
     property_id: '',
     room_id: ''
   });
+  const [orderBy, setOrderBy] = useState('ticket_id');
+  const [order, setOrder] = useState('asc');
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
@@ -335,6 +339,31 @@ const ViewTickets = () => {
     }
   };
 
+  const handleRequestSort = (property) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  };
+
+  const sortTickets = (tickets) => {
+    return [...tickets].sort((a, b) => {
+      let aValue = a[orderBy];
+      let bValue = b[orderBy];
+
+      // Handle string comparison
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+
+      if (order === 'desc') {
+        return bValue < aValue ? -1 : bValue > aValue ? 1 : 0;
+      } else {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      }
+    });
+  };
+
   const TicketCard = ({ ticket }) => (
     <Card sx={{ mb: 2 }}>
       <CardContent>
@@ -473,21 +502,101 @@ const ViewTickets = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>Title</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Room</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Priority</TableCell>
-                    <TableCell>Category</TableCell>
-                    <TableCell>Subcategory</TableCell>
-                    <TableCell>Created By</TableCell>
-                    <TableCell>Group</TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'ticket_id'}
+                        direction={orderBy === 'ticket_id' ? order : 'asc'}
+                        onClick={() => handleRequestSort('ticket_id')}
+                      >
+                        ID
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'title'}
+                        direction={orderBy === 'title' ? order : 'asc'}
+                        onClick={() => handleRequestSort('title')}
+                      >
+                        Title
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'description'}
+                        direction={orderBy === 'description' ? order : 'asc'}
+                        onClick={() => handleRequestSort('description')}
+                      >
+                        Description
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'room_name'}
+                        direction={orderBy === 'room_name' ? order : 'asc'}
+                        onClick={() => handleRequestSort('room_name')}
+                      >
+                        Room
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'status'}
+                        direction={orderBy === 'status' ? order : 'asc'}
+                        onClick={() => handleRequestSort('status')}
+                      >
+                        Status
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'priority'}
+                        direction={orderBy === 'priority' ? order : 'asc'}
+                        onClick={() => handleRequestSort('priority')}
+                      >
+                        Priority
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'category'}
+                        direction={orderBy === 'category' ? order : 'asc'}
+                        onClick={() => handleRequestSort('category')}
+                      >
+                        Category
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'subcategory'}
+                        direction={orderBy === 'subcategory' ? order : 'asc'}
+                        onClick={() => handleRequestSort('subcategory')}
+                      >
+                        Subcategory
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'created_by_username'}
+                        direction={orderBy === 'created_by_username' ? order : 'asc'}
+                        onClick={() => handleRequestSort('created_by_username')}
+                      >
+                        Created By
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'created_by_group'}
+                        direction={orderBy === 'created_by_group' ? order : 'asc'}
+                        onClick={() => handleRequestSort('created_by_group')}
+                      >
+                        Group
+                      </TableSortLabel>
+                    </TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {tickets.map((ticket) => (
+                  {sortTickets(tickets).map((ticket) => (
                     <TableRow key={ticket.ticket_id}>
                       <TableCell>{ticket.ticket_id}</TableCell>
                       <TableCell>{ticket.title}</TableCell>
@@ -562,9 +671,26 @@ const ViewTickets = () => {
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
           {editingTicket ? 'Edit Ticket' : 'Create New Ticket'}
+          <IconButton
+            aria-label="close"
+            onClick={handleCloseDialog}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+              color: (theme) => theme.palette.grey[500],
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+            {error && (
+              <Alert severity="error" onClose={() => setError(null)}>
+                {error}
+              </Alert>
+            )}
             <Typography variant="subtitle1" color="textSecondary">
               Property: {properties.find(p => p.property_id === selectedProperty)?.name || 'No property selected'}
             </Typography>

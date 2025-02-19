@@ -29,7 +29,8 @@ import {
   Tooltip,
   Card,
   CardContent,
-  CardActions
+  CardActions,
+  TableSortLabel
 } from "@mui/material";
 import { useAuth } from '../context/AuthContext';
 import EditIcon from '@mui/icons-material/Edit';
@@ -44,6 +45,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
 import { format } from 'date-fns';
 import { useIsMobile } from '../hooks/useIsMobile';
+import CloseIcon from '@mui/icons-material/Close';
 
 const ViewTasks = () => {
   const navigate = useNavigate();
@@ -69,6 +71,8 @@ const ViewTasks = () => {
   const [openDueDatePicker, setOpenDueDatePicker] = useState(false);
   const [managers, setManagers] = useState([]);
   const isMobile = useIsMobile();
+  const [orderBy, setOrderBy] = useState('task_id');
+  const [order, setOrder] = useState('asc');
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -168,6 +172,16 @@ const ViewTasks = () => {
         return;
       }
 
+      // Validate required fields
+      if (!taskForm.title.trim()) {
+        setError('Title is required');
+        return;
+      }
+      if (!taskForm.description.trim()) {
+        setError('Description is required');
+        return;
+      }
+
       console.log('Creating/Editing task with data:', {
         ...taskForm,
         property_id: selectedProperty
@@ -180,19 +194,25 @@ const ViewTasks = () => {
 
       if (editingTask) {
         const response = await apiClient.patch(`/tasks/${editingTask.task_id}`, taskData);
-        console.log('Task update response:', response.data);
-        setMessage('Task updated successfully');
+        if (response.data?.msg) {
+          setMessage(response.data.msg);
+        } else {
+          setMessage('Task updated successfully');
+        }
       } else {
         const response = await apiClient.post('/tasks', taskData);
-        console.log('Task creation response:', response.data);
-        setMessage('Task created successfully');
+        if (response.data?.msg) {
+          setMessage(response.data.msg);
+        } else {
+          setMessage('Task created successfully');
+        }
       }
       await fetchTasks();
       handleCloseDialog();
     } catch (error) {
       console.error('Failed to save task:', error);
       console.error('Error response:', error.response?.data);
-      setError(error.response?.data?.message || 'Failed to save task');
+      setError(error.response?.data?.msg || error.response?.data?.message || 'Failed to save task');
     }
   };
 
@@ -315,6 +335,43 @@ const ViewTasks = () => {
         setLoading(false);
       }
     }
+  };
+
+  const handleRequestSort = (property) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  };
+
+  const sortTasks = (tasks) => {
+    return [...tasks].sort((a, b) => {
+      let aValue = a[orderBy];
+      let bValue = b[orderBy];
+
+      // Special handling for nested values
+      if (orderBy === 'assigned_to') {
+        aValue = users.find(u => u.user_id === a.assigned_to_id)?.username || '';
+        bValue = users.find(u => u.user_id === b.assigned_to_id)?.username || '';
+      } else if (orderBy === 'group') {
+        aValue = users.find(u => u.user_id === a.assigned_to_id)?.group || '';
+        bValue = users.find(u => u.user_id === b.assigned_to_id)?.group || '';
+      } else if (orderBy === 'due_date') {
+        aValue = a.due_date ? new Date(a.due_date).getTime() : 0;
+        bValue = b.due_date ? new Date(b.due_date).getTime() : 0;
+      }
+
+      // Handle string comparison
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+
+      if (order === 'desc') {
+        return bValue < aValue ? -1 : bValue > aValue ? 1 : 0;
+      } else {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      }
+    });
   };
 
   const TaskCard = ({ task }) => (
@@ -444,19 +501,83 @@ const ViewTasks = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>Title</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Priority</TableCell>
-                    <TableCell>Due Date</TableCell>
-                    <TableCell>Assigned To</TableCell>
-                    <TableCell>Group</TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'task_id'}
+                        direction={orderBy === 'task_id' ? order : 'asc'}
+                        onClick={() => handleRequestSort('task_id')}
+                      >
+                        ID
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'title'}
+                        direction={orderBy === 'title' ? order : 'asc'}
+                        onClick={() => handleRequestSort('title')}
+                      >
+                        Title
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'description'}
+                        direction={orderBy === 'description' ? order : 'asc'}
+                        onClick={() => handleRequestSort('description')}
+                      >
+                        Description
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'status'}
+                        direction={orderBy === 'status' ? order : 'asc'}
+                        onClick={() => handleRequestSort('status')}
+                      >
+                        Status
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'priority'}
+                        direction={orderBy === 'priority' ? order : 'asc'}
+                        onClick={() => handleRequestSort('priority')}
+                      >
+                        Priority
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'due_date'}
+                        direction={orderBy === 'due_date' ? order : 'asc'}
+                        onClick={() => handleRequestSort('due_date')}
+                      >
+                        Due Date
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'assigned_to'}
+                        direction={orderBy === 'assigned_to' ? order : 'asc'}
+                        onClick={() => handleRequestSort('assigned_to')}
+                      >
+                        Assigned To
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'group'}
+                        direction={orderBy === 'group' ? order : 'asc'}
+                        onClick={() => handleRequestSort('group')}
+                      >
+                        Group
+                      </TableSortLabel>
+                    </TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {tasks.map((task) => (
+                  {sortTasks(tasks).map((task) => (
                     <TableRow key={task.task_id}>
                       <TableCell>{task.task_id}</TableCell>
                       <TableCell>{task.title}</TableCell>
@@ -530,9 +651,26 @@ const ViewTasks = () => {
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
           {editingTask ? 'Edit Task' : 'Create New Task'}
+          <IconButton
+            aria-label="close"
+            onClick={handleCloseDialog}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+              color: (theme) => theme.palette.grey[500],
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+            {error && (
+              <Alert severity="error" onClose={() => setError(null)}>
+                {error}
+              </Alert>
+            )}
             <TextField
               label="Title"
               value={taskForm.title}
@@ -593,13 +731,24 @@ const ViewTasks = () => {
               </Select>
             </FormControl>
             <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <TextField
-                fullWidth
-                label="Due Date"
-                value={taskForm.due_date ? format(new Date(taskForm.due_date), 'MM/dd/yyyy') : ''}
-                onClick={() => setOpenDueDatePicker(true)}
-                inputProps={{ readOnly: true }}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TextField
+                  fullWidth
+                  label="Due Date"
+                  value={taskForm.due_date ? format(new Date(taskForm.due_date), 'MM/dd/yyyy') : ''}
+                  onClick={() => setOpenDueDatePicker(true)}
+                  inputProps={{ readOnly: true }}
+                />
+                {taskForm.due_date && (
+                  <Button 
+                    variant="outlined" 
+                    color="secondary"
+                    onClick={() => setTaskForm({ ...taskForm, due_date: null })}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </Box>
               <Dialog open={openDueDatePicker} onClose={() => setOpenDueDatePicker(false)}>
                 <DialogContent>
                   <StaticDatePicker

@@ -334,21 +334,6 @@ const ViewRooms = () => {
                       <Typography color="textSecondary">
                         Type: {room.type || 'N/A'}
                       </Typography>
-                      <TextField
-                        label="Type"
-                        value={room.type || ''}
-                        onChange={(e) => {
-                          const updatedRooms = rooms.map(r => 
-                            r.room_id === room.room_id 
-                              ? { ...r, type: e.target.value }
-                              : r
-                          );
-                          setRooms(updatedRooms);
-                        }}
-                        fullWidth
-                        size="small"
-                        margin="dense"
-                      />
                       <Typography color="textSecondary">
                         Floor: {room.floor || 'N/A'}
                       </Typography>
@@ -406,18 +391,12 @@ const ViewRooms = () => {
               fullWidth
               required
             />
-            <FormControl fullWidth>
-              <InputLabel>Room Type</InputLabel>
-              <Select
-                value={roomFormData.type}
-                onChange={(e) => setRoomFormData({ ...roomFormData, type: e.target.value })}
-                label="Room Type"
-              >
-                {roomTypes.map(type => (
-                  <MenuItem key={type} value={type}>{type}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <TextField
+              label="Room Type"
+              value={roomFormData.type}
+              onChange={(e) => setRoomFormData({ ...roomFormData, type: e.target.value })}
+              fullWidth
+            />
             <TextField
               label="Floor"
               value={roomFormData.floor}
