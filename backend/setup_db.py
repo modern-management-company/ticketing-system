@@ -323,6 +323,15 @@ def setup_database():
                     # Determine category and subcategory based on issue
                     category, subcategory = get_category_and_subcategory(issue)
                     
+                    # Determine the appropriate manager based on category
+                    assigned_manager = None
+                    if category == 'Maintenance':
+                        assigned_manager = manager_engineering
+                    elif category == 'Housekeeping':
+                        assigned_manager = manager_housekeeping
+                    else:
+                        assigned_manager = manager_frontdesk
+
                     ticket = Ticket(
                         title=f"Room {room_data['number']} - {issue.title()}",
                         description=f"Issue reported in Room {room_data['number']}: {issue}",
@@ -331,12 +340,35 @@ def setup_database():
                         category=category,
                         subcategory=subcategory,
                         property_id=residence_inn.property_id,
-                        user_id=manager_engineering.user_id if category == 'Maintenance' else manager_housekeeping.user_id,
+                        user_id=assigned_manager.user_id,
                         room_id=room.room_id
                     )
                     db.session.add(ticket)
+                    db.session.flush()  # Flush to get the ticket_id
+
+                    # Create a task for the ticket
+                    task = Task(
+                        title=f"Handle {category} Issue - {issue.title()}",
+                        description=f"Address {category} issue in Room {room_data['number']}: {issue}",
+                        status='pending',
+                        priority=ticket.priority,
+                        property_id=residence_inn.property_id,
+                        assigned_to_id=assigned_manager.user_id,
+                        due_date=datetime.utcnow() + timedelta(days=3)  # Set due date to 3 days from now
+                    )
+                    db.session.add(task)
+                    db.session.flush()  # Flush to get the task_id
+
+                    # Create task assignment linking task to ticket
+                    task_assignment = TaskAssignment(
+                        task_id=task.task_id,
+                        ticket_id=ticket.ticket_id,
+                        assigned_to_user_id=assigned_manager.user_id,
+                        status='Pending'
+                    )
+                    db.session.add(task_assignment)
         
-        # Commit tickets
+        # Commit all changes
         db.session.commit()
 
 def get_category_and_subcategory(issue):
