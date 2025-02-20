@@ -23,11 +23,10 @@ import ManageUsers from './components/ManageUsers';
 import ViewTasks from './components/ViewTasks';
 import ViewTickets from './components/ViewTickets';
 import ViewRooms from './components/ViewRooms';
-import TicketDetails from './components/TicketDetails';
 import PropertyManagement from './components/PropertyManagement';
 import Unauthorized from './components/Unauthorized';
-import UserProfile from './components/UserProfile';
 import Reports from './components/Reports';
+import HomeOverview from './components/HomeOverview';
 
 const App = () => {
   return (
@@ -54,11 +53,6 @@ const App = () => {
                   <ViewTickets />
                 </ProtectedRoute>
               } />
-              <Route path="/tickets/:ticketId" element={
-                <ProtectedRoute>
-                  <TicketDetails />
-                </ProtectedRoute>
-              } />
               
               <Route path="/tasks" element={
                 <ProtectedRoute>
@@ -69,6 +63,12 @@ const App = () => {
               <Route path="/rooms" element={
                 <ProtectedRoute>
                   <ViewRooms />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/reports" element={
+                <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
+                  <Reports />
                 </ProtectedRoute>
               } />
               
@@ -83,20 +83,14 @@ const App = () => {
                     <ManageUsers />
                   </ProtectedRoute>
                 } />
-                <Route path="reports" element={
-                  <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
-                    <Reports />
-                  </ProtectedRoute>
-                } />
               </Route>
               
-              <Route path="/profile" element={
+              
+              <Route path="/" element={
                 <ProtectedRoute>
-                  <UserProfile />
+                  <HomeOverview />
                 </ProtectedRoute>
               } />
-              
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Route>
             
             {/* Default route */}

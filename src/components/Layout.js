@@ -30,6 +30,7 @@ import {
   Palette as ThemeIcon,
   Logout as LogoutIcon,
   Assessment as ReportIcon,
+  Home as HomeIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -56,6 +57,11 @@ const Layout = () => {
   const getMenuItems = () => {
     const baseItems = [
       {
+        text: 'Home',
+        icon: <HomeIcon />,
+        path: '/',
+      },
+      {
         text: 'Dashboard',
         icon: <DashboardIcon />,
         path: '/dashboard',
@@ -77,6 +83,11 @@ const Layout = () => {
         text: 'Rooms',
         icon: <RoomIcon />,
         path: '/rooms',
+      },
+      {
+        text: 'Reports',
+        icon: <ReportIcon />,
+        path: '/reports',
       }
     ];
 
@@ -90,11 +101,6 @@ const Layout = () => {
         text: 'Users',
         icon: <UsersIcon />,
         path: '/admin/users',
-      },
-      {
-        text: 'Reports',
-        icon: <ReportIcon />,
-        path: '/admin/reports',
       }
     ];
 
@@ -142,7 +148,16 @@ const Layout = () => {
             <ListItemIcon sx={{ color: location.pathname === item.path ? 'white' : 'inherit' }}>
               {item.icon}
             </ListItemIcon>
-            <ListItemText primary={item.text} />
+            <ListItemText 
+              primary={item.text} 
+              secondary={item.description}
+              secondaryTypographyProps={{
+                sx: { 
+                  color: location.pathname === item.path ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+                  fontSize: '0.75rem'
+                }
+              }}
+            />
           </ListItemButton>
         ))}
       </List>
