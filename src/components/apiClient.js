@@ -26,6 +26,15 @@ const getStoredAuth = () => {
   }
 };
 
+// Function to set auth token
+export const setAuthToken = (token) => {
+  if (token) {
+    apiClient.defaults.headers.common['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+  } else {
+    delete apiClient.defaults.headers.common['Authorization'];
+  }
+};
+
 apiClient.interceptors.request.use(
   (config) => {
     const auth = getStoredAuth();

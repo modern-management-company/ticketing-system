@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import apiClient from '../components/apiClient';
+import apiClient, { setAuthToken } from '../components/apiClient';
 
 const AuthContext = createContext(null);
 
@@ -21,9 +21,8 @@ export const AuthProvider = ({ children }) => {
 
   const verifyToken = useCallback(async (token) => {
     try {
-      // Ensure token is properly formatted with Bearer prefix
-      const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-      apiClient.defaults.headers.common['Authorization'] = formattedToken;
+      // Set token in headers
+      setAuthToken(token);
       
       const response = await apiClient.get('/verify-token');
       if (!response.data.valid) {
@@ -32,7 +31,7 @@ export const AuthProvider = ({ children }) => {
       return response.data;
     } catch (error) {
       console.error('Token verification failed:', error);
-      delete apiClient.defaults.headers.common['Authorization'];
+      setAuthToken(null);
       throw error;
     }
   }, []);
@@ -59,13 +58,14 @@ export const AuthProvider = ({ children }) => {
       // Store verified data
       localStorage.setItem('auth', JSON.stringify(authData));
       
-      // Set auth state
+      // Set auth state and token
       setAuth(authData);
+      setAuthToken(data.token);
     } catch (error) {
       console.error('Error in login:', error);
       // Clean up on error
       localStorage.removeItem('auth');
-      delete apiClient.defaults.headers.common['Authorization'];
+      setAuthToken(null);
       setAuth(null);
       throw error;
     }
@@ -73,7 +73,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(() => {
     localStorage.removeItem('auth');
-    delete apiClient.defaults.headers.common['Authorization'];
+    setAuthToken(null);
     setAuth(null);
   }, []);
 
@@ -97,20 +97,21 @@ export const AuthProvider = ({ children }) => {
                 };
                 localStorage.setItem('auth', JSON.stringify(updatedAuthData));
                 setAuth(updatedAuthData);
+                setAuthToken(authData.token);
               } else {
                 throw new Error('Token verification failed');
               }
             } catch (error) {
               console.warn('Stored token is invalid:', error);
               localStorage.removeItem('auth');
-              delete apiClient.defaults.headers.common['Authorization'];
+              setAuthToken(null);
             }
           }
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
         localStorage.removeItem('auth');
-        delete apiClient.defaults.headers.common['Authorization'];
+        setAuthToken(null);
       } finally {
         setInitialized(true);
       }

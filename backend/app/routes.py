@@ -11,6 +11,7 @@ from app.middleware import handle_errors
 from app.decorators import handle_errors
 import logging
 import secrets
+from sqlalchemy import or_
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -1848,18 +1849,54 @@ def get_dashboard_stats():
         current_user = get_jwt_identity()
         property_id = request.args.get('property_id', type=int)
 
-        # Validate access
-        if property_id and current_user['role'] == 'manager' and current_user['managed_property_id'] != property_id:
-            return jsonify({'message': 'Unauthorized'}), 403
-
-        # Base query filters
-        filters = []
+        # Base query filters for tickets
+        ticket_filters = []
         if property_id:
-            filters.append(Ticket.property_id == property_id)
+            ticket_filters.append(Ticket.property_id == property_id)
 
-        # Calculate statistics
-        tickets = Ticket.query.filter(*filters).all()
-        tasks = TaskAssignment.query.join(Ticket).filter(*filters).all()
+        # Base query filters for tasks
+        task_filters = []
+        if property_id:
+            task_filters.append(Task.property_id == property_id)
+
+        # Role-based filtering
+        if current_user['role'] == 'user':
+            # For users: show tickets they created or are assigned to
+            ticket_filters.append(
+                or_(
+                    Ticket.user_id == current_user['user_id'],
+                    Task.assigned_to_id == current_user['user_id']
+                )
+            )
+            task_filters.append(Task.assigned_to_id == current_user['user_id'])
+        elif current_user['role'] == 'manager':
+            # For managers: show tickets and tasks for their managed properties
+            managed_properties = PropertyManager.query.filter_by(
+                user_id=current_user['user_id']
+            ).with_entities(PropertyManager.property_id).all()
+            managed_property_ids = [p[0] for p in managed_properties]
+            ticket_filters.append(Ticket.property_id.in_(managed_property_ids))
+            task_filters.append(Task.property_id.in_(managed_property_ids))
+
+        # Get tickets with filters
+        tickets = Ticket.query.filter(*ticket_filters).all()
+        
+        # Get tasks with filters
+        tasks = Task.query.filter(*task_filters).all()
+
+        # Calculate total properties based on role
+        if current_user['role'] == 'super_admin':
+            total_properties = Property.query.filter_by(status='active').count()
+            total_users = User.query.filter_by(is_active=True).count()
+        elif current_user['role'] == 'manager':
+            total_properties = len(managed_property_ids)
+            total_users = User.query.filter(
+                User.manager_id == current_user['user_id'],
+                User.is_active == True
+            ).count()
+        else:
+            total_properties = len(set(t.property_id for t in tickets))
+            total_users = 0
 
         # Calculate ticket distribution
         status_counts = defaultdict(int)
@@ -1878,11 +1915,28 @@ def get_dashboard_stats():
         total_tasks = len(tasks)
         completed_tasks = total_tasks - active_tasks
 
+        # Get total rooms based on role
+        if current_user['role'] == 'super_admin':
+            total_rooms = Room.query.count()
+        elif current_user['role'] == 'manager':
+            total_rooms = Room.query.filter(
+                Room.property_id.in_(managed_property_ids)
+            ).count()
+        else:
+            # For regular users, count rooms in properties they have tickets/tasks in
+            property_ids = set(t.property_id for t in tickets).union(set(t.property_id for t in tasks))
+            total_rooms = Room.query.filter(Room.property_id.in_(property_ids)).count()
+
         return jsonify({
             'openTickets': status_counts.get('Open', 0),
             'activeTasks': active_tasks,
+            'completedTasks': completed_tasks,
+            'totalTasks': total_tasks,
             'resolutionRate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2),
             'avgResponseTime': round(sum(resolution_times) / len(resolution_times) if resolution_times else 0, 2),
+            'totalProperties': total_properties,
+            'totalUsers': total_users,
+            'totalRooms': total_rooms,
             'ticketDistribution': [
                 {'status': status, 'count': count}
                 for status, count in status_counts.items()

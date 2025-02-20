@@ -46,10 +46,13 @@ const HomeOverview = () => {
       openTickets: 0,
       activeTasks: 0,
       completedTasks: 0,
+      totalTasks: 0,
       ticketResolutionRate: 0,
       totalProperties: 0,
       totalUsers: 0,
-      totalRooms: 0
+      totalRooms: 0,
+      ticketDistribution: [],
+      priorityDistribution: []
     }
   });
 
@@ -61,6 +64,7 @@ const HomeOverview = () => {
     try {
       setLoading(true);
       const response = await apiClient.get('/dashboard/stats');
+      
       setOverview({
         recentTickets: response.data.recentTickets || [],
         recentTasks: response.data.recentTasks || [],
@@ -68,10 +72,13 @@ const HomeOverview = () => {
           openTickets: response.data.openTickets || 0,
           activeTasks: response.data.activeTasks || 0,
           completedTasks: response.data.completedTasks || 0,
+          totalTasks: response.data.totalTasks || 0,
           ticketResolutionRate: response.data.resolutionRate || 0,
           totalProperties: response.data.totalProperties || 0,
           totalUsers: response.data.totalUsers || 0,
-          totalRooms: response.data.totalRooms || 0
+          totalRooms: response.data.totalRooms || 0,
+          ticketDistribution: response.data.ticketDistribution || [],
+          priorityDistribution: response.data.priorityDistribution || []
         }
       });
     } catch (error) {
@@ -140,6 +147,12 @@ const HomeOverview = () => {
         value: overview.stats.activeTasks,
         icon: <TaskIcon color="primary" />,
         action: () => navigate('/tasks')
+      },
+      {
+        title: 'Completed Tasks',
+        value: overview.stats.completedTasks,
+        icon: <CompletedIcon color="primary" />,
+        action: () => navigate('/tasks')
       }
     ];
 
@@ -157,6 +170,12 @@ const HomeOverview = () => {
           value: overview.stats.totalUsers,
           icon: <PeopleIcon color="primary" />,
           action: () => navigate('/admin/users')
+        },
+        {
+          title: 'Total Rooms',
+          value: overview.stats.totalRooms,
+          icon: <RoomIcon color="primary" />,
+          action: () => navigate('/rooms')
         }
       ];
     }
@@ -165,31 +184,34 @@ const HomeOverview = () => {
       return [
         ...baseStats,
         {
+          title: 'Total Properties',
+          value: overview.stats.totalProperties,
+          icon: <PropertyIcon color="primary" />,
+          action: () => navigate('/properties')
+        },
+        {
           title: 'Total Rooms',
           value: overview.stats.totalRooms,
           icon: <RoomIcon color="primary" />,
           action: () => navigate('/rooms')
         },
         {
-          title: 'Resolution Rate',
-          value: `${overview.stats.ticketResolutionRate}%`,
-          icon: <ReportIcon color="primary" />,
-          action: () => navigate('/reports')
+          title: 'Team Members',
+          value: overview.stats.totalUsers,
+          icon: <PeopleIcon color="primary" />,
+          action: () => navigate('/team')
         }
       ];
     }
 
+    // For regular users
     return [
       ...baseStats,
       {
-        title: 'Completed Tasks',
-        value: overview.stats.completedTasks,
-        icon: <CompletedIcon color="primary" />
-      },
-      {
         title: 'Resolution Rate',
         value: `${overview.stats.ticketResolutionRate}%`,
-        icon: <ReportIcon color="primary" />
+        icon: <ReportIcon color="primary" />,
+        action: () => navigate('/reports')
       }
     ];
   };
