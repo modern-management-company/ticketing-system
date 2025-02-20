@@ -31,6 +31,7 @@ import {
   Logout as LogoutIcon,
   Assessment as ReportIcon,
   Home as HomeIcon,
+  Email as EmailIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -101,6 +102,11 @@ const Layout = () => {
         text: 'Users',
         icon: <UsersIcon />,
         path: '/admin/users',
+      },
+      {
+        text: 'Email Settings',
+        icon: <EmailIcon />,
+        path: '/admin/email-settings',
       }
     ];
 

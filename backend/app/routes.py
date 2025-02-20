@@ -1,7 +1,8 @@
 from flask import request, jsonify, current_app
 from app import app, db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager
-from app.services import EmailService
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings
+from app.services import EmailService, EmailTestService
+import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
@@ -9,6 +10,7 @@ from collections import defaultdict
 from app.middleware import handle_errors
 from app.decorators import handle_errors
 import logging
+import secrets
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -16,6 +18,10 @@ def get_user_from_jwt():
     if not identity or 'user_id' not in identity:
         return None
     return User.query.get(identity['user_id'])
+
+def generate_password_reset_token():
+    """Generate a secure token for password reset"""
+    return secrets.token_urlsafe(32)
 
 # Authentication and verification routes
 @app.route('/check-first-user', methods=['GET'])
@@ -1890,33 +1896,6 @@ def get_dashboard_stats():
         app.logger.error(f"Error in get_dashboard_stats: {str(e)}")
         return jsonify({'message': 'Internal server error', 'error': str(e)}), 500
 
-@app.route('/dashboard/activities', methods=['GET'])
-@jwt_required()
-@handle_errors
-def get_recent_activities():
-    current_user = get_jwt_identity()
-    property_id = request.args.get('property_id', type=int)
-
-    # Validate access
-    if property_id and current_user['role'] == 'manager' and current_user['managed_property_id'] != property_id:
-        return jsonify({'message': 'Unauthorized'}), 403
-
-    # Get recent activities
-    activities = Activity.query
-    if property_id:
-        activities = activities.filter(Activity.property_id == property_id)
-    
-    activities = activities.order_by(Activity.timestamp.desc()).limit(10).all()
-
-    return jsonify({
-        'activities': [{
-            'type': activity.type,
-            'description': activity.description,
-            'timestamp': activity.timestamp.isoformat(),
-            'user_id': activity.user_id
-        } for activity in activities]
-    })
-
 # Error handlers
 @app.errorhandler(404)
 def not_found_error(error):
@@ -1929,183 +1908,70 @@ def internal_error(error):
     app.logger.error(f"500 error: {str(error)}")
     return jsonify({"msg": "Internal server error"}), 500
 
-# Property Theme Settings Routes
-@app.route('/settings/property/theme', methods=['GET'])
-@jwt_required()
-@handle_errors
-def get_property_theme():
-    try:
-        current_user = get_user_from_jwt()
-        if not current_user:
-            return jsonify({'error': 'User not found'}), 404
-        
-        # Get the property ID from query params or use the first property for the user
-        property_id = request.args.get('property_id', type=int)
-        if not property_id:
-            if current_user.role == 'super_admin':
-                property = Property.query.first()
-            elif current_user.role == 'manager':
-                property = Property.query.filter_by(manager_id=current_user.user_id).first()
-            else:
-                property = current_user.assigned_properties[0] if current_user.assigned_properties else None
-            
-            if not property:
-                return jsonify({'error': 'No property found'}), 404
-            property_id = property.property_id
-
-        # Check if user has access to this property
-        if current_user.role != 'super_admin':
-            has_access = False
-            if current_user.role == 'manager':
-                has_access = Property.query.filter_by(property_id=property_id, manager_id=current_user.user_id).first() is not None
-            else:
-                has_access = any(p.property_id == property_id for p in current_user.assigned_properties)
-            
-            if not has_access:
-                return jsonify({'error': 'Access denied'}), 403
-
-        theme = PropertyTheme.query.filter_by(property_id=property_id).first()
-        if not theme:
-            # Create default theme if it doesn't exist
-            theme = PropertyTheme(
-                property_id=property_id,
-                primary_color='#1976d2',
-                secondary_color='#dc004e',
-                background_color='#ffffff',
-                accent_color='#2196f3'
-            )
-            db.session.add(theme)
-            db.session.commit()
-
-        return jsonify({
-            'colors': {
-                'primary': theme.primary_color,
-                'secondary': theme.secondary_color,
-                'background': theme.background_color,
-                'accent': theme.accent_color
-            }
-        }), 200
-
-    except Exception as e:
-        app.logger.error(f'Error in get_property_theme: {str(e)}')
-        return jsonify({'error': 'Internal server error'}), 500
-
-@app.route('/settings/property/theme', methods=['POST'])
-@jwt_required()
-@handle_errors
-def update_property_theme():
-    try:
-        current_user = get_user_from_jwt()
-        if not current_user:
-            return jsonify({'error': 'User not found'}), 404
-
-        data = request.get_json()
-        if not data or 'colors' not in data:
-            return jsonify({'error': 'Invalid request data'}), 400
-
-        property_id = request.args.get('property_id', type=int)
-        if not property_id:
-            if current_user.role == 'super_admin':
-                property = Property.query.first()
-            elif current_user.role == 'manager':
-                property = Property.query.filter_by(manager_id=current_user.user_id).first()
-            else:
-                property = current_user.assigned_properties[0] if current_user.assigned_properties else None
-            
-            if not property:
-                return jsonify({'error': 'No property found'}), 404
-            property_id = property.property_id
-
-        # Check if user has access to this property
-        if current_user.role != 'super_admin':
-            has_access = False
-            if current_user.role == 'manager':
-                has_access = Property.query.filter_by(property_id=property_id, manager_id=current_user.user_id).first() is not None
-            else:
-                has_access = any(p.property_id == property_id for p in current_user.assigned_properties)
-            
-            if not has_access:
-                return jsonify({'error': 'Access denied'}), 403
-
-        theme = PropertyTheme.query.filter_by(property_id=property_id).first()
-        if not theme:
-            theme = PropertyTheme(property_id=property_id)
-            db.session.add(theme)
-
-        colors = data['colors']
-        theme.primary_color = colors.get('primary', theme.primary_color)
-        theme.secondary_color = colors.get('secondary', theme.secondary_color)
-        theme.background_color = colors.get('background', theme.background_color)
-        theme.accent_color = colors.get('accent', theme.accent_color)
-
-        db.session.commit()
-        return jsonify({
-            'colors': {
-                'primary': theme.primary_color,
-                'secondary': theme.secondary_color,
-                'background': theme.background_color,
-                'accent': theme.accent_color
-            }
-        }), 200
-
-    except Exception as e:
-        app.logger.error(f'Error in update_property_theme: {str(e)}')
-        return jsonify({'error': 'Internal server error'}), 500
-
-# System Settings Routes
+# Email System Settings Routes
 @app.route('/api/settings/system', methods=['GET'])
 @jwt_required()
 def get_system_settings():
+    """Get system email settings"""
     try:
+        # Get the current user
         current_user = get_user_from_jwt()
-        if current_user.role != 'super_admin':
-            return jsonify({'error': 'Access denied'}), 403
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can view system settings'}), 403
 
-        settings = SystemSettings.query.first()
+        settings = EmailSettings.query.first()
         if not settings:
-            # Create default settings if they don't exist
-            settings = SystemSettings()
-            db.session.add(settings)
-            db.session.commit()
+            return jsonify({
+                'smtp_server': os.getenv('SMTP_SERVER', 'smtp.gmail.com'),
+                'smtp_port': int(os.getenv('SMTP_PORT', '587')),
+                'smtp_username': os.getenv('SMTP_USERNAME', 'modernmanagementhotels@gmail.com'),
+                'smtp_password': '',
+                'sender_email': os.getenv('SENDER_EMAIL', 'modernmanagementhotels@gmail.com'),
+                'enable_email_notifications': True
+            })
 
-        return jsonify(settings.to_dict()), 200
+        return jsonify(settings.to_dict())
 
     except Exception as e:
-        app.logger.error(f'Error in get_system_settings: {str(e)}')
+        app.logger.error(f"Error in get_system_settings: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/settings/system', methods=['POST'])
 @jwt_required()
 def update_system_settings():
+    """Update system email settings"""
     try:
+        # Get the current user
         current_user = get_user_from_jwt()
-        if current_user.role != 'super_admin':
-            return jsonify({'error': 'Access denied'}), 403
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can update system settings'}), 403
 
         data = request.get_json()
         if not data:
-            return jsonify({'error': 'Invalid request data'}), 400
+            return jsonify({'error': 'No data provided'}), 400
 
-        settings = SystemSettings.query.first()
+        settings = EmailSettings.query.first()
         if not settings:
-            settings = SystemSettings()
+            settings = EmailSettings()
             db.session.add(settings)
 
-        # Update settings with provided values
-        settings.site_name = data.get('siteName', settings.site_name)
-        settings.maintenance_mode = data.get('maintenanceMode', settings.maintenance_mode)
-        settings.user_registration = data.get('userRegistration', settings.user_registration)
-        settings.max_file_size = data.get('maxFileSize', settings.max_file_size)
-        settings.session_timeout = data.get('sessionTimeout', settings.session_timeout)
-        settings.default_language = data.get('defaultLanguage', settings.default_language)
-        settings.email_notifications = data.get('emailNotifications', settings.email_notifications)
-        settings.backup_frequency = data.get('backupFrequency', settings.backup_frequency)
+        # Update settings
+        settings.smtp_server = data.get('smtp_server', settings.smtp_server)
+        settings.smtp_port = data.get('smtp_port', settings.smtp_port)
+        settings.smtp_username = data.get('smtp_username', settings.smtp_username)
+        if data.get('smtp_password'):  # Only update password if provided
+            settings.smtp_password = data.get('smtp_password')
+        settings.sender_email = data.get('sender_email', settings.sender_email)
+        settings.enable_email_notifications = data.get('enable_email_notifications', settings.enable_email_notifications)
 
         db.session.commit()
-        return jsonify(settings.to_dict()), 200
+
+        # Return updated settings
+        return jsonify(settings.to_dict())
 
     except Exception as e:
-        app.logger.error(f'Error in update_system_settings: {str(e)}')
+        app.logger.error(f"Error in update_system_settings: {str(e)}")
+        db.session.rollback()
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/tickets/<int:ticket_id>', methods=['DELETE'])
@@ -2483,67 +2349,25 @@ def test_email():
         if not user or user.role != 'super_admin':
             return jsonify({'error': 'Unauthorized - Only super admins can test email service'}), 403
 
-        # Create email service instance
-        email_service = EmailService()
+        # Get test email recipient from request or use user's email
+        data = request.get_json()
+        test_email = data.get('email', user.email) if data else user.email
+
+        # Initialize email test service
+        email_test_service = EmailTestService()
         
-        # Log configuration details
-        app.logger.info("="*50)
-        app.logger.info("Email Service Test")
-        app.logger.info("Configuration:")
-        app.logger.info(f"SMTP_SERVER: {app.config.get('SMTP_SERVER', 'smtp.gmail.com')}")
-        app.logger.info(f"SMTP_PORT: {app.config.get('SMTP_PORT', 587)}")
-        app.logger.info(f"SMTP_USERNAME: {app.config.get('SMTP_USERNAME', 'modernmanagementhotels@gmail.com')}")
-        app.logger.info(f"EMAIL_PASSWORD is set: {'Yes' if app.config.get('EMAIL_PASSWORD') else 'No'}")
-        app.logger.info(f"Test email will be sent to: {user.email}")
-        app.logger.info("="*50)
+        # Send test email
+        result = email_test_service.send_test_email(test_email)
+        return jsonify(result), 200
 
-        # Create test email content
-        subject = "Email Service Test"
-        html_content = f"""
-        <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #1976d2;">Email Service Test</h2>
-                    <p>Hello {user.username},</p>
-                    <p>This is a test email to verify the email service functionality.</p>
-                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                        <p><strong>Test Details:</strong></p>
-                        <ul>
-                            <li>Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}</li>
-                            <li>Sent by: {user.username} (ID: {user.user_id})</li>
-                            <li>User Role: {user.role}</li>
-                            <li>User Group: {user.group or 'N/A'}</li>
-                        </ul>
-                    </div>
-                    <p>If you received this email, the email service is working correctly.</p>
-                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
-                        <p style="color: #666;">Best regards,<br>Property Management System</p>
-                    </div>
-                </div>
-            </body>
-        </html>
-        """
-
-        # Attempt to send the test email
-        success = email_service.send_email(user.email, subject, html_content)
-        
-        if success:
-            app.logger.info("✓ Test email sent successfully")
-            return jsonify({
-                'message': 'Test email sent successfully',
-                'recipient': user.email,
-                'timestamp': datetime.utcnow().isoformat()
-            }), 200
-        else:
-            app.logger.error("❌ Failed to send test email")
-            return jsonify({
-                'error': 'Failed to send test email',
-                'details': 'Check server logs for more information'
-            }), 500
-
+    except ValueError as e:
+        app.logger.error(f"Configuration error in test_email endpoint: {str(e)}")
+        return jsonify({
+            'error': 'Email configuration error',
+            'details': str(e)
+        }), 400
     except Exception as e:
-        app.logger.error(f"❌ Error in test_email endpoint: {str(e)}")
-        app.logger.error(f"Error type: {type(e).__name__}")
+        app.logger.error(f"Error in test_email endpoint: {str(e)}")
         return jsonify({
             'error': 'Internal server error',
             'details': str(e)
@@ -2552,140 +2376,30 @@ def test_email():
 @app.route('/api/test-all-emails', methods=['POST'])
 @jwt_required()
 def test_all_emails():
-    """Test endpoint to verify all email functionality"""
+    """Run comprehensive tests on email service configuration."""
     try:
-        current_user = get_user_from_jwt()
-        if not current_user or current_user.role != 'super_admin':
-            return jsonify({'error': 'Unauthorized access'}), 403
+        # Get the current user
+        current_user = get_jwt_identity()
+        user = User.query.get(current_user['user_id'])
+        
+        if not user or user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can test email service'}), 403
 
-        email_service = EmailService()
-        results = []
+        # Initialize email test service and run all tests
+        email_test_service = EmailTestService()
+        test_results = email_test_service.run_all_tests()
+        
+        return jsonify(test_results), 200
 
-        # Test 1: Basic Email
-        basic_result = email_service.send_email(
-            current_user.email,
-            "Test Basic Email",
-            "<html><body><h1>Basic Test Email</h1><p>This is a test of the basic email function.</p></body></html>"
-        )
-        results.append({"test": "Basic Email", "success": basic_result})
-
-        # Test 2: Task Assignment
-        from app.models import Task, Property
-        test_task = Task(
-            title="Test Task",
-            description="Test task description",
-            status="pending",
-            priority="High",
-            due_date=datetime.utcnow() + timedelta(days=1),
-            property_id=1
-        )
-        test_property = Property.query.first()
-        task_result = email_service.send_task_assignment_notification(
-            current_user,
-            test_task,
-            test_property.name if test_property else "Test Property"
-        )
-        results.append({"test": "Task Assignment", "success": task_result > 0})
-
-        # Test 3: Task Update
-        update_result = email_service.send_task_update_notification(
-            current_user,
-            test_task,
-            test_property.name if test_property else "Test Property"
-        )
-        results.append({"test": "Task Update", "success": update_result > 0})
-
-        # Test 4: Task Reminder
-        reminder_result = email_service.send_task_reminder(
-            current_user,
-            test_task,
-            test_property.name if test_property else "Test Property"
-        )
-        results.append({"test": "Task Reminder", "success": reminder_result})
-
-        # Test 5: User Registration
-        registration_result = email_service.send_user_registration_email(
-            current_user,
-            "test_password",
-            current_user
-        )
-        results.append({"test": "User Registration", "success": registration_result})
-
-        # Test 6: Ticket Notification
-        from app.models import Ticket
-        test_ticket = Ticket(
-            title="Test Ticket",
-            description="Test ticket description",
-            status="open",
-            priority="High",
-            category="Maintenance",
-            user_id=current_user.user_id,
-            property_id=test_property.property_id if test_property else 1
-        )
-        ticket_result = email_service.send_ticket_notification(
-            test_ticket,
-            test_property.name if test_property else "Test Property",
-            [current_user]
-        )
-        results.append({"test": "Ticket Notification", "success": ticket_result > 0})
-
-        # Test 7: Room Status
-        from app.models import Room
-        test_room = Room(
-            name="Test Room",
-            property_id=test_property.property_id if test_property else 1,
-            type="Standard",
-            floor=1,
-            status="Available"
-        )
-        room_result = email_service.send_room_status_notification(
-            test_room,
-            test_property.name if test_property else "Test Property",
-            [current_user]
-        )
-        results.append({"test": "Room Status", "success": True})  # This function doesn't return a result
-
-        # Test 8: Property Status
-        property_result = email_service.send_property_status_notification(
-            test_property if test_property else Property(name="Test Property", status="active"),
-            [current_user]
-        )
-        results.append({"test": "Property Status", "success": True})  # This function doesn't return a result
-
-        # Test 9: Password Reset
-        reset_result = email_service.send_password_reset_notification(
-            current_user,
-            reset_token="test_token"
-        )
-        results.append({"test": "Password Reset", "success": reset_result})
-
-        # Test 10: Admin Alert
-        admin_result = email_service.send_admin_alert(
-            "Test Admin Alert",
-            "This is a test admin alert message",
-            [current_user.email]
-        )
-        results.append({"test": "Admin Alert", "success": True})  # This function doesn't return a result
-
-        # Test 11: User Management
-        management_result = email_service.send_user_management_notification(
-            current_user,
-            ["Role changed from user to admin"],
-            "Test Admin",
-            [current_user.email]
-        )
-        results.append({"test": "User Management", "success": management_result > 0})
-
-        # Calculate overall success
-        total_tests = len(results)
-        successful_tests = sum(1 for r in results if r['success'])
-
+    except ValueError as e:
+        app.logger.error(f"Configuration error in test_all_emails endpoint: {str(e)}")
         return jsonify({
-            'message': f'Email tests completed: {successful_tests}/{total_tests} successful',
-            'results': results,
-            'recipient': current_user.email
-        }), 200
-
+            'error': 'Email configuration error',
+            'details': str(e)
+        }), 400
     except Exception as e:
-        current_app.logger.error(f"Error in test_all_emails: {str(e)}")
-        return jsonify({'error': f'Error testing emails: {str(e)}'}), 500
+        app.logger.error(f"Error in test_all_emails endpoint: {str(e)}")
+        return jsonify({
+            'error': 'Internal server error',
+            'details': str(e)
+        }), 500

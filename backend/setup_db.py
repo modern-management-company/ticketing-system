@@ -1,9 +1,10 @@
 from app import app, db
-from app.models import User, Property, Ticket, Task, TaskAssignment, Room, PropertyManager
+from app.models import User, Property, Ticket, Task, TaskAssignment, Room, PropertyManager, EmailSettings
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
 from sqlalchemy import text
 import random
+import os
 
 def clear_database():
     with app.app_context():
@@ -17,6 +18,7 @@ def clear_database():
         db.session.execute(text('DROP TABLE IF EXISTS property_managers CASCADE'))
         db.session.execute(text('DROP TABLE IF EXISTS properties CASCADE'))
         db.session.execute(text('DROP TABLE IF EXISTS users CASCADE'))
+        db.session.execute(text('DROP TABLE IF EXISTS email_settings CASCADE'))
         db.session.commit()
         
         # Recreate all tables
@@ -30,6 +32,18 @@ def setup_database():
     clear_database()
 
     with app.app_context():
+        # Initialize email settings
+        email_settings = EmailSettings(
+            smtp_server='smtp.gmail.com',
+            smtp_port=587,
+            smtp_username='modernmanagementhotels@gmail.com',
+            smtp_password=os.getenv('EMAIL_PASSWORD', ''),
+            sender_email='modernmanagementhotels@gmail.com',
+            enable_email_notifications=True
+        )
+        db.session.add(email_settings)
+        db.session.commit()
+
         # Create Properties
         hotels = [
             {
@@ -364,8 +378,8 @@ def setup_database():
                         task_id=task.task_id,
                         ticket_id=ticket.ticket_id,
                         assigned_to_user_id=assigned_manager.user_id,
-                        status='Pending'
-                    )
+                status='Pending'
+            )
                     db.session.add(task_assignment)
         
         # Commit all changes

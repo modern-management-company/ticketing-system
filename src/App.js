@@ -27,6 +27,7 @@ import PropertyManagement from './components/PropertyManagement';
 import Unauthorized from './components/Unauthorized';
 import Reports from './components/Reports';
 import HomeOverview from './components/HomeOverview';
+import EmailSettings from './components/EmailSettings';
 
 const App = () => {
   return (
@@ -83,8 +84,12 @@ const App = () => {
                     <ManageUsers />
                   </ProtectedRoute>
                 } />
+                <Route path="email-settings" element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <EmailSettings />
+                  </ProtectedRoute>
+                } />
               </Route>
-              
               
               <Route path="/" element={
                 <ProtectedRoute>

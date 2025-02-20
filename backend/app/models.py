@@ -258,3 +258,29 @@ class PropertyManager(db.Model):
     property_id = db.Column(db.Integer, db.ForeignKey('properties.property_id'), primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), primary_key=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class EmailSettings(db.Model):
+    __tablename__ = 'email_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    smtp_server = db.Column(db.String(255), nullable=False)
+    smtp_port = db.Column(db.Integer, nullable=False)
+    smtp_username = db.Column(db.String(255), nullable=False)
+    smtp_password = db.Column(db.String(255), nullable=False)
+    sender_email = db.Column(db.String(255), nullable=False)
+    enable_email_notifications = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        """Convert email settings object to dictionary"""
+        return {
+            'id': self.id,
+            'smtp_server': self.smtp_server,
+            'smtp_port': self.smtp_port,
+            'smtp_username': self.smtp_username,
+            'smtp_password': self.smtp_password,
+            'sender_email': self.sender_email,
+            'enable_email_notifications': self.enable_email_notifications,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
