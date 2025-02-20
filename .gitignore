@@ -57,3 +57,4 @@ backend/logs/app.log.8
 backend/logs/app.log.9
 backend/logs/app.log.10
 package-lock.json
+backend/database_backups/
