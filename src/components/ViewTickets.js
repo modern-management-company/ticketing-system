@@ -29,7 +29,8 @@ import {
   CardContent,
   CardActions,
   Grid,
-  TableSortLabel
+  TableSortLabel,
+  Tooltip
 } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -37,6 +38,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import PropertySwitcher from './PropertySwitcher';
 import { useIsMobile } from '../hooks/useIsMobile';
 import CloseIcon from '@mui/icons-material/Close';
+import ViewWeekIcon from '@mui/icons-material/ViewWeek';
+import TableViewIcon from '@mui/icons-material/TableView';
+import TicketKanbanBoard from './TicketKanbanBoard';
 
 const ViewTickets = () => {
   const { auth } = useAuth();
@@ -61,6 +65,7 @@ const ViewTickets = () => {
   });
   const [orderBy, setOrderBy] = useState('ticket_id');
   const [order, setOrder] = useState('asc');
+  const [viewMode, setViewMode] = useState('table');
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
@@ -339,6 +344,25 @@ const ViewTickets = () => {
     }
   };
 
+  const handleStatusChange = async (ticketId, newStatus) => {
+    try {
+      setError(null);
+      setMessage(null);
+      
+      const response = await apiClient.patch(`/tickets/${ticketId}`, { status: newStatus });
+      
+      if (response.status === 200) {
+        setTickets(prevTickets => prevTickets.map(ticket => 
+          ticket.ticket_id === ticketId ? { ...ticket, status: newStatus } : ticket
+        ));
+        setMessage('Ticket status updated successfully');
+      }
+    } catch (error) {
+      console.error('Failed to update ticket status:', error);
+      setError(error.response?.data?.msg || 'Failed to update ticket status');
+    }
+  };
+
   const handleRequestSort = (property) => {
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
@@ -456,7 +480,7 @@ const ViewTickets = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">Tickets</Typography>
+        <Typography variant="h5">Tickets</Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
           <Button
@@ -468,6 +492,11 @@ const ViewTickets = () => {
           >
             Create Ticket
           </Button>
+          <Tooltip title={viewMode === 'table' ? 'Switch to Kanban View' : 'Switch to Table View'}>
+            <IconButton onClick={() => setViewMode(viewMode === 'table' ? 'kanban' : 'table')}>
+              {viewMode === 'table' ? <ViewWeekIcon /> : <TableViewIcon />}
+            </IconButton>
+          </Tooltip>
         </Box>
       </Box>
 
@@ -491,7 +520,15 @@ const ViewTickets = () => {
         </Box>
       ) : (
         <>
-          {isMobile ? (
+          {viewMode === 'kanban' ? (
+            <TicketKanbanBoard
+              tickets={tickets}
+              onTicketMove={(ticketId, newStatus) => handleStatusChange(ticketId, newStatus)}
+              onEditTicket={handleOpenDialog}
+              onDeleteTicket={handleDeleteTicket}
+              canEdit={auth?.user?.role === 'super_admin' || managers.some(m => m.user_id === auth?.user?.user_id)}
+            />
+          ) : isMobile ? (
             <Box sx={{ mt: 2 }}>
               {tickets.map((ticket) => (
                 <TicketCard key={ticket.ticket_id} ticket={ticket} />

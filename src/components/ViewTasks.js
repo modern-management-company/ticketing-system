@@ -46,6 +46,9 @@ import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
 import { format } from 'date-fns';
 import { useIsMobile } from '../hooks/useIsMobile';
 import CloseIcon from '@mui/icons-material/Close';
+import ViewWeekIcon from '@mui/icons-material/ViewWeek';
+import TableViewIcon from '@mui/icons-material/TableView';
+import KanbanBoard from './TasksKanbanBoard';
 
 const ViewTasks = () => {
   const navigate = useNavigate();
@@ -73,6 +76,7 @@ const ViewTasks = () => {
   const isMobile = useIsMobile();
   const [orderBy, setOrderBy] = useState('task_id');
   const [order, setOrder] = useState('asc');
+  const [viewMode, setViewMode] = useState('table');
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -467,6 +471,11 @@ const ViewTasks = () => {
           >
             Create Task
           </Button>
+          <Tooltip title={viewMode === 'table' ? 'Switch to Kanban View' : 'Switch to Table View'}>
+            <IconButton onClick={() => setViewMode(viewMode === 'table' ? 'kanban' : 'table')}>
+              {viewMode === 'table' ? <ViewWeekIcon /> : <TableViewIcon />}
+            </IconButton>
+          </Tooltip>
         </Box>
       </Box>
       
@@ -490,7 +499,16 @@ const ViewTasks = () => {
         </Box>
       ) : (
         <>
-          {isMobile ? (
+          {viewMode === 'kanban' ? (
+            <KanbanBoard
+              tasks={tasks}
+              users={users}
+              onTaskMove={handleStatusChange}
+              onEditTask={handleOpenDialog}
+              onDeleteTask={handleDeleteTask}
+              canEdit={auth?.user?.role === 'super_admin' || managers.some(m => m.user_id === auth?.user?.user_id)}
+            />
+          ) : isMobile ? (
             <Box sx={{ mt: 2 }}>
               {tasks.map((task) => (
                 <TaskCard key={task.task_id} task={task} />
