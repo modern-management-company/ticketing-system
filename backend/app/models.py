@@ -34,7 +34,7 @@ class User(db.Model):
     
     assigned_tasks = db.relationship('Task',
                                    foreign_keys='Task.assigned_to_id',
-                                   backref=db.backref('assignee', lazy='dynamic'),
+                                   backref=db.backref('assigned_user', lazy='dynamic'),
                                    lazy='dynamic')
 
     def __init__(self, username, email, password, role='user', manager_id=None, group=None, phone=None):
@@ -257,13 +257,12 @@ class Task(db.Model):
     # Relationships
     created_by = db.relationship('User', foreign_keys=[created_by_id], backref='created_tasks')
     completed_by = db.relationship('User', foreign_keys=[completed_by_id], backref='completed_tasks')
-    assignee = db.relationship('User', foreign_keys=[assigned_to_id])
 
     def to_dict(self):
         """Convert task object to dictionary"""
         creator = User.query.get(self.created_by_id) if self.created_by_id else None
         completer = User.query.get(self.completed_by_id) if self.completed_by_id else None
-        assigned_user = self.assignee if self.assigned_to_id else None
+        assigned_user = self.assigned_user if self.assigned_to_id else None
         
         return {
             'task_id': self.task_id,
