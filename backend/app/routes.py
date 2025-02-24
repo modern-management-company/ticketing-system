@@ -1,6 +1,6 @@
 from flask import request, jsonify, current_app
 from app import app, db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest
 from app.services import EmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
@@ -12,6 +12,7 @@ from app.decorators import handle_errors
 import logging
 import secrets
 from sqlalchemy import or_
+from app.services.sms_service import SMSService
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -95,7 +96,9 @@ def register():
             email=data['email'],
             password=data['password'],
             role=role,
-            manager_id=data.get('manager_id')
+            manager_id=data.get('manager_id'),
+            group=data.get('group'),
+            phone=data.get('phone')  # Add phone field
         )
         
         db.session.add(new_user)
@@ -1072,6 +1075,7 @@ def manage_user(user_id):
             old_role = target_user.role
             old_group = target_user.group
             old_status = target_user.is_active
+            old_phone = target_user.phone
             old_properties = set(p.property_id for p in target_user.assigned_properties)
             
             # Handle property assignments
@@ -1100,6 +1104,10 @@ def manage_user(user_id):
             if 'email' in data:
                 target_user.email = data['email']
                 changes.append(f"Email updated to: {data['email']}")
+            
+            if 'phone' in data:
+                target_user.phone = data['phone']
+                changes.append(f"Phone updated to: {data['phone']}")
             
             if 'is_active' in data:
                 target_user.is_active = data['is_active']
@@ -2457,3 +2465,211 @@ def test_all_emails():
             'error': 'Internal server error',
             'details': str(e)
         }), 500
+
+@app.route('/service-requests', methods=['POST'])
+@jwt_required()
+def create_service_request():
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        data = request.get_json()
+        required_fields = ['room_id', 'property_id', 'request_group', 'request_type', 'priority']
+        
+        # Validate required fields
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'msg': f'Missing required field: {field}'}), 400
+
+        # Validate room exists and belongs to property
+        room = Room.query.filter_by(
+            room_id=data['room_id'],
+            property_id=data['property_id']
+        ).first()
+        
+        if not room:
+            return jsonify({'msg': 'Invalid room_id or room does not belong to the property'}), 400
+
+        # Create new service request
+        new_request = ServiceRequest(
+            room_id=data['room_id'],
+            property_id=data['property_id'],
+            request_group=data['request_group'],
+            request_type=data['request_type'],
+            priority=data['priority'],
+            quantity=data.get('quantity', 1),
+            guest_name=data.get('guest_name'),
+            notes=data.get('notes'),
+            created_by_id=current_user.user_id
+        )
+
+        # Create a task for the request
+        task = Task(
+            title=f"{data['request_group']} Request: {data['request_type']} - Room {room.name}",
+            description=f"Priority: {data['priority']}\nGuest: {data.get('guest_name', 'N/A')}\nNotes: {data.get('notes', 'N/A')}",
+            status='pending',
+            priority=data['priority'],
+            property_id=data['property_id']
+        )
+        
+        db.session.add(task)
+        db.session.flush()  # Get the task ID
+        
+        # Link task to request
+        new_request.assigned_task_id = task.task_id
+        
+        # Find all staff members in the request group
+        staff_members = User.query.filter_by(
+            group=data['request_group'],
+            is_active=True
+        ).join(PropertyManager).filter(
+            PropertyManager.property_id == data['property_id']
+        ).all()
+
+        if staff_members:
+            # Create task assignments for all staff members
+            for staff in staff_members:
+                task_assignment = TaskAssignment(
+                    task_id=task.task_id,
+                    assigned_to_user_id=staff.user_id,
+                    status='Pending'
+                )
+                db.session.add(task_assignment)
+
+                # Send SMS notification if staff has phone number
+                if staff.phone:
+                    sms_service = SMSService()
+                    sms_service.send_housekeeping_request_notification(
+                        room.name,
+                        f"{data['request_group']} - {data['request_type']}",
+                        staff.phone
+                    )
+
+        try:
+            db.session.add(new_request)
+            db.session.commit()
+
+            return jsonify({
+                'msg': 'Service request created successfully',
+                'request': new_request.to_dict()
+            }), 201
+
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error creating service request: {str(e)}")
+            return jsonify({'msg': 'Failed to create service request'}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error in create_service_request: {str(e)}")
+        return jsonify({'msg': 'Internal server error'}), 500
+
+@app.route('/service-requests', methods=['GET'])
+@jwt_required()
+def get_service_requests():
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        property_id = request.args.get('property_id', type=int)
+        status = request.args.get('status')
+        request_group = request.args.get('request_group')
+        
+        # Base query
+        query = ServiceRequest.query
+
+        # Apply filters
+        if property_id:
+            query = query.filter_by(property_id=property_id)
+        if status:
+            query = query.filter_by(status=status)
+        if request_group:
+            query = query.filter_by(request_group=request_group)
+
+        # Filter based on user role/group
+        if current_user.role == 'user':
+            # Users see requests for their group and property
+            query = query.filter(
+                (ServiceRequest.request_group == current_user.group) &
+                (ServiceRequest.property_id.in_([p.property_id for p in current_user.assigned_properties]))
+            )
+        elif current_user.role == 'manager':
+            # Managers see requests for their managed properties
+            managed_properties = PropertyManager.query.filter_by(
+                user_id=current_user.user_id
+            ).with_entities(PropertyManager.property_id).all()
+            managed_property_ids = [p[0] for p in managed_properties]
+            query = query.filter(ServiceRequest.property_id.in_(managed_property_ids))
+
+        # Execute query
+        requests = query.order_by(ServiceRequest.created_at.desc()).all()
+        
+        return jsonify({
+            'requests': [request.to_dict() for request in requests]
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting service requests: {str(e)}")
+        return jsonify({'msg': 'Failed to get service requests'}), 500
+
+@app.route('/service-requests/<int:request_id>', methods=['PATCH'])
+@jwt_required()
+def update_service_request(request_id):
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        service_request = ServiceRequest.query.get_or_404(request_id)
+        data = request.get_json()
+
+        # Update status if provided
+        if 'status' in data:
+            old_status = service_request.status
+            service_request.status = data['status']
+
+            # If marked as completed
+            if data['status'] == 'completed' and old_status != 'completed':
+                service_request.completed_at = datetime.utcnow()
+                
+                # Update associated task
+                if service_request.assigned_task:
+                    service_request.assigned_task.status = 'completed'
+                    # Update all task assignments
+                    for assignment in TaskAssignment.query.filter_by(task_id=service_request.assigned_task_id).all():
+                        assignment.status = 'Completed'
+
+                    # Send SMS notification to staff members
+                    staff_members = User.query.filter_by(
+                        group=service_request.request_group,
+                        is_active=True
+                    ).join(PropertyManager).filter(
+                        PropertyManager.property_id == service_request.property_id
+                    ).all()
+
+                    if staff_members:
+                        sms_service = SMSService()
+                        for staff in staff_members:
+                            if staff.phone:  # Only send if staff has phone number
+                                sms_service.send_housekeeping_request_notification(
+                                    service_request.room.name,
+                                    f"Request completed: {service_request.request_type}",
+                                    staff.phone
+                                )
+
+        # Update other fields if provided
+        for field in ['notes', 'quantity', 'priority']:
+            if field in data:
+                setattr(service_request, field, data[field])
+
+        db.session.commit()
+        return jsonify({
+            'msg': 'Service request updated successfully',
+            'request': service_request.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating service request: {str(e)}")
+        return jsonify({'msg': 'Failed to update service request'}), 500

@@ -58,4 +58,10 @@ class Config:
     SMTP_USERNAME = os.environ.get('SMTP_USERNAME', 'modernmanagementhotels@gmail.com')
     SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
     SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'noreply@modernmanagementhotels.com')
-    ENABLE_EMAIL_NOTIFICATIONS = os.environ.get('ENABLE_EMAIL_NOTIFICATIONS', 'True').lower() == 'true' 
+    ENABLE_EMAIL_NOTIFICATIONS = os.environ.get('ENABLE_EMAIL_NOTIFICATIONS', 'True').lower() == 'true'
+
+    # SMS configuration
+    TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
+    TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
+    TWILIO_FROM_NUMBER = os.environ.get('TWILIO_FROM_NUMBER', '')
+    ENABLE_SMS_NOTIFICATIONS = os.environ.get('ENABLE_SMS_NOTIFICATIONS', 'True').lower() == 'true' 

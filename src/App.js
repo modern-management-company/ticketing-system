@@ -28,6 +28,7 @@ import Unauthorized from './components/Unauthorized';
 import Reports from './components/Reports';
 import HomeOverview from './components/HomeOverview';
 import EmailSettings from './components/EmailSettings';
+import ServiceRequests from './components/ServiceRequests';
 
 const App = () => {
   return (
@@ -64,6 +65,12 @@ const App = () => {
               <Route path="/rooms" element={
                 <ProtectedRoute>
                   <ViewRooms />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/requests" element={
+                <ProtectedRoute>
+                  <ServiceRequests />
                 </ProtectedRoute>
               } />
               

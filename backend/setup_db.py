@@ -2,7 +2,7 @@ from app import app, db
 from app.models import User, Property, Ticket, Task, TaskAssignment, Room, PropertyManager, EmailSettings
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 import random
 import os
 import subprocess
@@ -197,54 +197,69 @@ def setup_database():
     backup_file = backup_database()
     if not backup_file:
         print("Failed to create database backup. Proceeding with caution...")
-    
-    # Check and initialize migrations folder if needed
-    if not check_migrations_folder():
-        print("Failed to initialize migrations. Exiting.")
-        return False
 
-    # Create new migration if there are model changes
-    if create_migration():
-        print("Attempting to apply new migration...")
-        if not safe_upgrade():
-            print("Failed to apply migration. Attempting to restore from backup...")
-            if backup_file and restore_database(backup_file):
-                print("Database restored successfully from backup.")
-            else:
-                print("Failed to restore database from backup.")
-            return False
-
-    with app.app_context():
-        # Check if we need to initialize data
-        if User.query.count() == 0:
-            print("No users found. Initializing database with default data...")
-            try:
-                initialize_data()
-            except Exception as e:
-                print(f"Error during data initialization: {e}")
-                if backup_file and restore_database(backup_file):
-                    print("Database restored successfully from backup.")
-                else:
-                    print("Failed to restore database from backup.")
-                return False
-        else:
-            print("Database already contains data. Skipping initialization.")
-    
-    print("Database setup completed successfully!")
-    
-    # Clean up old backups (keep last 5)
     try:
-        backup_dir = Path("database_backups")
-        if backup_dir.exists():
-            backups = sorted(backup_dir.glob("backup_*.sql"))
-            if len(backups) > 5:
-                for old_backup in backups[:-5]:
-                    old_backup.unlink()
-                print(f"Cleaned up {len(backups) - 5} old backup(s)")
+        with app.app_context():
+            # Initialize database
+            db.create_all()
+            
+            # Get all table names from the models
+            model_tables = {
+                User.__tablename__: User,
+                Property.__tablename__: Property,
+                Ticket.__tablename__: Ticket,
+                Task.__tablename__: Task,
+                TaskAssignment.__tablename__: TaskAssignment,
+                Room.__tablename__: Room,
+                PropertyManager.__tablename__: PropertyManager,
+                EmailSettings.__tablename__: EmailSettings
+            }
+            
+            inspector = inspect(db.engine)
+            existing_tables = inspector.get_table_names()
+            
+            # Create missing tables
+            for table_name, model in model_tables.items():
+                if table_name not in existing_tables:
+                    print(f"Creating table: {table_name}")
+                    model.__table__.create(db.engine)
+                else:
+                    # Check for missing columns
+                    existing_columns = {col['name'] for col in inspector.get_columns(table_name)}
+                    model_columns = {col.name for col in model.__table__.columns}
+                    missing_columns = model_columns - existing_columns
+                    
+                    if missing_columns:
+                        print(f"Adding missing columns for {table_name}: {missing_columns}")
+                        for col_name in missing_columns:
+                            column = next(col for col in model.__table__.columns if col.name == col_name)
+                            col_type = column.type.compile(db.engine.dialect)
+                            nullable = "NULL" if column.nullable else "NOT NULL"
+                            default = f"DEFAULT {column.default.arg}" if column.default is not None else ""
+                            
+                            db.session.execute(text(f"""
+                                ALTER TABLE {table_name}
+                                ADD COLUMN {col_name} {col_type} {nullable} {default}
+                            """))
+            
+            db.session.commit()
+            
+            # Initialize data if needed
+            if User.query.count() == 0:
+                print("Initializing default data...")
+                initialize_data()
+            else:
+                print("Database already contains data. Skipping initialization.")
+                
+            print("Database setup completed successfully!")
+            return True
+            
     except Exception as e:
-        print(f"Warning: Failed to clean up old backups: {e}")
-    
-    return True
+        print(f"Unexpected error during database setup: {e}")
+        if backup_file:
+            restore_database(backup_file)
+            print("Database restored from backup.")
+        return False
 
 def initialize_data():
     """Initialize database with default data"""
@@ -296,7 +311,8 @@ def initialize_data():
                         email='admin@modernhotels.management',
                         password='admin@123',
                         role='super_admin',
-                        group='Executive'
+                        group='Executive',
+                        phone='6144076457'
                     )
                     
                     # Create Basic User
@@ -305,7 +321,8 @@ def initialize_data():
                         email='user@modernhotels.management',
                         password='basic@123',
                         role='user',
-                        group='Front Desk'
+                        group='Front Desk',
+                        phone='6144076457'
                     )
                     
                     # Create Department Managers
@@ -314,7 +331,8 @@ def initialize_data():
                         email='manager.engineering@modernhotels.management',
                         password='engineering@123',
                         role='manager',
-                        group='Engineering'
+                        group='Engineering',
+                        phone='6144076457'
                     )
                     
                     manager_frontdesk = User(
@@ -322,7 +340,8 @@ def initialize_data():
                         email='manager.frontdesk@modernhotels.management',
                         password='frontdesk@123',
                         role='manager',
-                        group='Front Desk'
+                        group='Front Desk',
+                        phone='6144076457'
                     )
                     
                     manager_housekeeping = User(
@@ -330,7 +349,8 @@ def initialize_data():
                         email='manager.housekeeping@modernhotels.management',
                         password='housekeeping@123',
                         role='manager',
-                        group='Housekeeping'
+                        group='Housekeeping',
+                        phone='6144076457'
                     )
                     
                     db.session.add_all([admin, basic_user, manager_engineering, manager_frontdesk, manager_housekeeping])
