@@ -190,115 +190,124 @@ def create_ticket():
         if not current_user:
             return jsonify({'msg': 'User not found'}), 404
 
-        # Create new ticket
-        new_ticket = Ticket(
-            title=data['title'],
-            description=data['description'],
-            priority=data['priority'],
-            category=data['category'],
-            subcategory=data.get('subcategory'),  # Optional field
-            property_id=data['property_id'],
-            user_id=current_user.user_id,
-            room_id=data.get('room_id')  # Optional field
-        )
+        # Initialize response data
+        response_data = {
+            'msg': 'Ticket created successfully',
+            'ticket': None,
+            'notifications_sent': False,
+            'task_created': False,
+            'assigned_to': None
+        }
 
-        # If room_id is provided, validate it exists and belongs to the property
-        if data.get('room_id'):
-            room = Room.query.filter_by(
-                room_id=data['room_id'],
-                property_id=data['property_id']
-            ).first()
-            
-            if not room:
-                return jsonify({'msg': 'Invalid room_id or room does not belong to the property'}), 400
-
-            # Update room status based on ticket category
-            if data['category'] == 'Maintenance':
-                room.status = 'Maintenance'
-            elif data['category'] == 'Housekeeping':
-                room.status = 'Cleaning'
-            elif room.status == 'Available':  # Only change if room is available
-                room.status = 'Out of Order'
-
+        # First transaction: Create ticket and related data
         try:
-            db.session.add(new_ticket)
-            db.session.commit()
-
-            # Find the appropriate manager based on category
-            category = data['category']
-            property_managers = User.query.join(PropertyManager).filter(
-                PropertyManager.property_id == data['property_id']
-            ).all()
-
-            assigned_manager = None
-            for manager in property_managers:
-                if (category == 'Maintenance' and manager.group == 'Engineering') or \
-                   (category == 'Housekeeping' and manager.group == 'Housekeeping') or \
-                   (category == 'General' and manager.group == 'Front Desk'):
-                    assigned_manager = manager
-                    break
-
-            if assigned_manager:
-                # Create and assign a task
-                task = Task(
-                    title=f"Task for Ticket: {data['title']}",
-                    description=f"Auto-generated task for ticket. Category: {category}\nDescription: {data['description']}",
-                    status='pending',
-                    priority=data['priority'],
-                    property_id=data['property_id'],
-                    assigned_to_id=assigned_manager.user_id
-                )
-                db.session.add(task)
-                db.session.flush()  # This will populate the task_id
-                
-                # Create task assignment
-                task_assignment = TaskAssignment(
-                    task_id=task.task_id,
-                    ticket_id=new_ticket.ticket_id,
-                    assigned_to_user_id=assigned_manager.user_id,
-                    status='Pending'
-                )
-                db.session.add(task_assignment)
-                db.session.commit()
-
-            # Get property managers and super admins for notifications
-            super_admins = User.query.filter_by(role='super_admin').all()
-            
-            # Combine recipients and remove duplicates
-            recipients = list(set(property_managers + super_admins))
-            
-            # Get property name for notification
-            property_name = Property.query.get(data['property_id']).name
-
-            # Send notifications
-            from app.services.email_service import EmailService
-            email_service = EmailService()
-            notifications_sent = email_service.send_ticket_notification(
-                new_ticket,
-                property_name,
-                recipients,
-                notification_type="new"
+            # Create new ticket
+            new_ticket = Ticket(
+                title=data['title'],
+                description=data['description'],
+                priority=data['priority'],
+                category=data['category'],
+                subcategory=data.get('subcategory'),
+                property_id=data['property_id'],
+                user_id=current_user.user_id,
+                room_id=data.get('room_id')
             )
 
-            response_data = {
-                'msg': 'Ticket created successfully',
-                'ticket': new_ticket.to_dict(),
-                'notifications_sent': notifications_sent > 0
-            }
+            # Handle room status if room_id provided
+            if data.get('room_id'):
+                room = Room.query.filter_by(
+                    room_id=data['room_id'],
+                    property_id=data['property_id']
+                ).first()
+                
+                if not room:
+                    return jsonify({'msg': 'Invalid room_id or room does not belong to the property'}), 400
+
+                if data['category'] == 'Maintenance':
+                    room.status = 'Maintenance'
+                elif data['category'] == 'Housekeeping':
+                    room.status = 'Cleaning'
+                elif room.status == 'Available':
+                    room.status = 'Out of Order'
+
+            # Save ticket first
+            db.session.add(new_ticket)
+            db.session.commit()
             
-            if assigned_manager:
-                response_data['task_created'] = True
-                response_data['assigned_to'] = {
-                    'user_id': assigned_manager.user_id,
-                    'username': assigned_manager.username,
-                    'group': assigned_manager.group
-                }
+            # Update response with ticket data
+            response_data['ticket'] = new_ticket.to_dict()
+
+            # Second transaction: Create and assign task if needed
+            try:
+                property_managers = User.query.join(PropertyManager).filter(
+                    PropertyManager.property_id == data['property_id']
+                ).all()
+
+                assigned_manager = next(
+                    (manager for manager in property_managers 
+                     if (data['category'] == 'Maintenance' and manager.group == 'Engineering') or
+                        (data['category'] == 'Housekeeping' and manager.group == 'Housekeeping') or
+                        (data['category'] == 'General' and manager.group == 'Front Desk')),
+                    None
+                )
+
+                if assigned_manager:
+                    task = Task(
+                        title=f"Task for Ticket: {data['title']}",
+                        description=f"Auto-generated task for ticket. Category: {data['category']}\nDescription: {data['description']}",
+                        status='pending',
+                        priority=data['priority'],
+                        property_id=data['property_id'],
+                        assigned_to_id=assigned_manager.user_id
+                    )
+                    db.session.add(task)
+                    db.session.flush()
+                    
+                    task_assignment = TaskAssignment(
+                        task_id=task.task_id,
+                        ticket_id=new_ticket.ticket_id,
+                        assigned_to_user_id=assigned_manager.user_id,
+                        status='Pending'
+                    )
+                    db.session.add(task_assignment)
+                    db.session.commit()
+
+                    response_data['task_created'] = True
+                    response_data['assigned_to'] = {
+                        'user_id': assigned_manager.user_id,
+                        'username': assigned_manager.username,
+                        'group': assigned_manager.group
+                    }
+            except Exception as task_error:
+                app.logger.error(f"Error creating task: {str(task_error)}")
+                # Don't rollback ticket creation if task creation fails
+                db.session.rollback()
+
+            # Third step: Send notifications (outside of any transaction)
+            try:
+                super_admins = User.query.filter_by(role='super_admin').all()
+                recipients = list(set(property_managers + super_admins))
+                property_name = Property.query.get(data['property_id']).name
+
+                from app.services.email_service import EmailService
+                email_service = EmailService()
+                notifications_sent = email_service.send_ticket_notification(
+                    new_ticket,
+                    property_name,
+                    recipients,
+                    notification_type="new"
+                )
+                response_data['notifications_sent'] = notifications_sent > 0
+            except Exception as email_error:
+                app.logger.error(f"Error sending notifications: {str(email_error)}")
+                # Don't affect the response status if email fails
+                response_data['notifications_sent'] = False
 
             return jsonify(response_data), 201
 
-        except Exception as e:
+        except Exception as db_error:
             db.session.rollback()
-            app.logger.error(f"Error creating ticket: {str(e)}")
+            app.logger.error(f"Database error: {str(db_error)}")
             return jsonify({'msg': 'Failed to create ticket'}), 500
 
     except Exception as e:
