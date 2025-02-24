@@ -2661,17 +2661,25 @@ def get_service_requests():
 
         # Filter based on user role/group
         if current_user.role == 'user':
-            # Users see requests for their group and property
+            # Get user's assigned property IDs from UserProperty table
+            assigned_property_ids = db.session.query(UserProperty.property_id).filter_by(
+                user_id=current_user.user_id
+            ).all()
+            assigned_property_ids = [p[0] for p in assigned_property_ids]
+            
+            # Users see requests for their group and assigned properties
             query = query.filter(
                 (ServiceRequest.request_group == current_user.group) &
-                (ServiceRequest.property_id.in_([p.property_id for p in current_user.assigned_properties]))
+                (ServiceRequest.property_id.in_(assigned_property_ids))
             )
         elif current_user.role == 'manager':
-            # Managers see requests for their managed properties
-            managed_properties = PropertyManager.query.filter_by(
+            # Get manager's property IDs from PropertyManager table
+            managed_property_ids = db.session.query(PropertyManager.property_id).filter_by(
                 user_id=current_user.user_id
-            ).with_entities(PropertyManager.property_id).all()
-            managed_property_ids = [p[0] for p in managed_properties]
+            ).all()
+            managed_property_ids = [p[0] for p in managed_property_ids]
+            
+            # Managers see requests for their managed properties
             query = query.filter(ServiceRequest.property_id.in_(managed_property_ids))
 
         # Execute query
