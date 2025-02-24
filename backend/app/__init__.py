@@ -47,15 +47,32 @@ CORS(app, resources={
             "http://127.0.0.1:3000",
             "https://modernhotels.management",
             "https://ticketing-system-gilt.vercel.app",
-            "https://ticketing-system-gilt.vercel.app/"  # Note the trailing slash version
+            "https://ticketing-system-gilt.vercel.app/",  # Note the trailing slash version
+            "http://vm.vasantika.net:3000",  # Add your VM domain
+            "http://vm.vasantika.net"  # Add your VM domain without port
         ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-        "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
+        "allow_headers": [
+            "Content-Type", 
+            "Authorization", 
+            "Access-Control-Allow-Credentials",
+            "Access-Control-Allow-Private-Network"  # Add private network access
+        ],
         "expose_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True,
         "max_age": 600
     }
 })
+
+# Add headers for private network access
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Private-Network', 'true')
+    response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Access-Control-Allow-Private-Network')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
 
 # Initialize extensions
 db = SQLAlchemy(app)
