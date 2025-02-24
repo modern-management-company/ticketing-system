@@ -975,7 +975,15 @@ def create_task():
         if not all(field in data for field in required_fields):
             return jsonify({'msg': 'Missing required fields'}), 400
 
-        # Create the task
+        # Initialize response data
+        response_data = {
+            'msg': 'Task created successfully',
+            'task': None,
+            'notifications_sent': False,
+            'ticket_linked': False
+        }
+
+        # First transaction: Create the task
         task = Task(
             title=data['title'],
             description=data['description'],
@@ -986,31 +994,37 @@ def create_task():
             due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None
         )
         db.session.add(task)
-        db.session.flush()  # Flush to get the task_id
-
-        # If this task is imported from a ticket, create task assignment and sync status/priority
-        if 'ticket_id' in data:
-            ticket = Ticket.query.get(data['ticket_id'])
-            if ticket:
-                # Map ticket status to task status
-                task_status = 'completed' if ticket.status == 'completed' else \
-                            'in progress' if ticket.status == 'in progress' else \
-                            'pending'
-                task.status = task_status
-                task.priority = ticket.priority  # Sync priority with ticket
-
-                task_assignment = TaskAssignment(
-                    task_id=task.task_id,
-                    ticket_id=data['ticket_id'],
-                    assigned_to_user_id=data.get('assigned_to_id'),
-                    status=task_status
-                )
-                db.session.add(task_assignment)
-
         db.session.commit()
+        response_data['task'] = task.to_dict()
 
-        # Send email notification if user is assigned
-        notifications_sent = False
+        # Second transaction: Handle ticket association if needed
+        try:
+            if 'ticket_id' in data:
+                ticket = Ticket.query.get(data['ticket_id'])
+                if ticket:
+                    # Map ticket status to task status
+                    task_status = 'completed' if ticket.status == 'completed' else \
+                                'in progress' if ticket.status == 'in progress' else \
+                                'pending'
+                    task.status = task_status
+                    task.priority = ticket.priority  # Sync priority with ticket
+
+                    task_assignment = TaskAssignment(
+                        task_id=task.task_id,
+                        ticket_id=data['ticket_id'],
+                        assigned_to_user_id=data.get('assigned_to_id'),
+                        status=task_status
+                    )
+                    db.session.add(task_assignment)
+                    db.session.commit()
+                    response_data['ticket_linked'] = True
+
+        except Exception as ticket_error:
+            app.logger.error(f"Error linking ticket to task: {str(ticket_error)}")
+            # Don't rollback task creation if ticket linking fails
+            db.session.rollback()
+
+        # Third step: Send email notifications (outside any transaction)
         if data.get('assigned_to_id'):
             try:
                 assigned_user = User.query.get(data['assigned_to_id'])
@@ -1020,18 +1034,17 @@ def create_task():
                     notifications_sent = email_service.send_task_assignment_notification(
                         assigned_user, task, property.name
                     )
-            except Exception as e:
-                app.logger.error(f"Failed to send email notification: {str(e)}")
+                    response_data['notifications_sent'] = notifications_sent
+            except Exception as email_error:
+                app.logger.error(f"Failed to send email notification: {str(email_error)}")
+                # Don't affect the response status if email fails
+                response_data['notifications_sent'] = False
 
-        return jsonify({
-            'msg': 'Task created successfully',
-            'task': task.to_dict(),
-            'notifications_sent': notifications_sent
-        }), 201
+        return jsonify(response_data), 201
 
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Error creating task: {str(e)}")
+        app.logger.error(f"Error in create_task: {str(e)}")
         return jsonify({'msg': f'Error creating task: {str(e)}'}), 500
 
 @app.route('/users', methods=['GET'])
