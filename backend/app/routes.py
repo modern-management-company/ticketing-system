@@ -13,7 +13,17 @@ import logging
 import secrets
 from sqlalchemy import or_
 from app.services.sms_service import SMSService
-from app.services.background_tasks import send_ticket_notification_async, send_service_request_notification_async
+from app.services.background_tasks import (
+    send_ticket_notification_async, 
+    send_service_request_notification_async,
+    send_user_registration_notification_async,
+    send_user_management_notification_async,
+    send_password_reset_notification_async,
+    send_password_reset_link_async,
+    send_admin_alert_async,
+    send_room_status_notification_async,
+    send_property_status_notification_async
+)
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -99,18 +109,14 @@ def register():
             role=role,
             manager_id=data.get('manager_id'),
             group=data.get('group'),
-            phone=data.get('phone')  # Add phone field
+            phone=data.get('phone')
         )
         
         db.session.add(new_user)
         db.session.commit()
 
-        # Send welcome email with credentials
-        email_service = EmailService()
-        email_sent = email_service.send_user_registration_email(new_user, original_password, None)
-        
-        if not email_sent:
-            app.logger.warning(f"Failed to send welcome email to {new_user.email}")
+        # Send welcome email asynchronously
+        send_user_registration_notification_async(new_user, original_password, None)
 
         # Generate token
         access_token = new_user.get_token()
@@ -617,7 +623,7 @@ def manage_property_room(property_id, room_id):
 
             db.session.commit()
 
-            # Send notifications if status was changed
+            # Send notifications if status was changed asynchronously
             if 'status' in data and old_status != room.status:
                 # Get all managers and admins for this property
                 property_managers = User.query.join(PropertyManager).filter(
@@ -629,9 +635,8 @@ def manage_property_room(property_id, room_id):
                 # Combine unique recipients
                 recipients = list(set(property_managers + super_admins))
 
-                # Send email notifications
-                email_service = EmailService()
-                email_service.send_room_status_notification(
+                # Send email notifications asynchronously
+                send_room_status_notification_async(
                     room=room,
                     property_name=property.name,
                     old_status=old_status,
@@ -640,8 +645,8 @@ def manage_property_room(property_id, room_id):
                 )
 
             return jsonify({
-                "msg": "Property updated successfully",
-                "property": property.to_dict()
+                "msg": "Room updated successfully",
+                "room": room.to_dict()
             }), 200
 
     except Exception as e:
@@ -1135,9 +1140,8 @@ def manage_user(user_id):
             
             db.session.commit()
 
-            # Send notifications based on changes
-            try:
-                email_service = EmailService()
+            # Send notifications based on changes asynchronously
+            if changes:
                 admin_emails = [user.email for user in User.query.filter_by(role='super_admin').all()]
                 
                 # Determine notification type based on changes
@@ -1152,16 +1156,13 @@ def manage_user(user_id):
                 else:
                     notification_type = 'update'
                 
-                email_service.send_user_management_notification(
+                send_user_management_notification_async(
                     user=target_user,
                     changes=changes,
                     updated_by=current_user.username,
                     admin_emails=admin_emails,
                     change_type=notification_type
                 )
-            except Exception as e:
-                app.logger.error(f"Failed to send notification email: {str(e)}")
-                # Continue with the update even if email fails
             
             return jsonify({'msg': 'User updated successfully', 'changes': changes})
 
@@ -1169,21 +1170,17 @@ def manage_user(user_id):
             if current_user.role != 'super_admin':
                 return jsonify({'msg': 'Unauthorized'}), 403
             
-            # Send deletion notification
-            try:
-                email_service = EmailService()
-                admin_emails = [user.email for user in User.query.filter_by(role='super_admin').all()]
-                
-                changes = ["Account scheduled for deletion"]
-                email_service.send_user_management_notification(
-                    user=target_user,
-                    changes=changes,
-                    updated_by=current_user.username,
-                    admin_emails=admin_emails,
-                    change_type="deleted"
-                )
-            except Exception as e:
-                app.logger.error(f"Failed to send deletion notification email: {str(e)}")
+            # Send deletion notification asynchronously
+            admin_emails = [user.email for user in User.query.filter_by(role='super_admin').all()]
+            changes = ["Account scheduled for deletion"]
+            
+            send_user_management_notification_async(
+                user=target_user,
+                changes=changes,
+                updated_by=current_user.username,
+                admin_emails=admin_emails,
+                change_type="deleted"
+            )
             
             db.session.delete(target_user)
             db.session.commit()
@@ -1295,7 +1292,7 @@ def manage_property(property_id):
 
             db.session.commit()
 
-            # Send notifications if status was changed
+            # Send notifications if status was changed asynchronously
             if 'status' in data and old_status != property.status:
                 # Get all managers for this property
                 property_managers = User.query.join(PropertyManager).filter(
@@ -1307,9 +1304,8 @@ def manage_property(property_id):
                 # Combine unique recipients
                 recipients = list(set(property_managers + super_admins))
 
-                # Send email notifications
-                email_service = EmailService()
-                email_service.send_property_status_notification(
+                # Send email notifications asynchronously
+                send_property_status_notification_async(
                     property=property,
                     old_status=old_status,
                     new_status=property.status,
@@ -2331,22 +2327,22 @@ def reset_password():
         target_user.password = generate_password_hash(data['new_password'])
         db.session.commit()
 
-        # Send email notifications
-        email_service = EmailService()
+        # Send notifications asynchronously
+        is_self_reset = str(current_user.user_id) == str(data['user_id'])
         
         # Notify the user whose password was reset
-        email_service.send_password_reset_notification(
+        send_password_reset_notification_async(
             user=target_user,
             reset_by=current_user,
-            is_self_reset=(str(current_user.user_id) == str(data['user_id']))
+            is_self_reset=is_self_reset
         )
 
         # If reset by admin/manager, send admin alert
-        if str(current_user.user_id) != str(data['user_id']):
+        if not is_self_reset:
             super_admins = User.query.filter_by(role='super_admin').all()
             admin_emails = [admin.email for admin in super_admins]
             if admin_emails:
-                email_service.send_admin_alert(
+                send_admin_alert_async(
                     subject="Password Reset Alert",
                     message=f"""
                         <p>A password reset was performed:</p>
@@ -2382,18 +2378,17 @@ def request_password_reset():
         user.reset_token_expires = datetime.now() + timedelta(hours=1)
         db.session.commit()
 
-        # Send reset email
-        email_service = EmailService()
-        email_service.send_password_reset_link(
+        # Send reset email asynchronously
+        send_password_reset_link_async(
             user=user,
             reset_token=reset_token
         )
 
-        # Send admin alert
+        # Send admin alert asynchronously
         super_admins = User.query.filter_by(role='super_admin').all()
         admin_emails = [admin.email for admin in super_admins]
         if admin_emails:
-            email_service.send_admin_alert(
+            send_admin_alert_async(
                 subject="Password Reset Request",
                 message=f"""
                     <p>A password reset was requested:</p>
