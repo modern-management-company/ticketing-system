@@ -13,6 +13,7 @@ import logging
 import secrets
 from sqlalchemy import or_
 from app.services.sms_service import SMSService
+from app.services.background_tasks import send_ticket_notification_async, send_service_request_notification_async
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -194,7 +195,6 @@ def create_ticket():
         response_data = {
             'msg': 'Ticket created successfully',
             'ticket': None,
-            'notifications_sent': False,
             'task_created': False,
             'assigned_to': None
         }
@@ -283,25 +283,22 @@ def create_ticket():
                 # Don't rollback ticket creation if task creation fails
                 db.session.rollback()
 
-            # Third step: Send notifications (outside of any transaction)
+            # Third step: Send notifications asynchronously
             try:
                 super_admins = User.query.filter_by(role='super_admin').all()
                 recipients = list(set(property_managers + super_admins))
                 property_name = Property.query.get(data['property_id']).name
 
-                from app.services.email_service import EmailService
-                email_service = EmailService()
-                notifications_sent = email_service.send_ticket_notification(
+                # Send notification asynchronously
+                send_ticket_notification_async(
                     new_ticket,
                     property_name,
                     recipients,
                     notification_type="new"
                 )
-                response_data['notifications_sent'] = notifications_sent > 0
             except Exception as email_error:
-                app.logger.error(f"Error sending notifications: {str(email_error)}")
+                app.logger.error(f"Error initiating notifications: {str(email_error)}")
                 # Don't affect the response status if email fails
-                response_data['notifications_sent'] = False
 
             return jsonify(response_data), 201
 
@@ -979,7 +976,6 @@ def create_task():
         response_data = {
             'msg': 'Task created successfully',
             'task': None,
-            'notifications_sent': False,
             'ticket_linked': False
         }
 
@@ -1024,21 +1020,15 @@ def create_task():
             # Don't rollback task creation if ticket linking fails
             db.session.rollback()
 
-        # Third step: Send email notifications (outside any transaction)
+        # Third step: Send email notifications asynchronously
         if data.get('assigned_to_id'):
             try:
                 assigned_user = User.query.get(data['assigned_to_id'])
                 property = Property.query.get(data['property_id'])
                 if assigned_user and property:
-                    email_service = EmailService()
-                    notifications_sent = email_service.send_task_assignment_notification(
-                        assigned_user, task, property.name
-                    )
-                    response_data['notifications_sent'] = notifications_sent
+                    send_task_notification_async(task, assigned_user, property.name)
             except Exception as email_error:
-                app.logger.error(f"Failed to send email notification: {str(email_error)}")
-                # Don't affect the response status if email fails
-                response_data['notifications_sent'] = False
+                app.logger.error(f"Error initiating notification: {str(email_error)}")
 
         return jsonify(response_data), 201
 
@@ -2517,8 +2507,7 @@ def create_service_request():
         response_data = {
             'msg': 'Service request created successfully',
             'request': None,
-            'task_created': False,
-            'notifications_sent': False
+            'task_created': False
         }
 
         # First transaction: Create service request
@@ -2575,35 +2564,18 @@ def create_service_request():
             db.session.commit()
             response_data['task_created'] = True
 
+            # Third step: Send notifications asynchronously
+            if staff_members:
+                try:
+                    request_details = f"{data['request_group']} - {data['request_type']}"
+                    send_service_request_notification_async(staff_members, room.name, request_details)
+                except Exception as notification_error:
+                    app.logger.error(f"Error initiating notifications: {str(notification_error)}")
+
         except Exception as task_error:
             db.session.rollback()
             app.logger.error(f"Error creating task for service request: {str(task_error)}")
             # Don't rollback service request creation if task creation fails
-
-        # Third step: Send notifications (outside any transaction)
-        try:
-            if staff_members:
-                sms_service = SMSService()
-                notifications_sent = 0
-
-                for staff in staff_members:
-                    if staff.phone:  # Only send if staff has phone number
-                        try:
-                            sms_service.send_housekeeping_request_notification(
-                                room.name,
-                                f"{data['request_group']} - {data['request_type']}",
-                                staff.phone
-                            )
-                            notifications_sent += 1
-                        except Exception as sms_error:
-                            app.logger.error(f"Error sending SMS to {staff.phone}: {str(sms_error)}")
-                            continue
-
-                response_data['notifications_sent'] = notifications_sent > 0
-
-        except Exception as notification_error:
-            app.logger.error(f"Error sending notifications: {str(notification_error)}")
-            # Don't affect the response status if notifications fail
 
         return jsonify(response_data), 201
 
