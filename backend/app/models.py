@@ -33,9 +33,9 @@ class User(db.Model):
                                         lazy='dynamic')
     
     assigned_tasks = db.relationship('Task',
-                                   backref='assigned_to',
-                                   lazy='dynamic',
-                                   foreign_keys='Task.assigned_to_id')
+                                   foreign_keys='Task.assigned_to_id',
+                                   backref=db.backref('assignee', lazy='dynamic'),
+                                   lazy='dynamic')
 
     def __init__(self, username, email, password, role='user', manager_id=None, group=None, phone=None):
         self.username = username
@@ -257,13 +257,13 @@ class Task(db.Model):
     # Relationships
     created_by = db.relationship('User', foreign_keys=[created_by_id], backref='created_tasks')
     completed_by = db.relationship('User', foreign_keys=[completed_by_id], backref='completed_tasks')
-    assigned_to = db.relationship('User', foreign_keys=[assigned_to_id], backref='assigned_tasks')
+    assignee = db.relationship('User', foreign_keys=[assigned_to_id])
 
     def to_dict(self):
         """Convert task object to dictionary"""
         creator = User.query.get(self.created_by_id) if self.created_by_id else None
         completer = User.query.get(self.completed_by_id) if self.completed_by_id else None
-        assigned_to = User.query.get(self.assigned_to_id) if self.assigned_to_id else None
+        assigned_user = self.assignee if self.assigned_to_id else None
         
         return {
             'task_id': self.task_id,
@@ -274,7 +274,7 @@ class Task(db.Model):
             'due_date': self.due_date.isoformat() if self.due_date else None,
             'property_id': self.property_id,
             'assigned_to_id': self.assigned_to_id,
-            'assigned_to_username': assigned_to.username if assigned_to else None,
+            'assigned_to_username': assigned_user.username if assigned_user else None,
             'created_by_id': self.created_by_id,
             'created_by_username': creator.username if creator else None,
             'completed_by_id': self.completed_by_id,

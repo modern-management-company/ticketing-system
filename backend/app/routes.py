@@ -178,25 +178,16 @@ def login():
 def create_ticket():
     try:
         data = request.get_json()
-        required_fields = ['title', 'description', 'priority', 'category', 'property_id']
-        
-        # Validate required fields
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({'msg': f'Missing required field: {field}'}), 400
-
-        # Get the current user
         current_user = get_user_from_jwt()
+        
         if not current_user:
-            return jsonify({'msg': 'User not found'}), 404
+            return jsonify({'message': 'User not found'}), 404
 
         # Initialize response data
         response_data = {
-            'msg': 'Ticket created successfully',
-            'ticket': None,
-            'notifications_sent': False,
+            'ticket_created': False,
             'task_created': False,
-            'assigned_to': None
+            'notifications_sent': False
         }
 
         # First transaction: Create ticket and related data
@@ -793,11 +784,14 @@ def manage_task(task_id):
             return jsonify({"msg": "Task not found"}), 404
 
         # Check authorization
-        if current_user.role not in ['super_admin', 'manager'] and task.assigned_to_id != current_user.user_id:
+        is_manager = current_user.role in ['super_admin', 'manager']
+        is_assigned = task.assigned_to_id == current_user.user_id
+        is_in_group = current_user.group == task.created_by.group if task.created_by else False
+
+        if not (is_manager or is_assigned or is_in_group):
             return jsonify({'msg': 'Unauthorized'}), 403
 
         if request.method == 'GET':
-            # Get associated ticket information if exists
             task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
             task_data = task.to_dict()
             if task_assignment:
@@ -832,31 +826,31 @@ def manage_task(task_id):
                 if data['status'] == 'completed' and old_status != 'completed':
                     task.completed_by_id = current_user.user_id
                     task.completed_at = datetime.utcnow()
+                    
+                    # Update associated ticket if exists
+                    task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
+                    if task_assignment:
+                        ticket = Ticket.query.get(task_assignment.ticket_id)
+                        if ticket:
+                            ticket.status = 'completed'
+                            ticket.completed_by_id = current_user.user_id
+                            ticket.completed_at = datetime.utcnow()
+                            task_assignment.status = 'completed'
+                
                 # If task is being reopened, remove completion info
                 elif data['status'] != 'completed' and old_status == 'completed':
                     task.completed_by_id = None
                     task.completed_at = None
-                
-                # Update associated task assignment and ticket
-                task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
-                if task_assignment:
-                    task_assignment.status = data['status']
-                    ticket = Ticket.query.get(task_assignment.ticket_id)
-                    if ticket:
-                        # Map task status to ticket status and update completion info
-                        if data['status'] == 'completed':
-                            ticket.status = 'completed'
-                            ticket.completed_by_id = current_user.user_id
-                            ticket.completed_at = datetime.utcnow()
-                        elif data['status'] == 'in progress':
-                            ticket.status = 'in progress'
+                    
+                    # Update associated ticket if exists
+                    task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
+                    if task_assignment:
+                        ticket = Ticket.query.get(task_assignment.ticket_id)
+                        if ticket:
+                            ticket.status = 'open' if data['status'] == 'pending' else 'in progress'
                             ticket.completed_by_id = None
                             ticket.completed_at = None
-                        elif data['status'] == 'pending':
-                            ticket.status = 'open'
-                            ticket.completed_by_id = None
-                            ticket.completed_at = None
-                        task_assignment.status = ticket.status
+                            task_assignment.status = data['status']
 
             if 'priority' in data:
                 task.priority = data['priority']
@@ -866,14 +860,18 @@ def manage_task(task_id):
                     ticket = Ticket.query.get(task_assignment.ticket_id)
                     if ticket:
                         ticket.priority = data['priority']
+
             if 'assigned_to_id' in data:
-                task.assigned_to_id = data['assigned_to_id']
-                # Update task assignment if exists
-                task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
-                if task_assignment:
-                    task_assignment.assigned_to_user_id = data['assigned_to_id']
-            if 'due_date' in data:
-                task.due_date = datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if data['due_date'] else None
+                # Check if the new assignee is in the correct group
+                new_assignee = User.query.get(data['assigned_to_id'])
+                if new_assignee and (is_manager or new_assignee.group == current_user.group):
+                    task.assigned_to_id = data['assigned_to_id']
+                    # Update task assignment if exists
+                    task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
+                    if task_assignment:
+                        task_assignment.assigned_to_user_id = data['assigned_to_id']
+                else:
+                    return jsonify({'msg': 'Invalid assignment: User must be in the same group'}), 400
 
             task.updated_at = datetime.utcnow()
             
@@ -881,8 +879,7 @@ def manage_task(task_id):
                 db.session.commit()
                 app.logger.info(f"Successfully updated task {task_id}")
 
-                # Send email notification if assignee was changed
-                notifications_sent = False
+                # Send notifications for assignment changes
                 if 'assigned_to_id' in data and data['assigned_to_id'] != old_assignee_id:
                     try:
                         assigned_user = User.query.get(data['assigned_to_id'])
@@ -890,20 +887,13 @@ def manage_task(task_id):
                         if assigned_user and property:
                             email_service = EmailService()
                             notifications_sent = email_service.send_task_assignment_notification(
-                                assigned_user,
-                                task,
-                                property.name
+                                assigned_user, task, property.name
                             )
-                            app.logger.info(f"Task assignment email {'sent successfully' if notifications_sent else 'failed to send'} to {assigned_user.email}")
-                    except Exception as e:
-                        app.logger.error(f"Failed to send task assignment email: {str(e)}")
+                    except Exception as email_error:
+                        app.logger.error(f"Failed to send task assignment email: {str(email_error)}")
 
-                # Get the updated task with user information
+                # Get updated task data
                 task_data = task.to_dict()
-                assigned_user = User.query.get(task.assigned_to_id) if task.assigned_to_id else None
-                task_data['assigned_to'] = assigned_user.username if assigned_user else None
-
-                # Add task assignment information if exists
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
                     task_data['ticket_id'] = task_assignment.ticket_id
@@ -911,8 +901,7 @@ def manage_task(task_id):
 
                 return jsonify({
                     'msg': 'Task updated successfully',
-                    'task': task_data,
-                    'notifications_sent': notifications_sent
+                    'task': task_data
                 })
 
             except Exception as e:
@@ -921,7 +910,7 @@ def manage_task(task_id):
                 return jsonify({'msg': 'Failed to update task'}), 500
 
         elif request.method == 'DELETE':
-            if current_user.role not in ['super_admin', 'manager']:
+            if not is_manager:
                 return jsonify({'msg': 'Unauthorized'}), 403
                 
             # Delete associated task assignment if exists
@@ -2529,60 +2518,56 @@ def test_all_emails():
 @jwt_required()
 def create_service_request():
     try:
-        current_user = get_user_from_jwt()
-        if not current_user:
-            return jsonify({'msg': 'User not found'}), 404
-
         data = request.get_json()
-        required_fields = ['room_id', 'property_id', 'request_group', 'request_type', 'priority']
+        current_user = get_user_from_jwt()
         
-        # Validate required fields
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({'msg': f'Missing required field: {field}'}), 400
-
-        # Validate room exists and belongs to property
-        room = Room.query.filter_by(
-            room_id=data['room_id'],
-            property_id=data['property_id']
-        ).first()
-        
-        if not room:
-            return jsonify({'msg': 'Invalid room_id or room does not belong to the property'}), 400
+        if not current_user:
+            return jsonify({'message': 'User not found'}), 404
 
         # Initialize response data
         response_data = {
-            'msg': 'Service request created successfully',
-            'request': None,
+            'request_created': False,
             'task_created': False,
             'notifications_sent': False
         }
 
-        # First transaction: Create service request
-        new_request = ServiceRequest(
-            room_id=data['room_id'],
-            property_id=data['property_id'],
-            request_group=data['request_group'],
-            request_type=data['request_type'],
-            priority=data['priority'],
-            quantity=data.get('quantity', 1),
-            guest_name=data.get('guest_name'),
-            notes=data.get('notes'),
-            created_by_id=current_user.user_id
-        )
-        
-        db.session.add(new_request)
-        db.session.commit()
-        response_data['request'] = new_request.to_dict()
+        # First transaction: Create the service request
+        try:
+            new_request = ServiceRequest(
+                room_id=data['room_id'],
+                property_id=data['property_id'],
+                request_group=data['request_group'],
+                request_type=data['request_type'],
+                priority=data.get('priority', 'normal'),
+                quantity=data.get('quantity', 1),
+                guest_name=data.get('guest_name'),
+                notes=data.get('notes'),
+                status='pending',
+                created_by_id=current_user.user_id
+            )
+            
+            db.session.add(new_request)
+            db.session.commit()
+            response_data['request_created'] = True
+            response_data['request'] = new_request.to_dict()
+
+        except Exception as request_error:
+            db.session.rollback()
+            app.logger.error(f"Error creating service request: {str(request_error)}")
+            return jsonify({'msg': f'Error creating service request: {str(request_error)}'}), 500
 
         # Second transaction: Create and assign task
         try:
+            # Get room information for task title
+            room = Room.query.get(data['room_id'])
+            
             task = Task(
                 title=f"{data['request_group']} Request: {data['request_type']} - Room {room.name}",
                 description=f"Priority: {data['priority']}\nGuest: {data.get('guest_name', 'N/A')}\nNotes: {data.get('notes', 'N/A')}",
                 status='pending',
                 priority=data['priority'],
-                property_id=data['property_id']
+                property_id=data['property_id'],
+                created_by_id=current_user.user_id
             )
             
             db.session.add(task)
@@ -2592,10 +2577,9 @@ def create_service_request():
             new_request.assigned_task_id = task.task_id
             
             # Find all staff members in the request group
-            staff_members = User.query.filter_by(
-                group=data['request_group'],
-                is_active=True
-            ).join(PropertyManager).filter(
+            staff_members = User.query.join(PropertyManager).filter(
+                User.group == data['request_group'],
+                User.is_active == True,
                 PropertyManager.property_id == data['property_id']
             ).all()
 
@@ -2611,6 +2595,7 @@ def create_service_request():
 
             db.session.commit()
             response_data['task_created'] = True
+            response_data['task'] = task.to_dict()
 
         except Exception as task_error:
             db.session.rollback()
@@ -2619,35 +2604,37 @@ def create_service_request():
 
         # Third step: Send notifications (outside any transaction)
         try:
-            if staff_members:
-                sms_service = SMSService()
-                notifications_sent = 0
+            email_service = EmailService()
+            
+            # Get relevant users for notification
+            property_managers = User.query.join(PropertyManager).filter(
+                PropertyManager.property_id == data['property_id']
+            ).all()
+            
+            group_staff = User.query.filter_by(
+                group=data['request_group'],
+                is_active=True
+            ).all()
 
-                for staff in staff_members:
-                    if staff.phone:  # Only send if staff has phone number
-                        try:
-                            sms_service.send_housekeeping_request_notification(
-                                room.name,
-                                f"{data['request_group']} - {data['request_type']}",
-                                staff.phone
-                            )
-                            notifications_sent += 1
-                        except Exception as sms_error:
-                            app.logger.error(f"Error sending SMS to {staff.phone}: {str(sms_error)}")
-                            continue
+            # Send notifications
+            notifications_sent = 0
+            property_name = Property.query.get(data['property_id']).name
+            
+            for recipient in set(property_managers + group_staff):
+                if email_service.send_service_request_notification(recipient, new_request, property_name):
+                    notifications_sent += 1
 
-                response_data['notifications_sent'] = notifications_sent > 0
+            response_data['notifications_sent'] = notifications_sent > 0
 
-        except Exception as notification_error:
-            app.logger.error(f"Error sending notifications: {str(notification_error)}")
-            # Don't affect the response status if notifications fail
+        except Exception as email_error:
+            app.logger.error(f"Error sending notifications: {str(email_error)}")
+            # Don't affect response status if notifications fail
 
         return jsonify(response_data), 201
 
     except Exception as e:
-        db.session.rollback()
         app.logger.error(f"Error in create_service_request: {str(e)}")
-        return jsonify({'msg': 'Internal server error'}), 500
+        return jsonify({'msg': f'Error creating service request: {str(e)}'}), 500
 
 @app.route('/service-requests', methods=['GET'])
 @jwt_required()
