@@ -338,7 +338,7 @@ class ServiceRequest(db.Model):
     property = db.relationship('Property', backref='service_requests')
     created_by = db.relationship('User', foreign_keys=[created_by_id], backref='created_requests')
     completed_by = db.relationship('User', foreign_keys=[completed_by_id], backref='completed_requests')
-    assigned_task = db.relationship('Task', backref='service_request')
+    assigned_task = db.relationship('Task', backref=db.backref('service_request', uselist=False))
 
     def to_dict(self):
         return {
