@@ -2683,7 +2683,14 @@ def get_service_requests():
 
     except Exception as e:
         app.logger.error(f"Error getting service requests: {str(e)}")
-        return jsonify({'msg': 'Failed to get service requests'}), 500
+        app.logger.error(f"Exception type: {type(e)}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'msg': 'Failed to get service requests',
+            'error': str(e),
+            'type': str(type(e))
+        }), 500
 
 @app.route('/service-requests/<int:request_id>', methods=['PATCH'])
 @jwt_required()

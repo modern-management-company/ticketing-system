@@ -257,6 +257,7 @@ class Task(db.Model):
     # Relationships
     created_by = db.relationship('User', foreign_keys=[created_by_id], backref='created_tasks')
     completed_by = db.relationship('User', foreign_keys=[completed_by_id], backref='completed_tasks')
+    assigned_user = db.relationship('User', foreign_keys=[assigned_to_id], backref='assigned_tasks')
 
     def to_dict(self):
         """Convert task object to dictionary"""
