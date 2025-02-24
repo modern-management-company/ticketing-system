@@ -34,7 +34,7 @@ class User(db.Model):
     
     assigned_tasks = db.relationship('Task',
                                    foreign_keys='Task.assigned_to_id',
-                                   backref=db.backref('assigned_user', lazy='dynamic'),
+                                   backref='assigned_user',
                                    lazy='dynamic')
 
     def __init__(self, username, email, password, role='user', manager_id=None, group=None, phone=None):
