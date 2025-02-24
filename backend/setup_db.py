@@ -237,9 +237,12 @@ def setup_database():
                             nullable = "NULL" if column.nullable else "NOT NULL"
                             default = f"DEFAULT {column.default.arg}" if column.default is not None else ""
                             
+                            # Handle reserved keywords by quoting them
+                            quoted_col_name = f'"{col_name}"' if col_name.lower() in ['group', 'user', 'order', 'table'] else col_name
+                            
                             db.session.execute(text(f"""
                                 ALTER TABLE {table_name}
-                                ADD COLUMN {col_name} {col_type} {nullable} {default}
+                                ADD COLUMN {quoted_col_name} {col_type} {nullable} {default}
                             """))
             
             db.session.commit()
@@ -257,8 +260,11 @@ def setup_database():
     except Exception as e:
         print(f"Unexpected error during database setup: {e}")
         if backup_file:
-            restore_database(backup_file)
-            print("Database restored from backup.")
+            print("Attempting to restore from backup...")
+            if restore_database(backup_file):
+                print("Database restored from backup.")
+            else:
+                print("Failed to restore from backup.")
         return False
 
 def initialize_data():
