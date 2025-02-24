@@ -2513,7 +2513,15 @@ def create_service_request():
         if not room:
             return jsonify({'msg': 'Invalid room_id or room does not belong to the property'}), 400
 
-        # Create new service request
+        # Initialize response data
+        response_data = {
+            'msg': 'Service request created successfully',
+            'request': None,
+            'task_created': False,
+            'notifications_sent': False
+        }
+
+        # First transaction: Create service request
         new_request = ServiceRequest(
             room_id=data['room_id'],
             property_id=data['property_id'],
@@ -2525,64 +2533,82 @@ def create_service_request():
             notes=data.get('notes'),
             created_by_id=current_user.user_id
         )
-
-        # Create a task for the request
-        task = Task(
-            title=f"{data['request_group']} Request: {data['request_type']} - Room {room.name}",
-            description=f"Priority: {data['priority']}\nGuest: {data.get('guest_name', 'N/A')}\nNotes: {data.get('notes', 'N/A')}",
-            status='pending',
-            priority=data['priority'],
-            property_id=data['property_id']
-        )
         
-        db.session.add(task)
-        db.session.flush()  # Get the task ID
-        
-        # Link task to request
-        new_request.assigned_task_id = task.task_id
-        
-        # Find all staff members in the request group
-        staff_members = User.query.filter_by(
-            group=data['request_group'],
-            is_active=True
-        ).join(PropertyManager).filter(
-            PropertyManager.property_id == data['property_id']
-        ).all()
+        db.session.add(new_request)
+        db.session.commit()
+        response_data['request'] = new_request.to_dict()
 
-        if staff_members:
-            # Create task assignments for all staff members
-            for staff in staff_members:
-                task_assignment = TaskAssignment(
-                    task_id=task.task_id,
-                    assigned_to_user_id=staff.user_id,
-                    status='Pending'
-                )
-                db.session.add(task_assignment)
-
-                # Send SMS notification if staff has phone number
-                if staff.phone:
-                    sms_service = SMSService()
-                    sms_service.send_housekeeping_request_notification(
-                        room.name,
-                        f"{data['request_group']} - {data['request_type']}",
-                        staff.phone
-                    )
-
+        # Second transaction: Create and assign task
         try:
-            db.session.add(new_request)
+            task = Task(
+                title=f"{data['request_group']} Request: {data['request_type']} - Room {room.name}",
+                description=f"Priority: {data['priority']}\nGuest: {data.get('guest_name', 'N/A')}\nNotes: {data.get('notes', 'N/A')}",
+                status='pending',
+                priority=data['priority'],
+                property_id=data['property_id']
+            )
+            
+            db.session.add(task)
+            db.session.flush()  # Get the task ID
+            
+            # Link task to request
+            new_request.assigned_task_id = task.task_id
+            
+            # Find all staff members in the request group
+            staff_members = User.query.filter_by(
+                group=data['request_group'],
+                is_active=True
+            ).join(PropertyManager).filter(
+                PropertyManager.property_id == data['property_id']
+            ).all()
+
+            if staff_members:
+                # Create task assignments for all staff members
+                for staff in staff_members:
+                    task_assignment = TaskAssignment(
+                        task_id=task.task_id,
+                        assigned_to_user_id=staff.user_id,
+                        status='Pending'
+                    )
+                    db.session.add(task_assignment)
+
             db.session.commit()
+            response_data['task_created'] = True
 
-            return jsonify({
-                'msg': 'Service request created successfully',
-                'request': new_request.to_dict()
-            }), 201
-
-        except Exception as e:
+        except Exception as task_error:
             db.session.rollback()
-            app.logger.error(f"Error creating service request: {str(e)}")
-            return jsonify({'msg': 'Failed to create service request'}), 500
+            app.logger.error(f"Error creating task for service request: {str(task_error)}")
+            # Don't rollback service request creation if task creation fails
+
+        # Third step: Send notifications (outside any transaction)
+        try:
+            if staff_members:
+                sms_service = SMSService()
+                notifications_sent = 0
+
+                for staff in staff_members:
+                    if staff.phone:  # Only send if staff has phone number
+                        try:
+                            sms_service.send_housekeeping_request_notification(
+                                room.name,
+                                f"{data['request_group']} - {data['request_type']}",
+                                staff.phone
+                            )
+                            notifications_sent += 1
+                        except Exception as sms_error:
+                            app.logger.error(f"Error sending SMS to {staff.phone}: {str(sms_error)}")
+                            continue
+
+                response_data['notifications_sent'] = notifications_sent > 0
+
+        except Exception as notification_error:
+            app.logger.error(f"Error sending notifications: {str(notification_error)}")
+            # Don't affect the response status if notifications fail
+
+        return jsonify(response_data), 201
 
     except Exception as e:
+        db.session.rollback()
         app.logger.error(f"Error in create_service_request: {str(e)}")
         return jsonify({'msg': 'Internal server error'}), 500
 
