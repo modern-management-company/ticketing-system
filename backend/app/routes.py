@@ -828,19 +828,36 @@ def manage_task(task_id):
                 task.description = data['description']
             if 'status' in data:
                 task.status = data['status']
+                # If task is being completed, add completion info
+                if data['status'] == 'completed' and old_status != 'completed':
+                    task.completed_by_id = current_user.user_id
+                    task.completed_at = datetime.utcnow()
+                # If task is being reopened, remove completion info
+                elif data['status'] != 'completed' and old_status == 'completed':
+                    task.completed_by_id = None
+                    task.completed_at = None
+                
                 # Update associated task assignment and ticket
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
                     task_assignment.status = data['status']
                     ticket = Ticket.query.get(task_assignment.ticket_id)
                     if ticket:
-                        # Map task status to ticket status
+                        # Map task status to ticket status and update completion info
                         if data['status'] == 'completed':
                             ticket.status = 'completed'
+                            ticket.completed_by_id = current_user.user_id
+                            ticket.completed_at = datetime.utcnow()
                         elif data['status'] == 'in progress':
                             ticket.status = 'in progress'
+                            ticket.completed_by_id = None
+                            ticket.completed_at = None
                         elif data['status'] == 'pending':
                             ticket.status = 'open'
+                            ticket.completed_by_id = None
+                            ticket.completed_at = None
+                        task_assignment.status = ticket.status
+
             if 'priority' in data:
                 task.priority = data['priority']
                 # Update associated ticket priority
@@ -966,6 +983,10 @@ def get_property_tasks(property_id):
 @jwt_required()
 def create_task():
     try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
         data = request.get_json()
         if not data:
             return jsonify({'msg': 'No input data provided'}), 400
@@ -991,7 +1012,8 @@ def create_task():
             property_id=data['property_id'],
             status=data.get('status', 'pending'),
             assigned_to_id=data.get('assigned_to_id'),
-            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None
+            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None,
+            created_by_id=current_user.user_id  # Add creator information
         )
         db.session.add(task)
         db.session.commit()
@@ -2153,6 +2175,15 @@ def manage_ticket(ticket_id):
                     ticket.status = new_status
                     changes.append(f"Status: {old_status} → {new_status}")
                     
+                    # Add completion info if ticket is being completed
+                    if new_status == 'completed':
+                        ticket.completed_by_id = current_user.user_id
+                        ticket.completed_at = datetime.utcnow()
+                    # Remove completion info if ticket is being reopened
+                    elif old_status == 'completed':
+                        ticket.completed_by_id = None
+                        ticket.completed_at = None
+                    
                     # Update associated task status
                     task_assignment = TaskAssignment.query.filter_by(ticket_id=ticket_id).first()
                     if task_assignment:
@@ -2161,10 +2192,16 @@ def manage_ticket(ticket_id):
                             # Map ticket status to task status
                             if new_status == 'completed':
                                 task.status = 'completed'
+                                task.completed_by_id = current_user.user_id
+                                task.completed_at = datetime.utcnow()
                             elif new_status == 'in progress':
                                 task.status = 'in progress'
+                                task.completed_by_id = None
+                                task.completed_at = None
                             elif new_status == 'open':
                                 task.status = 'pending'
+                                task.completed_by_id = None
+                                task.completed_at = None
                             task_assignment.status = task.status
 
             if 'priority' in data:
@@ -2680,6 +2717,7 @@ def update_service_request(request_id):
             # If marked as completed
             if data['status'] == 'completed' and old_status != 'completed':
                 service_request.completed_at = datetime.utcnow()
+                service_request.completed_by_id = current_user.user_id
                 
                 # Update associated task
                 if service_request.assigned_task:
