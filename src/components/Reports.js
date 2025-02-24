@@ -137,8 +137,10 @@ const Reports = () => {
           item.room_name || 'N/A',
           item.status,
           item.priority,
-          item.created_by_username,
-          format(new Date(item.created_at), 'MM/dd/yyyy HH:mm')
+          item.created_by_username || 'Unknown',
+          format(new Date(item.created_at), 'MM/dd/yyyy HH:mm'),
+          item.completed_by_username || 'N/A',
+          item.completed_at ? format(new Date(item.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'
         ];
       } else if (type === 'tasks') {
         return [
@@ -146,7 +148,10 @@ const Reports = () => {
           item.title,
           item.status,
           item.priority,
-          item.assigned_to || 'Unassigned',
+          item.assigned_to_username || 'Unassigned',
+          item.created_by_username || 'Unknown',
+          item.completed_by_username || 'N/A',
+          item.completed_at ? format(new Date(item.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A',
           item.due_date ? format(new Date(item.due_date), 'MM/dd/yyyy') : 'No due date'
         ];
       } else if (type === 'requests') {
@@ -158,16 +163,19 @@ const Reports = () => {
           item.status,
           item.priority,
           item.guest_name || 'N/A',
-          format(new Date(item.created_at), 'MM/dd/yyyy HH:mm')
+          item.created_by_name || 'Unknown',
+          format(new Date(item.created_at), 'MM/dd/yyyy HH:mm'),
+          item.completed_by_name || 'N/A',
+          item.completed_at ? format(new Date(item.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'
         ];
       }
     });
 
     const columns = type === 'tickets' 
-      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Created At']
+      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Created At', 'Completed By', 'Completed At']
       : type === 'tasks'
-      ? ['ID', 'Title', 'Status', 'Priority', 'Assigned To', 'Due Date']
-      : ['ID', 'Type', 'Room', 'Group', 'Status', 'Priority', 'Guest', 'Created At'];
+      ? ['ID', 'Title', 'Status', 'Priority', 'Assigned To', 'Created By', 'Completed By', 'Completed At', 'Due Date']
+      : ['ID', 'Type', 'Room', 'Group', 'Status', 'Priority', 'Guest', 'Created By', 'Created At', 'Completed By', 'Completed At'];
 
     doc.autoTable({
       head: [columns],
@@ -252,6 +260,8 @@ const Reports = () => {
                       <TableCell>Priority</TableCell>
                       <TableCell>Created By</TableCell>
                       <TableCell>Created At</TableCell>
+                      <TableCell>Completed By</TableCell>
+                      <TableCell>Completed At</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -262,9 +272,13 @@ const Reports = () => {
                         <TableCell>{ticket.room_name || 'N/A'}</TableCell>
                         <TableCell>{ticket.status}</TableCell>
                         <TableCell>{ticket.priority}</TableCell>
-                        <TableCell>{ticket.created_by_username}</TableCell>
+                        <TableCell>{ticket.created_by_username || 'Unknown'}</TableCell>
                         <TableCell>
                           {format(new Date(ticket.created_at), 'MM/dd/yyyy HH:mm')}
+                        </TableCell>
+                        <TableCell>{ticket.completed_by_username || 'N/A'}</TableCell>
+                        <TableCell>
+                          {ticket.completed_at ? format(new Date(ticket.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -292,6 +306,9 @@ const Reports = () => {
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
                       <TableCell>Assigned To</TableCell>
+                      <TableCell>Created By</TableCell>
+                      <TableCell>Completed By</TableCell>
+                      <TableCell>Completed At</TableCell>
                       <TableCell>Due Date</TableCell>
                     </TableRow>
                   </TableHead>
@@ -302,7 +319,12 @@ const Reports = () => {
                         <TableCell>{task.title}</TableCell>
                         <TableCell>{task.status}</TableCell>
                         <TableCell>{task.priority}</TableCell>
-                        <TableCell>{task.assigned_to || 'Unassigned'}</TableCell>
+                        <TableCell>{task.assigned_to_username || 'Unassigned'}</TableCell>
+                        <TableCell>{task.created_by_username || 'Unknown'}</TableCell>
+                        <TableCell>{task.completed_by_username || 'N/A'}</TableCell>
+                        <TableCell>
+                          {task.completed_at ? format(new Date(task.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
+                        </TableCell>
                         <TableCell>
                           {task.due_date ? format(new Date(task.due_date), 'MM/dd/yyyy') : 'No due date'}
                         </TableCell>
@@ -334,7 +356,10 @@ const Reports = () => {
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
                       <TableCell>Guest</TableCell>
+                      <TableCell>Created By</TableCell>
                       <TableCell>Created At</TableCell>
+                      <TableCell>Completed By</TableCell>
+                      <TableCell>Completed At</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -347,8 +372,13 @@ const Reports = () => {
                         <TableCell>{request.status}</TableCell>
                         <TableCell>{request.priority}</TableCell>
                         <TableCell>{request.guest_name || 'N/A'}</TableCell>
+                        <TableCell>{request.created_by_name || 'Unknown'}</TableCell>
                         <TableCell>
                           {format(new Date(request.created_at), 'MM/dd/yyyy HH:mm')}
+                        </TableCell>
+                        <TableCell>{request.completed_by_name || 'N/A'}</TableCell>
+                        <TableCell>
+                          {request.completed_at ? format(new Date(request.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
                         </TableCell>
                       </TableRow>
                     ))}
