@@ -13,17 +13,6 @@ import logging
 import secrets
 from sqlalchemy import or_
 from app.services.sms_service import SMSService
-from app.services.background_tasks import (
-    send_ticket_notification_async, 
-    send_service_request_notification_async,
-    send_user_registration_notification_async,
-    send_user_management_notification_async,
-    send_password_reset_notification_async,
-    send_password_reset_link_async,
-    send_admin_alert_async,
-    send_room_status_notification_async,
-    send_property_status_notification_async
-)
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -109,14 +98,18 @@ def register():
             role=role,
             manager_id=data.get('manager_id'),
             group=data.get('group'),
-            phone=data.get('phone')
+            phone=data.get('phone')  # Add phone field
         )
         
         db.session.add(new_user)
         db.session.commit()
 
-        # Send welcome email asynchronously
-        send_user_registration_notification_async(new_user, original_password, None)
+        # Send welcome email with credentials
+        email_service = EmailService()
+        email_sent = email_service.send_user_registration_email(new_user, original_password, None)
+        
+        if not email_sent:
+            app.logger.warning(f"Failed to send welcome email to {new_user.email}")
 
         # Generate token
         access_token = new_user.get_token()
@@ -197,51 +190,39 @@ def create_ticket():
         if not current_user:
             return jsonify({'msg': 'User not found'}), 404
 
-        # Initialize response data
-        response_data = {
-            'msg': 'Ticket created successfully',
-            'ticket': None,
-            'task_created': False,
-            'assigned_to': None
-        }
+        # Create new ticket
+        new_ticket = Ticket(
+            title=data['title'],
+            description=data['description'],
+            priority=data['priority'],
+            category=data['category'],
+            subcategory=data.get('subcategory'),  # Optional field
+            property_id=data['property_id'],
+            user_id=current_user.user_id,
+            room_id=data.get('room_id')  # Optional field
+        )
 
-        # First transaction: Create ticket and related data
+        # If room_id is provided, validate it exists and belongs to the property
+        if data.get('room_id'):
+            room = Room.query.filter_by(
+                room_id=data['room_id'],
+                property_id=data['property_id']
+            ).first()
+            
+            if not room:
+                return jsonify({'msg': 'Invalid room_id or room does not belong to the property'}), 400
+
+            # Update room status based on ticket category
+            if data['category'] == 'Maintenance':
+                room.status = 'Maintenance'
+            elif data['category'] == 'Housekeeping':
+                room.status = 'Cleaning'
+            elif room.status == 'Available':  # Only change if room is available
+                room.status = 'Out of Order'
+
         try:
-            # Create new ticket
-            new_ticket = Ticket(
-                title=data['title'],
-                description=data['description'],
-                priority=data['priority'],
-                category=data['category'],
-                subcategory=data.get('subcategory'),
-                property_id=data['property_id'],
-                user_id=current_user.user_id,
-                room_id=data.get('room_id')
-            )
-
-            # Handle room status if room_id provided
-            if data.get('room_id'):
-                room = Room.query.filter_by(
-                    room_id=data['room_id'],
-                    property_id=data['property_id']
-                ).first()
-                
-                if not room:
-                    return jsonify({'msg': 'Invalid room_id or room does not belong to the property'}), 400
-
-                if data['category'] == 'Maintenance':
-                    room.status = 'Maintenance'
-                elif data['category'] == 'Housekeeping':
-                    room.status = 'Cleaning'
-                elif room.status == 'Available':
-                    room.status = 'Out of Order'
-
-            # Save ticket first
             db.session.add(new_ticket)
             db.session.commit()
-            
-            # Update response with ticket data
-            response_data['ticket'] = new_ticket.to_dict()
 
             # Find the appropriate manager based on category
             category = data['category']
@@ -299,39 +280,34 @@ def create_ticket():
             property_name = Property.query.get(data['property_id']).name
 
             # Send notifications
-            try:
-                email_service = EmailService()
-                notifications_sent = email_service.send_ticket_notification(
-                    new_ticket,
-                    property_name,
-                    recipients,
-                    notification_type="new"
-                )
+            from app.services.email_service import EmailService
+            email_service = EmailService()
+            notifications_sent = email_service.send_ticket_notification(
+                new_ticket,
+                property_name,
+                recipients,
+                notification_type="new"
+            )
 
-                response_data = {
-                    'msg': 'Ticket created successfully',
-                    'ticket': new_ticket.to_dict(),
-                    'notifications_sent': notifications_sent > 0
+            response_data = {
+                'msg': 'Ticket created successfully',
+                'ticket': new_ticket.to_dict(),
+                'notifications_sent': notifications_sent > 0
+            }
+            
+            if assigned_manager:
+                response_data['task_created'] = True
+                response_data['assigned_to'] = {
+                    'user_id': assigned_manager.user_id,
+                    'username': assigned_manager.username,
+                    'group': assigned_manager.group
                 }
-                
-                if assigned_manager:
-                    response_data['task_created'] = True
-                    response_data['assigned_to'] = {
-                        'user_id': assigned_manager.user_id,
-                        'username': assigned_manager.username,
-                        'group': assigned_manager.group
-                    }
 
-                return jsonify(response_data), 201
+            return jsonify(response_data), 201
 
-            except Exception as email_error:
-                app.logger.error(f"Email notification error: {str(email_error)}")
-                # Don't affect the response status if email fails
-                return jsonify(response_data), 201
-
-        except Exception as db_error:
+        except Exception as e:
             db.session.rollback()
-            app.logger.error(f"Database error: {str(db_error)}")
+            app.logger.error(f"Error creating ticket: {str(e)}")
             return jsonify({'msg': 'Failed to create ticket'}), 500
 
     except Exception as e:
@@ -644,7 +620,7 @@ def manage_property_room(property_id, room_id):
 
             db.session.commit()
 
-            # Send notifications if status was changed asynchronously
+            # Send notifications if status was changed
             if 'status' in data and old_status != room.status:
                 # Get all managers and admins for this property
                 property_managers = User.query.join(PropertyManager).filter(
@@ -656,8 +632,9 @@ def manage_property_room(property_id, room_id):
                 # Combine unique recipients
                 recipients = list(set(property_managers + super_admins))
 
-                # Send email notifications asynchronously
-                send_room_status_notification_async(
+                # Send email notifications
+                email_service = EmailService()
+                email_service.send_room_status_notification(
                     room=room,
                     property_name=property.name,
                     old_status=old_status,
@@ -998,14 +975,7 @@ def create_task():
         if not all(field in data for field in required_fields):
             return jsonify({'msg': 'Missing required fields'}), 400
 
-        # Initialize response data
-        response_data = {
-            'msg': 'Task created successfully',
-            'task': None,
-            'ticket_linked': False
-        }
-
-        # First transaction: Create the task
+        # Create the task
         task = Task(
             title=data['title'],
             description=data['description'],
@@ -1016,51 +986,52 @@ def create_task():
             due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None
         )
         db.session.add(task)
+        db.session.flush()  # Flush to get the task_id
+
+        # If this task is imported from a ticket, create task assignment and sync status/priority
+        if 'ticket_id' in data:
+            ticket = Ticket.query.get(data['ticket_id'])
+            if ticket:
+                # Map ticket status to task status
+                task_status = 'completed' if ticket.status == 'completed' else \
+                            'in progress' if ticket.status == 'in progress' else \
+                            'pending'
+                task.status = task_status
+                task.priority = ticket.priority  # Sync priority with ticket
+
+                task_assignment = TaskAssignment(
+                    task_id=task.task_id,
+                    ticket_id=data['ticket_id'],
+                    assigned_to_user_id=data.get('assigned_to_id'),
+                    status=task_status
+                )
+                db.session.add(task_assignment)
+
         db.session.commit()
-        response_data['task'] = task.to_dict()
 
-        # Second transaction: Handle ticket association if needed
-        try:
-            if 'ticket_id' in data:
-                ticket = Ticket.query.get(data['ticket_id'])
-                if ticket:
-                    # Map ticket status to task status
-                    task_status = 'completed' if ticket.status == 'completed' else \
-                                'in progress' if ticket.status == 'in progress' else \
-                                'pending'
-                    task.status = task_status
-                    task.priority = ticket.priority  # Sync priority with ticket
-
-                    task_assignment = TaskAssignment(
-                        task_id=task.task_id,
-                        ticket_id=data['ticket_id'],
-                        assigned_to_user_id=data.get('assigned_to_id'),
-                        status=task_status
-                    )
-                    db.session.add(task_assignment)
-                    db.session.commit()
-                    response_data['ticket_linked'] = True
-
-        except Exception as ticket_error:
-            app.logger.error(f"Error linking ticket to task: {str(ticket_error)}")
-            # Don't rollback task creation if ticket linking fails
-            db.session.rollback()
-
-        # Third step: Send email notifications asynchronously
+        # Send email notification if user is assigned
+        notifications_sent = False
         if data.get('assigned_to_id'):
             try:
                 assigned_user = User.query.get(data['assigned_to_id'])
                 property = Property.query.get(data['property_id'])
                 if assigned_user and property:
-                    send_task_notification_async(task, assigned_user, property.name)
-            except Exception as email_error:
-                app.logger.error(f"Error initiating notification: {str(email_error)}")
+                    email_service = EmailService()
+                    notifications_sent = email_service.send_task_assignment_notification(
+                        assigned_user, task, property.name
+                    )
+            except Exception as e:
+                app.logger.error(f"Failed to send email notification: {str(e)}")
 
-        return jsonify(response_data), 201
+        return jsonify({
+            'msg': 'Task created successfully',
+            'task': task.to_dict(),
+            'notifications_sent': notifications_sent
+        }), 201
 
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Error in create_task: {str(e)}")
+        app.logger.error(f"Error creating task: {str(e)}")
         return jsonify({'msg': f'Error creating task: {str(e)}'}), 500
 
 @app.route('/users', methods=['GET'])
@@ -1161,8 +1132,9 @@ def manage_user(user_id):
             
             db.session.commit()
 
-            # Send notifications based on changes asynchronously
-            if changes:
+            # Send notifications based on changes
+            try:
+                email_service = EmailService()
                 admin_emails = [user.email for user in User.query.filter_by(role='super_admin').all()]
                 
                 # Determine notification type based on changes
@@ -1177,13 +1149,16 @@ def manage_user(user_id):
                 else:
                     notification_type = 'update'
                 
-                send_user_management_notification_async(
+                email_service.send_user_management_notification(
                     user=target_user,
                     changes=changes,
                     updated_by=current_user.username,
                     admin_emails=admin_emails,
                     change_type=notification_type
                 )
+            except Exception as e:
+                app.logger.error(f"Failed to send notification email: {str(e)}")
+                # Continue with the update even if email fails
             
             return jsonify({'msg': 'User updated successfully', 'changes': changes})
 
@@ -1191,17 +1166,21 @@ def manage_user(user_id):
             if current_user.role != 'super_admin':
                 return jsonify({'msg': 'Unauthorized'}), 403
             
-            # Send deletion notification asynchronously
-            admin_emails = [user.email for user in User.query.filter_by(role='super_admin').all()]
-            changes = ["Account scheduled for deletion"]
-            
-            send_user_management_notification_async(
-                user=target_user,
-                changes=changes,
-                updated_by=current_user.username,
-                admin_emails=admin_emails,
-                change_type="deleted"
-            )
+            # Send deletion notification
+            try:
+                email_service = EmailService()
+                admin_emails = [user.email for user in User.query.filter_by(role='super_admin').all()]
+                
+                changes = ["Account scheduled for deletion"]
+                email_service.send_user_management_notification(
+                    user=target_user,
+                    changes=changes,
+                    updated_by=current_user.username,
+                    admin_emails=admin_emails,
+                    change_type="deleted"
+                )
+            except Exception as e:
+                app.logger.error(f"Failed to send deletion notification email: {str(e)}")
             
             db.session.delete(target_user)
             db.session.commit()
@@ -1313,7 +1292,7 @@ def manage_property(property_id):
 
             db.session.commit()
 
-            # Send notifications if status was changed asynchronously
+            # Send notifications if status was changed
             if 'status' in data and old_status != property.status:
                 # Get all managers for this property
                 property_managers = User.query.join(PropertyManager).filter(
@@ -1325,8 +1304,9 @@ def manage_property(property_id):
                 # Combine unique recipients
                 recipients = list(set(property_managers + super_admins))
 
-                # Send email notifications asynchronously
-                send_property_status_notification_async(
+                # Send email notifications
+                email_service = EmailService()
+                email_service.send_property_status_notification(
                     property=property,
                     old_status=old_status,
                     new_status=property.status,
@@ -2348,22 +2328,22 @@ def reset_password():
         target_user.password = generate_password_hash(data['new_password'])
         db.session.commit()
 
-        # Send notifications asynchronously
-        is_self_reset = str(current_user.user_id) == str(data['user_id'])
+        # Send email notifications
+        email_service = EmailService()
         
         # Notify the user whose password was reset
-        send_password_reset_notification_async(
+        email_service.send_password_reset_notification(
             user=target_user,
             reset_by=current_user,
-            is_self_reset=is_self_reset
+            is_self_reset=(str(current_user.user_id) == str(data['user_id']))
         )
 
         # If reset by admin/manager, send admin alert
-        if not is_self_reset:
+        if str(current_user.user_id) != str(data['user_id']):
             super_admins = User.query.filter_by(role='super_admin').all()
             admin_emails = [admin.email for admin in super_admins]
             if admin_emails:
-                send_admin_alert_async(
+                email_service.send_admin_alert(
                     subject="Password Reset Alert",
                     message=f"""
                         <p>A password reset was performed:</p>
@@ -2399,17 +2379,18 @@ def request_password_reset():
         user.reset_token_expires = datetime.now() + timedelta(hours=1)
         db.session.commit()
 
-        # Send reset email asynchronously
-        send_password_reset_link_async(
+        # Send reset email
+        email_service = EmailService()
+        email_service.send_password_reset_link(
             user=user,
             reset_token=reset_token
         )
 
-        # Send admin alert asynchronously
+        # Send admin alert
         super_admins = User.query.filter_by(role='super_admin').all()
         admin_emails = [admin.email for admin in super_admins]
         if admin_emails:
-            send_admin_alert_async(
+            email_service.send_admin_alert(
                 subject="Password Reset Request",
                 message=f"""
                     <p>A password reset was requested:</p>
@@ -2519,14 +2500,7 @@ def create_service_request():
         if not room:
             return jsonify({'msg': 'Invalid room_id or room does not belong to the property'}), 400
 
-        # Initialize response data
-        response_data = {
-            'msg': 'Service request created successfully',
-            'request': None,
-            'task_created': False
-        }
-
-        # First transaction: Create service request
+        # Create new service request
         new_request = ServiceRequest(
             room_id=data['room_id'],
             property_id=data['property_id'],
@@ -2540,8 +2514,30 @@ def create_service_request():
         )
         
         db.session.add(new_request)
-        db.session.commit()
-        response_data['request'] = new_request.to_dict()
+        db.session.flush()  # Get the request ID
+
+        # Create a task for the request
+        task = Task(
+            title=f"{data['request_group']} Request: {data['request_type']} - Room {room.name}",
+            description=f"Priority: {data['priority']}\nGuest: {data.get('guest_name', 'N/A')}\nNotes: {data.get('notes', 'N/A')}",
+            status='pending',
+            priority=data['priority'],
+            property_id=data['property_id']
+        )
+        
+        db.session.add(task)
+        db.session.flush()  # Get the task ID
+        
+        # Link task to request
+        new_request.assigned_task_id = task.task_id
+        
+        # Find all staff members in the request group
+        staff_members = User.query.filter_by(
+            group=data['request_group'],
+            is_active=True
+        ).join(PropertyManager).filter(
+            PropertyManager.property_id == data['property_id']
+        ).all()
 
         if staff_members:
             # Create task assignments for all staff members using request_id as ticket_id
@@ -2562,29 +2558,21 @@ def create_service_request():
                         f"{data['request_group']} - {data['request_type']}",
                         staff.phone
                     )
-                    db.session.add(task_assignment)
 
         try:
             db.session.commit()
-            response_data['task_created'] = True
 
-            # Third step: Send notifications asynchronously
-            if staff_members:
-                try:
-                    request_details = f"{data['request_group']} - {data['request_type']}"
-                    send_service_request_notification_async(staff_members, room.name, request_details)
-                except Exception as notification_error:
-                    app.logger.error(f"Error initiating notifications: {str(notification_error)}")
+            return jsonify({
+                'msg': 'Service request created successfully',
+                'request': new_request.to_dict()
+            }), 201
 
-        except Exception as task_error:
+        except Exception as e:
             db.session.rollback()
-            app.logger.error(f"Error creating task for service request: {str(task_error)}")
-            # Don't rollback service request creation if task creation fails
-
-        return jsonify(response_data), 201
+            app.logger.error(f"Error creating service request: {str(e)}")
+            return jsonify({'msg': 'Failed to create service request'}), 500
 
     except Exception as e:
-        db.session.rollback()
         app.logger.error(f"Error in create_service_request: {str(e)}")
         return jsonify({'msg': 'Internal server error'}), 500
 
