@@ -3,16 +3,22 @@ import { useAuth } from '../context/AuthContext';
 import { Select, MenuItem, FormControl, InputLabel, CircularProgress, Box, Chip, Alert } from '@mui/material';
 import apiClient from './apiClient';
 
-const PropertySwitcher = ({ onPropertyChange }) => {
+const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
   const { auth } = useAuth();
   const [properties, setProperties] = useState([]);
-  const [selectedProperty, setSelectedProperty] = useState('');
+  const [selectedProperty, setSelectedProperty] = useState(initialValue || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchProperties();
   }, [auth]);
+
+  useEffect(() => {
+    if (initialValue) {
+      setSelectedProperty(initialValue);
+    }
+  }, [initialValue]);
 
   const fetchProperties = async () => {
     try {
@@ -27,8 +33,8 @@ const PropertySwitcher = ({ onPropertyChange }) => {
         const activeProperties = response.data.filter(prop => prop.status === 'active');
         setProperties(activeProperties);
         
-        // Set default property
-        if (activeProperties.length > 0) {
+        // Set default property only if no initialValue is provided
+        if (activeProperties.length > 0 && !initialValue) {
           // If user has assigned properties, use the first assigned active one
           if (auth.assigned_properties && auth.assigned_properties.length > 0) {
             const assignedActiveProperty = auth.assigned_properties.find(p => 

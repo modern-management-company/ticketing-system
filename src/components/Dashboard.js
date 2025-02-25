@@ -63,7 +63,11 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedProperty, setSelectedProperty] = useState('all');
+  const [selectedProperty, setSelectedProperty] = useState(() => {
+    // Try to get the last selected property from localStorage
+    const savedProperty = localStorage.getItem('selectedProperty');
+    return savedProperty || 'all';
+  });
   const [shouldRefetch, setShouldRefetch] = useState(0);
 
   const fetchRoomsForProperty = async (propertyId) => {
@@ -175,6 +179,8 @@ const Dashboard = () => {
 
   const handlePropertyChange = useCallback((propertyId) => {
     console.log('Property changed to:', propertyId);
+    // Save the selected property to localStorage
+    localStorage.setItem('selectedProperty', propertyId);
     setSelectedProperty(propertyId);
     setShouldRefetch(prev => prev + 1);
   }, []);
@@ -307,7 +313,10 @@ const Dashboard = () => {
     <Box sx={{ flexGrow: 1, p: 3 }}>
       {/* Property Filter */}
       <Box sx={{ mb: 3 }}>
-        <PropertySwitcher onPropertyChange={handlePropertyChange} />
+        <PropertySwitcher 
+          onPropertyChange={handlePropertyChange} 
+          initialValue={selectedProperty}
+        />
       </Box>
 
       <Grid container spacing={3}>
