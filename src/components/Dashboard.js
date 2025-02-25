@@ -66,7 +66,7 @@ const Dashboard = () => {
   const [selectedProperty, setSelectedProperty] = useState(() => {
     // Try to get the last selected property from localStorage
     const savedProperty = localStorage.getItem('selectedProperty');
-    return savedProperty || 'all';
+    return savedProperty || '';
   });
   const [shouldRefetch, setShouldRefetch] = useState(0);
 
@@ -101,14 +101,21 @@ const Dashboard = () => {
       let allTasks = [];
       let roomsData = {};
       
-      // Fetch data for selected property or all properties
-      const propertiesToFetch = selectedProperty === 'all' 
-        ? properties.filter(p => p.status === 'active')
-        : properties.filter(p => p.property_id === parseInt(selectedProperty) && p.status === 'active');
+      // Fetch data only for the selected property
+      const propertiesToFetch = properties.filter(p => 
+        p.status === 'active' && 
+        (!selectedProperty || p.property_id === parseInt(selectedProperty))
+      );
 
       console.log('Fetching data for properties:', propertiesToFetch);
 
-      // Fetch data for each property
+      // If no property is selected and there are active properties, select the first one
+      if (!selectedProperty && propertiesToFetch.length > 0) {
+        handlePropertyChange(propertiesToFetch[0].property_id);
+        return;
+      }
+
+      // Fetch data for the property
       for (const property of propertiesToFetch) {
         try {
           const [ticketsRes, tasksRes, roomsRes, managersRes] = await Promise.all([
@@ -179,7 +186,6 @@ const Dashboard = () => {
 
   const handlePropertyChange = useCallback((propertyId) => {
     console.log('Property changed to:', propertyId);
-    // Save the selected property to localStorage
     localStorage.setItem('selectedProperty', propertyId);
     setSelectedProperty(propertyId);
     setShouldRefetch(prev => prev + 1);
@@ -189,8 +195,8 @@ const Dashboard = () => {
     let filteredTickets = [...dashboardData.tickets];
     let filteredTasks = [...dashboardData.tasks];
 
-    // Filter by selected property if not 'all'
-    if (selectedProperty !== 'all') {
+    // Always filter by selected property since 'all' option is removed
+    if (selectedProperty) {
       const propertyId = parseInt(selectedProperty);
       filteredTickets = filteredTickets.filter(ticket => ticket.property_id === propertyId);
       filteredTasks = filteredTasks.filter(task => task.property_id === propertyId);
@@ -198,15 +204,6 @@ const Dashboard = () => {
 
     return { filteredTickets, filteredTasks };
   }, [dashboardData, selectedProperty]);
-
-  // Add this useEffect to handle initial property selection
-  useEffect(() => {
-    const savedProperty = localStorage.getItem('selectedProperty');
-    if (savedProperty) {
-      setSelectedProperty(savedProperty);
-      setShouldRefetch(prev => prev + 1);
-    }
-  }, []);
 
   const getTicketStatusData = () => {
     const { filteredTickets } = getFilteredData();

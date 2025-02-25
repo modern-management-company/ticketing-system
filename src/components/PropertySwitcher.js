@@ -6,17 +6,12 @@ import apiClient from './apiClient';
 const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
   const { auth } = useAuth();
   const [properties, setProperties] = useState([]);
-  const [selectedProperty, setSelectedProperty] = useState(initialValue);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchProperties();
   }, [auth]);
-
-  useEffect(() => {
-    setSelectedProperty(initialValue);
-  }, [initialValue]);
 
   const fetchProperties = async () => {
     try {
@@ -30,24 +25,17 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
         // Filter only active properties
         const activeProperties = response.data.filter(prop => prop.status === 'active');
         setProperties(activeProperties);
+        
+        // If no property is selected, select the first one
+        if (!initialValue && activeProperties.length > 0) {
+          onPropertyChange(activeProperties[0].property_id);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch properties:', error);
       setError('Failed to load properties');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handlePropertyChange = async (propertyId) => {
-    try {
-      setSelectedProperty(propertyId);
-      if (onPropertyChange) {
-        onPropertyChange(propertyId);
-      }
-    } catch (error) {
-      console.error('Failed to switch property:', error);
-      setError('Failed to switch property');
     }
   };
 
@@ -59,11 +47,10 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
     <FormControl sx={{ minWidth: 200 }}>
       <InputLabel>Select Property</InputLabel>
       <Select
-        value={selectedProperty || 'all'}
-        onChange={(e) => handlePropertyChange(e.target.value)}
+        value={initialValue || ''}
+        onChange={(e) => onPropertyChange(e.target.value)}
         label="Select Property"
       >
-        <MenuItem value="all">All Properties</MenuItem>
         {properties.map((property) => (
           <MenuItem key={property.property_id} value={property.property_id}>
             {property.name}
