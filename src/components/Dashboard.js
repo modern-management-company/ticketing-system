@@ -64,6 +64,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedProperty, setSelectedProperty] = useState('all');
+  const [shouldRefetch, setShouldRefetch] = useState(0);
 
   const fetchRoomsForProperty = async (propertyId) => {
     try {
@@ -100,6 +101,8 @@ const Dashboard = () => {
       const propertiesToFetch = selectedProperty === 'all' 
         ? properties.filter(p => p.status === 'active')
         : properties.filter(p => p.property_id === parseInt(selectedProperty) && p.status === 'active');
+
+      console.log('Fetching data for properties:', propertiesToFetch);
 
       // Fetch data for each property
       for (const property of propertiesToFetch) {
@@ -164,14 +167,16 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [auth?.token, auth?.role, auth?.user_id, selectedProperty, logout, navigate]);
+  }, [auth?.token, auth?.role, auth?.user_id, selectedProperty, logout, navigate, shouldRefetch]);
 
   useEffect(() => {
     verifyAuthAndFetchData();
   }, [verifyAuthAndFetchData]);
 
   const handlePropertyChange = useCallback((propertyId) => {
+    console.log('Property changed to:', propertyId);
     setSelectedProperty(propertyId);
+    setShouldRefetch(prev => prev + 1);
   }, []);
 
   const getFilteredData = useCallback(() => {
