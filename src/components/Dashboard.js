@@ -99,7 +99,7 @@ const Dashboard = () => {
       // Fetch data for selected property or all properties
       const propertiesToFetch = selectedProperty === 'all' 
         ? properties.filter(p => p.status === 'active')
-        : properties.filter(p => p.property_id === selectedProperty && p.status === 'active');
+        : properties.filter(p => p.property_id === parseInt(selectedProperty) && p.status === 'active');
 
       // Fetch data for each property
       for (const property of propertiesToFetch) {
@@ -169,6 +169,10 @@ const Dashboard = () => {
   useEffect(() => {
     verifyAuthAndFetchData();
   }, [verifyAuthAndFetchData]);
+
+  const handlePropertyChange = useCallback((propertyId) => {
+    setSelectedProperty(propertyId);
+  }, []);
 
   const getFilteredData = useCallback(() => {
     let filteredTickets = [...dashboardData.tickets];
@@ -298,7 +302,7 @@ const Dashboard = () => {
     <Box sx={{ flexGrow: 1, p: 3 }}>
       {/* Property Filter */}
       <Box sx={{ mb: 3 }}>
-        <PropertySwitcher onPropertyChange={setSelectedProperty} />
+        <PropertySwitcher onPropertyChange={handlePropertyChange} />
       </Box>
 
       <Grid container spacing={3}>
