@@ -226,42 +226,51 @@ def create_ticket():
 
             # Find the appropriate manager based on category
             category = data['category']
-            property_managers = User.query.join(PropertyManager).filter(
-                PropertyManager.property_id == data['property_id']
-            ).all()
+            # Map category to group name
+            group_mapping = {
+                'Maintenance': 'Engineering',
+                'Housekeeping': 'Housekeeping',
+                'General': 'Front Desk'
+            }
+            group = group_mapping.get(category)
+            
+            if group:
+                # Query active managers with matching group
+                assigned_manager = User.query.filter_by(
+                    group=group,
+                    is_active=True
+                ).join(PropertyManager).filter(
+                    PropertyManager.property_id == data['property_id']
+                ).first()
 
-            assigned_manager = None
-            for manager in property_managers:
-                if (category == 'Maintenance' and manager.group == 'Engineering') or \
-                   (category == 'Housekeeping' and manager.group == 'Housekeeping') or \
-                   (category == 'General' and manager.group == 'Front Desk'):
-                    assigned_manager = manager
-                    break
-
-            if assigned_manager:
-                # Create and assign a task
-                task = Task(
-                    title=f"Task for Ticket: {data['title']}",
-                    description=f"Auto-generated task for ticket. Category: {category}\nDescription: {data['description']}",
-                    status='pending',
-                    priority=data['priority'],
-                    property_id=data['property_id'],
-                    assigned_to_id=assigned_manager.user_id
-                )
-                db.session.add(task)
-                db.session.flush()  # This will populate the task_id
-                
-                # Create task assignment
-                task_assignment = TaskAssignment(
-                    task_id=task.task_id,
-                    ticket_id=new_ticket.ticket_id,
-                    assigned_to_user_id=assigned_manager.user_id,
-                    status='Pending'
-                )
-                db.session.add(task_assignment)
-                db.session.commit()
+                if assigned_manager:
+                    # Create and assign a task
+                    task = Task(
+                        title=f"Task for Ticket: {data['title']}",
+                        description=f"Auto-generated task for ticket. Category: {category}\nDescription: {data['description']}",
+                        status='pending',
+                        priority=data['priority'],
+                        property_id=data['property_id'],
+                        assigned_to_id=assigned_manager.user_id
+                    )
+                    db.session.add(task)
+                    db.session.flush()  # This will populate the task_id
+                    
+                    # Create task assignment
+                    task_assignment = TaskAssignment(
+                        task_id=task.task_id,
+                        ticket_id=new_ticket.ticket_id,
+                        assigned_to_user_id=assigned_manager.user_id,
+                        status='Pending'
+                    )
+                    db.session.add(task_assignment)
+                    db.session.commit()
 
             # Get property managers and super admins for notifications
+            property_managers = User.query.join(PropertyManager).filter(
+                PropertyManager.property_id == data['property_id'],
+                User.is_active == True
+            ).all()
             super_admins = User.query.filter_by(role='super_admin').all()
             
             # Combine recipients and remove duplicates
