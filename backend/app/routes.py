@@ -2512,6 +2512,9 @@ def create_service_request():
             notes=data.get('notes'),
             created_by_id=current_user.user_id
         )
+        
+        db.session.add(new_request)
+        db.session.flush()  # Get the request ID
 
         # Create a task for the request
         task = Task(
@@ -2537,10 +2540,11 @@ def create_service_request():
         ).all()
 
         if staff_members:
-            # Create task assignments for all staff members
+            # Create task assignments for all staff members using request_id as ticket_id
             for staff in staff_members:
                 task_assignment = TaskAssignment(
                     task_id=task.task_id,
+                    ticket_id=new_request.request_id,  # Use request_id as ticket_id
                     assigned_to_user_id=staff.user_id,
                     status='Pending'
                 )
@@ -2556,7 +2560,6 @@ def create_service_request():
                     )
 
         try:
-            db.session.add(new_request)
             db.session.commit()
 
             return jsonify({
