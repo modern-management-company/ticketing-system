@@ -45,7 +45,7 @@ const HomeOverview = () => {
     stats: {
       openTickets: 0,
       activeTasks: 0,
-      completedTasks: 0,
+      openRequests: 0,
       totalTasks: 0,
       ticketResolutionRate: 0,
       totalProperties: 0,
@@ -71,7 +71,7 @@ const HomeOverview = () => {
         stats: {
           openTickets: response.data.openTickets || 0,
           activeTasks: response.data.activeTasks || 0,
-          completedTasks: response.data.completedTasks || 0,
+          openRequests: response.data.openRequests || 0,
           totalTasks: response.data.totalTasks || 0,
           ticketResolutionRate: response.data.resolutionRate || 0,
           totalProperties: response.data.totalProperties || 0,
@@ -149,10 +149,10 @@ const HomeOverview = () => {
         action: () => navigate('/tasks')
       },
       {
-        title: 'Completed Tasks',
-        value: overview.stats.completedTasks,
-        icon: <CompletedIcon color="primary" />,
-        action: () => navigate('/tasks')
+        title: 'Open Requests',
+        value: overview.stats.openRequests || 0,
+        icon: <PendingIcon color="primary" />,
+        action: () => navigate('/requests')
       }
     ];
 
@@ -228,6 +228,12 @@ const HomeOverview = () => {
         title: 'Create Task',
         icon: <TaskIcon />,
         action: () => navigate('/tasks'),
+        variant: 'contained'
+      },
+      {
+        title: 'Create Request',
+        icon: <PendingIcon />,
+        action: () => navigate('/requests'),
         variant: 'contained'
       }
     ];
@@ -366,86 +372,7 @@ const HomeOverview = () => {
         </Grid>
       </Grid>
 
-      {/* Recent Activity */}
-      <Grid container spacing={3}>
-        {/* Recent Tickets */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">Recent Tickets</Typography>
-                <Button
-                  endIcon={<ArrowForwardIcon />}
-                  onClick={() => navigate('/tickets')}
-                >
-                  View All
-                </Button>
-              </Box>
-              <List>
-                {overview.recentTickets.map((ticket, index) => (
-                  <React.Fragment key={ticket.ticket_id}>
-                    <ListItem>
-                      <ListItemText
-                        primary={ticket.title}
-                        secondary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {getStatusIcon(ticket.status)}
-                            <Chip
-                              label={ticket.status}
-                              size="small"
-                              color={getStatusColor(ticket.status)}
-                            />
-                          </Box>
-                        }
-                      />
-                    </ListItem>
-                    {index < overview.recentTickets.length - 1 && <Divider />}
-                  </React.Fragment>
-                ))}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
 
-        {/* Recent Tasks */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">Recent Tasks</Typography>
-                <Button
-                  endIcon={<ArrowForwardIcon />}
-                  onClick={() => navigate('/tasks')}
-                >
-                  View All
-                </Button>
-              </Box>
-              <List>
-                {overview.recentTasks.map((task, index) => (
-                  <React.Fragment key={task.task_id}>
-                    <ListItem>
-                      <ListItemText
-                        primary={task.title}
-                        secondary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {getStatusIcon(task.status)}
-                            <Chip
-                              label={task.status}
-                              size="small"
-                              color={getStatusColor(task.status)}
-                            />
-                          </Box>
-                        }
-                      />
-                    </ListItem>
-                    {index < overview.recentTasks.length - 1 && <Divider />}
-                  </React.Fragment>
-                ))}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
     </Container>
   );
 };
