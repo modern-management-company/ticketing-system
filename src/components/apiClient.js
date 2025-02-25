@@ -1,68 +1,61 @@
 import axios from 'axios';
 
+// Use VM's domain instead of localhost
+const baseURL = process.env.NODE_ENV === 'development' 
+  ? 'http://vm.vasantika.net:5000'
+  : 'https://api.modernhotels.management';
+
 const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json'
-  },
-  // Add these settings for CORS
+  baseURL,
   withCredentials: true,
-  credentials: 'include'
-});
-
-// Retry configuration
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
-
-const getStoredAuth = () => {
-  try {
-    const auth = localStorage.getItem('auth');
-    return auth ? JSON.parse(auth) : null;
-  } catch (error) {
-    console.error('Error parsing stored auth:', error);
-    localStorage.removeItem('auth');
-    return null;
+  headers: {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Private-Network': 'true'
   }
-};
+});
 
 // Function to set auth token
 export const setAuthToken = (token) => {
   if (token) {
-    apiClient.defaults.headers.common['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   } else {
     delete apiClient.defaults.headers.common['Authorization'];
   }
 };
 
+// Add request interceptor
 apiClient.interceptors.request.use(
   (config) => {
-    const auth = getStoredAuth();
-    if (auth?.token) {
-      // Ensure token is always properly formatted with Bearer prefix
-      const token = auth.token.startsWith('Bearer ') ? auth.token : `Bearer ${auth.token}`;
-      config.headers.Authorization = token;
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
   (error) => {
-    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
+// Add response interceptor
 apiClient.interceptors.response.use(
-  response => response,
-  error => {
+  (response) => {
+    return response;
+  },
+  (error) => {
     if (error.response) {
-      // Handle response errors
-      return Promise.reject(error);
+      // Server responded with error status
+      console.error('Response error:', error.response.data);
+      return Promise.reject(error.response.data);
     } else if (error.request) {
-      // Handle CORS and network errors
+      // Request was made but no response
       console.error('Network error:', error);
-      throw new Error('Network error. Please check your connection.');
+      return Promise.reject(new Error('Network error. Please check your connection.'));
+    } else {
+      // Something else happened
+      console.error('Error:', error.message);
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
   }
 );
 
