@@ -6,7 +6,7 @@ import apiClient from './apiClient';
 const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
   const { auth } = useAuth();
   const [properties, setProperties] = useState([]);
-  const [selectedProperty, setSelectedProperty] = useState(initialValue || '');
+  const [selectedProperty, setSelectedProperty] = useState(initialValue);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -15,9 +15,7 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
   }, [auth]);
 
   useEffect(() => {
-    if (initialValue) {
-      setSelectedProperty(initialValue);
-    }
+    setSelectedProperty(initialValue);
   }, [initialValue]);
 
   const fetchProperties = async () => {
@@ -32,29 +30,6 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
         // Filter only active properties
         const activeProperties = response.data.filter(prop => prop.status === 'active');
         setProperties(activeProperties);
-        
-        // Set default property only if no initialValue is provided
-        if (activeProperties.length > 0 && !initialValue) {
-          // If user has assigned properties, use the first assigned active one
-          if (auth.assigned_properties && auth.assigned_properties.length > 0) {
-            const assignedActiveProperty = auth.assigned_properties.find(p => 
-              activeProperties.some(ap => ap.property_id === p.property_id)
-            );
-            if (assignedActiveProperty) {
-              setSelectedProperty(assignedActiveProperty.property_id);
-              if (onPropertyChange) {
-                onPropertyChange(assignedActiveProperty.property_id);
-              }
-            }
-          } else {
-            // Otherwise use the first available active property
-            const defaultProperty = activeProperties[0].property_id;
-            setSelectedProperty(defaultProperty);
-            if (onPropertyChange) {
-              onPropertyChange(defaultProperty);
-            }
-          }
-        }
       }
     } catch (error) {
       console.error('Failed to fetch properties:', error);
@@ -84,22 +59,11 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
     <FormControl sx={{ minWidth: 200 }}>
       <InputLabel>Select Property</InputLabel>
       <Select
-        value={selectedProperty || ''}
+        value={selectedProperty || 'all'}
         onChange={(e) => handlePropertyChange(e.target.value)}
         label="Select Property"
-        renderValue={(selected) => {
-          const property = properties.find(p => p.property_id === selected);
-          return (
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Chip 
-                label={property ? property.name : 'Select Property'} 
-                size="small"
-                color="primary"
-              />
-            </Box>
-          );
-        }}
       >
+        <MenuItem value="all">All Properties</MenuItem>
         {properties.map((property) => (
           <MenuItem key={property.property_id} value={property.property_id}>
             {property.name}

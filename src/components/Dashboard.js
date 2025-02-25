@@ -191,12 +191,22 @@ const Dashboard = () => {
 
     // Filter by selected property if not 'all'
     if (selectedProperty !== 'all') {
-      filteredTickets = filteredTickets.filter(ticket => ticket.property_id === selectedProperty);
-      filteredTasks = filteredTasks.filter(task => task.property_id === selectedProperty);
+      const propertyId = parseInt(selectedProperty);
+      filteredTickets = filteredTickets.filter(ticket => ticket.property_id === propertyId);
+      filteredTasks = filteredTasks.filter(task => task.property_id === propertyId);
     }
 
     return { filteredTickets, filteredTasks };
   }, [dashboardData, selectedProperty]);
+
+  // Add this useEffect to handle initial property selection
+  useEffect(() => {
+    const savedProperty = localStorage.getItem('selectedProperty');
+    if (savedProperty) {
+      setSelectedProperty(savedProperty);
+      setShouldRefetch(prev => prev + 1);
+    }
+  }, []);
 
   const getTicketStatusData = () => {
     const { filteredTickets } = getFilteredData();
