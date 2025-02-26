@@ -1273,9 +1273,46 @@ def manage_property(property_id):
 
         elif request.method == 'DELETE':
             try:
+                # Get all rooms for this property
+                rooms = Room.query.filter_by(property_id=property_id).all()
+                room_ids = [room.room_id for room in rooms]
+
+                # Get all tickets for this property
+                tickets = Ticket.query.filter_by(property_id=property_id).all()
+                ticket_ids = [ticket.ticket_id for ticket in tickets]
+
+                # Get all tasks for this property
+                tasks = Task.query.filter_by(property_id=property_id).all()
+                task_ids = [task.task_id for task in tasks]
+
+                # Delete task assignments first (due to foreign key constraints)
+                TaskAssignment.query.filter(
+                    (TaskAssignment.task_id.in_(task_ids)) |
+                    (TaskAssignment.ticket_id.in_(ticket_ids))
+                ).delete(synchronize_session=False)
+
+                # Delete tasks
+                Task.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+
+                # Delete tickets
+                Ticket.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+
+                # Delete rooms
+                Room.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+
+                # Delete property manager assignments
+                PropertyManager.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+
+                # Delete user property assignments
+                UserProperty.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+
+                # Finally delete the property
                 db.session.delete(property)
                 db.session.commit()
-                return jsonify({'message': 'Property deleted successfully'})
+
+                app.logger.info(f"Property {property_id} and all associated data deleted successfully")
+                return jsonify({'message': 'Property and all associated data deleted successfully'})
+
             except Exception as e:
                 db.session.rollback()
                 app.logger.error(f"Error deleting property: {str(e)}")
