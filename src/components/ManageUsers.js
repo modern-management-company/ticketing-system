@@ -182,7 +182,35 @@ const ManageUsers = () => {
         return;
       }
 
-      if (!window.confirm('Are you sure you want to delete this user?')) {
+      // First check for associated tickets and tasks
+      const [ticketsResponse, tasksResponse] = await Promise.all([
+        apiClient.get(`/users/${userId}/tickets`),
+        apiClient.get(`/users/${userId}/tasks`)
+      ]);
+
+      const tickets = ticketsResponse.data?.tickets || [];
+      const tasks = tasksResponse.data?.tasks || [];
+
+      let warningMessage = `WARNING: Are you sure you want to delete user "${user.username}"?\n\n`;
+
+      if (tickets.length > 0 || tasks.length > 0) {
+        warningMessage += 'This user has:\n';
+        if (tickets.length > 0) {
+          warningMessage += `• ${tickets.length} ticket(s)\n`;
+        }
+        if (tasks.length > 0) {
+          warningMessage += `• ${tasks.length} task(s)\n`;
+        }
+        warningMessage += '\nDeleting this user will:\n';
+        warningMessage += '• Reassign all tickets to system\n';
+        warningMessage += '• Unassign all tasks\n';
+        warningMessage += '• Remove all property assignments\n\n';
+        warningMessage += 'This action cannot be undone. Do you want to proceed?';
+      } else {
+        warningMessage += 'This will remove the user and all their property assignments.\nThis action cannot be undone.';
+      }
+
+      if (!window.confirm(warningMessage)) {
         return;
       }
 
@@ -190,7 +218,8 @@ const ManageUsers = () => {
       setSuccess('User deleted successfully');
       await fetchData();
     } catch (error) {
-      setError('Failed to delete user');
+      console.error('Failed to delete user:', error);
+      setError(error.response?.data?.message || 'Failed to delete user');
     }
   };
 
@@ -198,6 +227,12 @@ const ManageUsers = () => {
     try {
       setError(null);
       setSuccess(null);
+
+      // Validate required fields
+      if (!userFormData.username || !userFormData.email) {
+        setError('Username and email are required');
+        return;
+      }
 
       const payload = {
         ...userFormData,
@@ -208,15 +243,24 @@ const ManageUsers = () => {
       let response;
       if (editingUser) {
         response = await apiClient.put(`/users/${editingUser.user_id}`, payload);
+        if (response.data?.user) {
+          setSuccess('User updated successfully');
+          setOpenUserDialog(false);
+          await fetchData(); // Refresh the user list
+          resetUserForm();
+        }
       } else {
+        if (!userFormData.password) {
+          setError('Password is required for new users');
+          return;
+        }
         response = await apiClient.post('/users', payload);
-      }
-
-      if (response.data?.user) {
-        setSuccess(editingUser ? 'User updated successfully' : 'User added successfully');
-        await fetchData();
-        setOpenUserDialog(false);
-        resetUserForm();
+        if (response.data?.user) {
+          setSuccess('User added successfully');
+          setOpenUserDialog(false);
+          await fetchData();
+          resetUserForm();
+        }
       }
     } catch (error) {
       console.error('Failed to save user:', error);
