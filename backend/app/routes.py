@@ -1285,20 +1285,29 @@ def manage_property(property_id):
                 tasks = Task.query.filter_by(property_id=property_id).all()
                 task_ids = [task.task_id for task in tasks]
 
-                # Delete task assignments first (due to foreign key constraints)
-                TaskAssignment.query.filter(
-                    (TaskAssignment.task_id.in_(task_ids)) |
-                    (TaskAssignment.ticket_id.in_(ticket_ids))
-                ).delete(synchronize_session=False)
+                # Delete service requests first
+                ServiceRequest.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+
+                # Delete task assignments
+                if task_ids or ticket_ids:
+                    TaskAssignment.query.filter(
+                        db.or_(
+                            TaskAssignment.task_id.in_(task_ids) if task_ids else False,
+                            TaskAssignment.ticket_id.in_(ticket_ids) if ticket_ids else False
+                        )
+                    ).delete(synchronize_session=False)
 
                 # Delete tasks
-                Task.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+                if task_ids:
+                    Task.query.filter(Task.task_id.in_(task_ids)).delete(synchronize_session=False)
 
                 # Delete tickets
-                Ticket.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+                if ticket_ids:
+                    Ticket.query.filter(Ticket.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
 
                 # Delete rooms
-                Room.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+                if room_ids:
+                    Room.query.filter(Room.room_id.in_(room_ids)).delete(synchronize_session=False)
 
                 # Delete property manager assignments
                 PropertyManager.query.filter_by(property_id=property_id).delete(synchronize_session=False)
@@ -1308,6 +1317,8 @@ def manage_property(property_id):
 
                 # Finally delete the property
                 db.session.delete(property)
+                
+                # Commit all changes
                 db.session.commit()
 
                 app.logger.info(f"Property {property_id} and all associated data deleted successfully")
