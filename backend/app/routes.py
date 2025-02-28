@@ -2740,11 +2740,20 @@ def create_user():
         # Handle property assignments
         if 'property_ids' in data and data['property_ids']:
             for property_id in data['property_ids']:
+                # Create UserProperty relationship
                 user_property = UserProperty(
                     user_id=new_user.user_id,
                     property_id=property_id
                 )
                 db.session.add(user_property)
+
+                # If user is a manager, also create PropertyManager relationship
+                if data['role'] == 'manager':
+                    property_manager = PropertyManager(
+                        user_id=new_user.user_id,
+                        property_id=property_id
+                    )
+                    db.session.add(property_manager)
 
         db.session.commit()
 
@@ -2769,3 +2778,198 @@ def create_user():
         db.session.rollback()
         app.logger.error(f"Error creating user: {str(e)}")
         return jsonify({"msg": f"Error creating user: {str(e)}"}), 500
+
+@app.route('/users/<int:user_id>', methods=['PATCH'])
+@jwt_required()
+def update_user(user_id):
+    try:
+        # Get current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+            
+        # Only super_admin and managers can update users
+        if current_user.role not in ['super_admin', 'manager']:
+            return jsonify({"msg": "Unauthorized - Insufficient permissions"}), 403
+
+        # Get user to update
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"msg": "User not found"}), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"msg": "No input data provided"}), 400
+
+        # Handle role change
+        if 'role' in data and data['role'] != user.role:
+            old_role = user.role
+            new_role = data['role']
+            
+            # If changing to manager
+            if new_role == 'manager':
+                # Get all current user properties
+                user_properties = UserProperty.query.filter_by(user_id=user.user_id).all()
+                
+                # Add PropertyManager entries for all properties the user has access to
+                for up in user_properties:
+                    # Check if PropertyManager entry already exists
+                    existing_manager = PropertyManager.query.filter_by(
+                        user_id=user.user_id,
+                        property_id=up.property_id
+                    ).first()
+                    
+                    # If not exists, create it
+                    if not existing_manager:
+                        property_manager = PropertyManager(
+                            user_id=user.user_id,
+                            property_id=up.property_id
+                        )
+                        db.session.add(property_manager)
+            
+            # If changing from manager
+            elif old_role == 'manager':
+                # Just remove from property_managers but keep user_properties
+                PropertyManager.query.filter_by(user_id=user.user_id).delete()
+            
+            user.role = new_role
+
+        # Update other fields
+        if 'username' in data:
+            user.username = data['username']
+        if 'email' in data:
+            user.email = data['email']
+        if 'group' in data:
+            user.group = data['group']
+        if 'phone' in data:
+            user.phone = data['phone']
+        if 'is_active' in data:
+            user.is_active = data['is_active']
+        if 'password' in data:
+            user.set_password(data['password'])
+
+        # Handle property assignments
+        if 'property_ids' in data:
+            # Store old property assignments before deletion if user is a manager
+            old_property_ids = None
+            if user.role == 'manager':
+                old_property_ids = [p.property_id for p in user.assigned_properties]
+
+            # Remove all current property assignments
+            UserProperty.query.filter_by(user_id=user.user_id).delete()
+            if user.role == 'manager':
+                PropertyManager.query.filter_by(user_id=user.user_id).delete()
+            
+            # Add new property assignments
+            for property_id in data['property_ids']:
+                # Add UserProperty for all users
+                user_property = UserProperty(
+                    user_id=user.user_id,
+                    property_id=property_id
+                )
+                db.session.add(user_property)
+                
+                # Add PropertyManager only for managers
+                if user.role == 'manager':
+                    property_manager = PropertyManager(
+                        user_id=user.user_id,
+                        property_id=property_id
+                    )
+                    db.session.add(property_manager)
+
+        db.session.commit()
+        return jsonify({
+            "msg": "User updated successfully",
+            "user": user.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating user: {str(e)}")
+        return jsonify({"msg": f"Error updating user: {str(e)}"}), 500
+
+@app.route('/users/<int:user_id>/verify-properties', methods=['GET'])
+@jwt_required()
+def verify_user_properties(user_id):
+    """Debug endpoint to verify user property assignments"""
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"msg": "User not found"}), 404
+
+        # Get all property assignments
+        user_properties = UserProperty.query.filter_by(user_id=user.user_id).all()
+        manager_properties = PropertyManager.query.filter_by(user_id=user.user_id).all()
+
+        return jsonify({
+            "user": {
+                "user_id": user.user_id,
+                "username": user.username,
+                "role": user.role
+            },
+            "user_properties": [
+                {
+                    "property_id": up.property_id,
+                    "property_name": Property.query.get(up.property_id).name
+                } for up in user_properties
+            ],
+            "manager_properties": [
+                {
+                    "property_id": mp.property_id,
+                    "property_name": Property.query.get(mp.property_id).name
+                } for mp in manager_properties
+            ] if user.role == 'manager' else []
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error verifying user properties: {str(e)}")
+        return jsonify({"msg": f"Error verifying user properties: {str(e)}"}), 500
+
+@app.route('/fix-manager-properties', methods=['POST'])
+@jwt_required()
+def fix_manager_properties():
+    """Fix property manager relationships for all managers"""
+    try:
+        # Get current user
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({"msg": "Unauthorized - Super admin required"}), 403
+
+        # Get all managers
+        managers = User.query.filter_by(role='manager').all()
+        fixed_count = 0
+
+        for manager in managers:
+            # Get all user properties for this manager
+            user_properties = UserProperty.query.filter_by(user_id=manager.user_id).all()
+            
+            for up in user_properties:
+                # Check if PropertyManager entry exists
+                existing_manager = PropertyManager.query.filter_by(
+                    user_id=manager.user_id,
+                    property_id=up.property_id
+                ).first()
+                
+                # If not exists, create it
+                if not existing_manager:
+                    property_manager = PropertyManager(
+                        user_id=manager.user_id,
+                        property_id=up.property_id
+                    )
+                    db.session.add(property_manager)
+                    fixed_count += 1
+
+        db.session.commit()
+
+        return jsonify({
+            "msg": f"Fixed property manager relationships. Added {fixed_count} missing entries.",
+            "details": {
+                "total_managers": len(managers),
+                "managers_fixed": fixed_count
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error fixing manager properties: {str(e)}")
+        return jsonify({"msg": f"Error fixing manager properties: {str(e)}"}), 500

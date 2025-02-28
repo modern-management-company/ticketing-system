@@ -34,6 +34,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import GroupIcon from '@mui/icons-material/Group';
+import BuildIcon from '@mui/icons-material/Build';
+import AddIcon from '@mui/icons-material/Add';
 
 const ManageUsers = () => {
   const { auth } = useAuth();
@@ -65,7 +67,11 @@ const ManageUsers = () => {
   const roles = ['user', 'manager', 'super_admin'];
   const groups = ['Front Desk', 'Maintenance', 'Housekeeping', 'Engineering', 'Executive'];
 
+  console.log('Auth context:', useAuth());
+  console.log('Full auth object:', auth);
+
   useEffect(() => {
+    console.log('Auth on mount:', auth);
     fetchData();
   }, []);
 
@@ -305,28 +311,60 @@ const ManageUsers = () => {
     setSelectedUser(null);
   };
 
+  const handleFixManagerProperties = async () => {
+    try {
+      setError('');
+      setSuccess('');
+      setLoading(true);
+
+      const response = await apiClient.post('/fix-manager-properties');
+      
+      if (response.data) {
+        setSuccess(response.data.msg);
+        // Refresh the users list to show updated relationships
+        await fetchData();
+      }
+    } catch (error) {
+      console.error('Failed to fix manager properties:', error);
+      setError(error.response?.data?.msg || 'Failed to fix manager properties');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading) return <CircularProgress />;
   if (error) return <Alert severity="error">{error}</Alert>;
 
   return (
     <Box p={3}>
-      <Typography variant="h4" gutterBottom>
-        Users Management
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h5">Users Management</Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          {auth?.user?.role === 'super_admin' && (
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<BuildIcon />}
+              onClick={handleFixManagerProperties}
+              sx={{ mr: 2 }}
+            >
+              Fix Manager Properties
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              resetUserForm();
+              setOpenUserDialog(true);
+            }}
+          >
+            Add User
+          </Button>
+        </Box>
+      </Box>
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={() => {
-          resetUserForm();
-          setOpenUserDialog(true);
-        }}
-        sx={{ mb: 2 }}
-      >
-        Add User
-      </Button>
 
       <TableContainer component={Paper}>
         <Table>
