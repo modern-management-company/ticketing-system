@@ -47,7 +47,7 @@ CORS(app, resources={
             "http://127.0.0.1:3000",
             "https://modernhotels.management",
             "https://ticketing-system-gilt.vercel.app",
-            "https://ticketing-system-gilt.vercel.app/"  # Note the trailing slash version
+            "http://vm.vasantika.net:3000" 
         ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
         "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
