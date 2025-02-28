@@ -18,12 +18,20 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
       setLoading(true);
       setError(null);
       
-      const response = await apiClient.get('/properties');
+      // Use different endpoints based on user role
+      const endpoint = auth.user.role === 'super_admin' 
+        ? '/properties'
+        : `/users/${auth.user.user_id}/managed-properties`;
+      
+      const response = await apiClient.get(endpoint);
       console.log('Properties response:', response.data);
       
       if (response.data) {
         // Filter only active properties
-        const activeProperties = response.data.filter(prop => prop.status === 'active');
+        const activeProperties = Array.isArray(response.data) 
+          ? response.data.filter(prop => prop.status === 'active')
+          : response.data.properties?.filter(prop => prop.status === 'active') || [];
+        
         setProperties(activeProperties);
         
         // If no property is selected, select the first one
