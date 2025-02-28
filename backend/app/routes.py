@@ -408,7 +408,7 @@ def create_property():
             
         app.logger.info(f"User role: {current_user.role}")
         if current_user.role not in ['super_admin', 'manager']:
-            app.logger.warning(f"Unauthorized property creation attempt by user {current_user.user_id} with role {current_user.role}")
+            app.logger.warning(f"Unauthorized property creation attempt by user {current_user.user_id}")
             return jsonify({"msg": "Unauthorized - Insufficient permissions"}), 403
             
         # Get and validate input data
@@ -432,16 +432,19 @@ def create_property():
             address=data['address'],
             type=data.get('type', 'residential'),
             status=data.get('status', 'active'),
-            description=data.get('description', ''),
-            manager_id=current_user.user_id if current_user.role == 'manager' else data.get('manager_id')
+            description=data.get('description', '')
         )
         
         db.session.add(new_property)
+        db.session.flush()  # Get the property_id
         
-        # If manager is creating the property, assign them to it
+        # If manager is creating the property, create property manager relationship
         if current_user.role == 'manager':
-            user_property = UserProperty(user_id=current_user.user_id, property_id=new_property.property_id)
-            db.session.add(user_property)
+            property_manager = PropertyManager(
+                property_id=new_property.property_id,
+                user_id=current_user.user_id
+            )
+            db.session.add(property_manager)
             
         db.session.commit()
         app.logger.info(f"Property created successfully: {new_property.property_id}")
@@ -450,7 +453,7 @@ def create_property():
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error creating property: {str(e)}")
-        return jsonify({"msg": "Internal server error"}), 500
+        return jsonify({"msg": f"Error creating property: {str(e)}"}), 500
 
 @app.route('/properties/<int:property_id>/rooms', methods=['GET'])
 @jwt_required()
@@ -2685,3 +2688,84 @@ def update_service_request(request_id):
         db.session.rollback()
         app.logger.error(f"Error updating service request: {str(e)}")
         return jsonify({'msg': 'Failed to update service request'}), 500
+
+# Add this route with the existing routes
+@app.route('/users', methods=['POST'])
+@jwt_required()
+def create_user():
+    try:
+        # Get current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+            
+        # Only super_admin and managers can create users
+        if current_user.role not in ['super_admin', 'manager']:
+            return jsonify({"msg": "Unauthorized - Insufficient permissions"}), 403
+            
+        # Get and validate input data
+        data = request.get_json()
+        if not data:
+            return jsonify({"msg": "No input data provided"}), 400
+            
+        # Validate required fields
+        required_fields = ['username', 'email', 'password', 'role']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        if missing_fields:
+            return jsonify({"msg": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+        # Check if username or email already exists
+        if User.query.filter_by(username=data['username']).first():
+            return jsonify({"msg": "Username already exists"}), 400
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({"msg": "Email already exists"}), 400
+
+        # Create new user with only the fields that exist in the model
+        new_user = User(
+            username=data['username'],
+            email=data['email'],
+            password=data['password'],
+            role=data['role'],
+            group=data.get('group'),
+            phone=data.get('phone')
+        )
+        
+        # Set is_active separately if the field exists in the model
+        if hasattr(new_user, 'is_active'):
+            new_user.is_active = data.get('is_active', True)
+        
+        db.session.add(new_user)
+        db.session.flush()  # Flush to get the user_id
+
+        # Handle property assignments
+        if 'property_ids' in data and data['property_ids']:
+            for property_id in data['property_ids']:
+                user_property = UserProperty(
+                    user_id=new_user.user_id,
+                    property_id=property_id
+                )
+                db.session.add(user_property)
+
+        db.session.commit()
+
+        # Send welcome email
+        try:
+            email_service = EmailService()
+            email_service.send_welcome_email(
+                new_user,
+                password=data['password'],
+                sender=current_user.username
+            )
+        except Exception as e:
+            app.logger.error(f"Failed to send welcome email: {str(e)}")
+            # Continue even if email fails
+
+        return jsonify({
+            "msg": "User created successfully",
+            "user": new_user.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error creating user: {str(e)}")
+        return jsonify({"msg": f"Error creating user: {str(e)}"}), 500

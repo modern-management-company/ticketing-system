@@ -205,11 +205,28 @@ const ManageUsers = () => {
         is_active: userFormData.is_active
       };
 
+      // Log the request details for debugging
+      console.log('Submitting user data:', {
+        method: editingUser ? 'PATCH' : 'POST',
+        endpoint: editingUser ? `/users/${editingUser.user_id}` : '/users',
+        payload
+      });
+
       let response;
-      if (editingUser) {
-        response = await apiClient.put(`/users/${editingUser.user_id}`, payload);
-      } else {
-        response = await apiClient.post('/users', payload);
+      try {
+        if (editingUser) {
+          response = await apiClient.patch(`/users/${editingUser.user_id}`, payload);
+        } else {
+          response = await apiClient.post('/users', payload);
+        }
+      } catch (apiError) {
+        // Log detailed error information
+        console.error('API Error:', {
+          status: apiError.response?.status,
+          data: apiError.response?.data,
+          message: apiError.message
+        });
+        throw apiError;
       }
 
       if (response.data?.user) {
@@ -220,7 +237,11 @@ const ManageUsers = () => {
       }
     } catch (error) {
       console.error('Failed to save user:', error);
-      setError(error.response?.data?.message || 'Failed to save user');
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Failed to save user';
+      setError(errorMessage);
     }
   };
 
