@@ -1,15 +1,18 @@
 import axios from 'axios';
 
+// Get the API URL from environment variables or use a fallback
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+console.log('Using API URL:', API_URL);
+
 const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
+  baseURL: API_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
   // Add these settings for CORS
-  withCredentials: true,
-  credentials: 'include'
+  withCredentials: true
 });
 
 // Retry configuration
