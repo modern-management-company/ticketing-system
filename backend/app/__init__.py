@@ -48,7 +48,8 @@ CORS(app, resources={
             "https://modernhotels.management",
             "https://ticketing-system-gilt.vercel.app",
             "http://vm.vasantika.net:3000",
-            "http://vm.vasantika.net"
+            "http://vm.vasantika.net",
+            "https://ticketing-system-6f4u.onrender.com"
         ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
         "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials", "X-Requested-With"],
