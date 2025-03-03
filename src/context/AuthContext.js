@@ -3,11 +3,29 @@ import apiClient, { setAuthToken } from '../components/apiClient';
 
 const AuthContext = createContext(null);
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
 
 export const AuthProvider = ({ children }) => {
-  const [initialized, setInitialized] = useState(false);
-  const [auth, setAuth] = useState(null);
+  const [auth, setAuth] = useState(() => {
+    // Initialize from localStorage if available
+    const storedAuth = localStorage.getItem('auth');
+    return storedAuth ? JSON.parse(storedAuth) : null;
+  });
+
+  // Save to localStorage whenever auth changes
+  useEffect(() => {
+    if (auth) {
+      localStorage.setItem('auth', JSON.stringify(auth));
+    } else {
+      localStorage.removeItem('auth');
+    }
+  }, [auth]);
 
   const checkFirstUser = useCallback(async () => {
     try {
@@ -112,8 +130,6 @@ export const AuthProvider = ({ children }) => {
         console.error('Error initializing auth:', error);
         localStorage.removeItem('auth');
         setAuthToken(null);
-      } finally {
-        setInitialized(true);
       }
     };
 
@@ -121,7 +137,7 @@ export const AuthProvider = ({ children }) => {
   }, [verifyToken]);
 
   return (
-    <AuthContext.Provider value={{ auth, login, logout, initialized, checkFirstUser }}>
+    <AuthContext.Provider value={{ auth, login, logout, checkFirstUser }}>
       {children}
     </AuthContext.Provider>
   );

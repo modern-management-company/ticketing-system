@@ -32,6 +32,7 @@ import {
   Assessment as ReportIcon,
   Home as HomeIcon,
   Email as EmailIcon,
+  CleaningServices as HousekeepingIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -76,6 +77,11 @@ const Layout = () => {
         text: 'Tasks',
         icon: <TasksIcon />,
         path: '/tasks',
+      },
+      {
+        text: 'Requests',
+        icon: <HousekeepingIcon />,
+        path: '/requests',
       },
     ];
 

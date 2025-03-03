@@ -58,7 +58,8 @@ const Reports = () => {
   const [error, setError] = useState(null);
   const [reportData, setReportData] = useState({
     tickets: [],
-    tasks: []
+    tasks: [],
+    requests: []
   });
   const [properties, setProperties] = useState([]);
 
@@ -92,14 +93,16 @@ const Reports = () => {
       setError(null);
 
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      const [ticketsRes, tasksRes] = await Promise.all([
+      const [ticketsRes, tasksRes, requestsRes] = await Promise.all([
         apiClient.get(`/properties/${selectedProperty}/tickets?date=${formattedDate}`),
-        apiClient.get(`/properties/${selectedProperty}/tasks?date=${formattedDate}`)
+        apiClient.get(`/properties/${selectedProperty}/tasks?date=${formattedDate}`),
+        apiClient.get(`/service-requests?property_id=${selectedProperty}`)
       ]);
 
       setReportData({
         tickets: ticketsRes.data?.tickets || [],
-        tasks: tasksRes.data?.tasks || []
+        tasks: tasksRes.data?.tasks || [],
+        requests: requestsRes.data?.requests || []
       });
     } catch (error) {
       setError('Failed to fetch report data');
@@ -137,7 +140,7 @@ const Reports = () => {
           item.created_by_username,
           format(new Date(item.created_at), 'MM/dd/yyyy HH:mm')
         ];
-      } else {
+      } else if (type === 'tasks') {
         return [
           item.task_id,
           item.title,
@@ -146,12 +149,25 @@ const Reports = () => {
           item.assigned_to || 'Unassigned',
           item.due_date ? format(new Date(item.due_date), 'MM/dd/yyyy') : 'No due date'
         ];
+      } else if (type === 'requests') {
+        return [
+          item.request_id,
+          item.request_type,
+          item.room_number || 'N/A',
+          item.request_group,
+          item.status,
+          item.priority,
+          item.guest_name || 'N/A',
+          format(new Date(item.created_at), 'MM/dd/yyyy HH:mm')
+        ];
       }
     });
 
     const columns = type === 'tickets' 
       ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Created At']
-      : ['ID', 'Title', 'Status', 'Priority', 'Assigned To', 'Due Date'];
+      : type === 'tasks'
+      ? ['ID', 'Title', 'Status', 'Priority', 'Assigned To', 'Due Date']
+      : ['ID', 'Type', 'Room', 'Group', 'Status', 'Priority', 'Guest', 'Created At'];
 
     doc.autoTable({
       head: [columns],
@@ -206,6 +222,7 @@ const Reports = () => {
         <Tabs value={tabValue} onChange={handleTabChange}>
           <Tab label="Tickets Report" />
           <Tab label="Tasks Report" />
+          <Tab label="Service Requests Report" />
         </Tabs>
 
         {loading ? (
@@ -288,6 +305,50 @@ const Reports = () => {
                         <TableCell>{task.assigned_to || 'Unassigned'}</TableCell>
                         <TableCell>
                           {task.due_date ? format(new Date(task.due_date), 'MM/dd/yyyy') : 'No due date'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </TabPanel>
+
+            <TabPanel value={tabValue} index={2}>
+              <Box sx={{ mb: 2 }}>
+                <Button
+                  variant="contained"
+                  onClick={() => generatePDF('requests')}
+                  disabled={!reportData.requests.length}
+                >
+                  Generate PDF
+                </Button>
+              </Box>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>ID</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Room</TableCell>
+                      <TableCell>Group</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Priority</TableCell>
+                      <TableCell>Guest</TableCell>
+                      <TableCell>Created At</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {reportData.requests.map((request) => (
+                      <TableRow key={request.request_id}>
+                        <TableCell>{request.request_id}</TableCell>
+                        <TableCell>{request.request_type}</TableCell>
+                        <TableCell>{request.room_number || 'N/A'}</TableCell>
+                        <TableCell>{request.request_group}</TableCell>
+                        <TableCell>{request.status}</TableCell>
+                        <TableCell>{request.priority}</TableCell>
+                        <TableCell>{request.guest_name || 'N/A'}</TableCell>
+                        <TableCell>
+                          {format(new Date(request.created_at), 'MM/dd/yyyy HH:mm')}
                         </TableCell>
                       </TableRow>
                     ))}

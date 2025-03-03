@@ -9,6 +9,7 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
+    phone = db.Column(db.String(20))  # Add phone field
     role = db.Column(db.String(20), default='user')  # user, manager, super_admin
     group = db.Column(db.String(50))  # Added group field
     manager_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=True)
@@ -36,13 +37,14 @@ class User(db.Model):
                                    lazy='dynamic',
                                    foreign_keys='Task.assigned_to_id')
 
-    def __init__(self, username, email, password, role='user', manager_id=None, group=None):
+    def __init__(self, username, email, password, role='user', manager_id=None, group=None, phone=None):
         self.username = username
         self.email = email
         self.set_password(password)
         self.role = role
         self.manager_id = manager_id
         self.group = group
+        self.phone = phone
 
     def set_password(self, password):
         self.password = generate_password_hash(password)
@@ -86,6 +88,7 @@ class User(db.Model):
             'user_id': self.user_id,
             'username': self.username,
             'email': self.email,
+            'phone': self.phone,
             'role': self.role,
             'group': self.group,
             'manager_id': self.manager_id,
@@ -283,4 +286,49 @@ class EmailSettings(db.Model):
             'enable_email_notifications': self.enable_email_notifications,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+class ServiceRequest(db.Model):
+    __tablename__ = 'service_requests'
+    request_id = db.Column(db.Integer, primary_key=True)
+    room_id = db.Column(db.Integer, db.ForeignKey('rooms.room_id'), nullable=False)
+    property_id = db.Column(db.Integer, db.ForeignKey('properties.property_id'), nullable=False)
+    request_group = db.Column(db.String(50), nullable=False)  # 'Housekeeping', 'Front Desk', 'Engineering'
+    request_type = db.Column(db.String(50), nullable=False)  # Specific type within the group
+    priority = db.Column(db.String(20), default='normal')  # low, normal, high, urgent
+    quantity = db.Column(db.Integer, default=1)
+    guest_name = db.Column(db.String(100))
+    notes = db.Column(db.Text)
+    status = db.Column(db.String(20), default='pending')  # pending, in_progress, completed
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.user_id'))
+    assigned_task_id = db.Column(db.Integer, db.ForeignKey('tasks.task_id'))
+
+    # Relationships
+    room = db.relationship('Room', backref='service_requests')
+    property = db.relationship('Property', backref='service_requests')
+    created_by = db.relationship('User', foreign_keys=[created_by_id], backref='created_requests')
+    assigned_task = db.relationship('Task', backref='service_request')
+
+    def to_dict(self):
+        return {
+            'request_id': self.request_id,
+            'room_id': self.room_id,
+            'property_id': self.property_id,
+            'request_group': self.request_group,
+            'request_type': self.request_type,
+            'priority': self.priority,
+            'quantity': self.quantity,
+            'guest_name': self.guest_name,
+            'notes': self.notes,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'created_by_id': self.created_by_id,
+            'assigned_task_id': self.assigned_task_id,
+            'room_number': self.room.name if self.room else None,
+            'property_name': self.property.name if self.property else None,
+            'created_by_name': self.created_by.username if self.created_by else None,
+            'task_status': self.assigned_task.status if self.assigned_task else None
         }

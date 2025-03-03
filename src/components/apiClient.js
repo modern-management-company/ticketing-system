@@ -1,14 +1,18 @@
 import axios from 'axios';
 
+// Get the API URL from environment variables or use a fallback
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+console.log('Using API URL:', API_URL);
+
 const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'https://ticketing-system-6f4u.onrender.com',
+  baseURL: API_URL,
   timeout: 10000,
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
   },
   // Add these settings for CORS
-  withCredentials: true,
-  credentials: 'include'
+  withCredentials: true
 });
 
 // Retry configuration
@@ -35,6 +39,7 @@ export const setAuthToken = (token) => {
   }
 };
 
+// Add request interceptor to handle errors
 apiClient.interceptors.request.use(
   (config) => {
     const auth = getStoredAuth();
@@ -51,14 +56,34 @@ apiClient.interceptors.request.use(
   }
 );
 
+// Add response interceptor with better error handling
 apiClient.interceptors.response.use(
   response => response,
   error => {
     if (error.response) {
-      // Handle response errors
+      // Log detailed error information
+      console.error('Response error:', {
+        status: error.response.status,
+        data: error.response.data,
+        headers: error.response.headers
+      });
+      
+      // Handle specific error codes
+      switch (error.response.status) {
+        case 405:
+          console.error('Method not allowed. Please check API endpoint configuration');
+          break;
+        case 401:
+          console.error('Unauthorized access');
+          break;
+        case 403:
+          console.error('Forbidden access');
+          break;
+        default:
+          console.error('Server error:', error.response.status);
+      }
       return Promise.reject(error);
     } else if (error.request) {
-      // Handle CORS and network errors
       console.error('Network error:', error);
       throw new Error('Network error. Please check your connection.');
     }
