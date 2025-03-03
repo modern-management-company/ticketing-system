@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Get the API URL from environment variables or use a fallback
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+// Hardcode the API URL to ensure it's always used
+const API_URL = 'https://ticketing-system-6f4u.onrender.com';
 console.log('Using API URL:', API_URL);
 
 const apiClient = axios.create({
