@@ -8,10 +8,18 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedProperty, setSelectedProperty] = useState(initialValue || '');
 
   useEffect(() => {
     fetchProperties();
   }, [auth]);
+
+  // Update selected property when initialValue changes
+  useEffect(() => {
+    if (initialValue) {
+      setSelectedProperty(initialValue);
+    }
+  }, [initialValue]);
 
   const fetchProperties = async () => {
     try {
@@ -35,8 +43,10 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
         setProperties(activeProperties);
         
         // If no property is selected, select the first one
-        if (!initialValue && activeProperties.length > 0) {
-          onPropertyChange(activeProperties[0].property_id);
+        if ((!selectedProperty || selectedProperty === '') && activeProperties.length > 0) {
+          const firstPropertyId = activeProperties[0].property_id;
+          setSelectedProperty(firstPropertyId);
+          onPropertyChange(firstPropertyId);
         }
       }
     } catch (error) {
@@ -47,6 +57,12 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
     }
   };
 
+  const handlePropertyChange = (event) => {
+    const newPropertyId = event.target.value;
+    setSelectedProperty(newPropertyId);
+    onPropertyChange(newPropertyId);
+  };
+
   if (loading) return <CircularProgress size={24} />;
   if (error) return <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>;
   if (properties.length === 0) return <Alert severity="info">No properties available</Alert>;
@@ -55,8 +71,8 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
     <FormControl sx={{ minWidth: 200 }}>
       <InputLabel>Select Property</InputLabel>
       <Select
-        value={initialValue || ''}
-        onChange={(e) => onPropertyChange(e.target.value)}
+        value={selectedProperty}
+        onChange={handlePropertyChange}
         label="Select Property"
       >
         {properties.map((property) => (
