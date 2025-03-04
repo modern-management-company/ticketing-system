@@ -70,6 +70,22 @@ const Dashboard = () => {
   });
   const [shouldRefetch, setShouldRefetch] = useState(0);
 
+  // Add this useEffect to ensure selectedProperty is properly persisted
+  useEffect(() => {
+    if (selectedProperty) {
+      localStorage.setItem('selectedProperty', selectedProperty);
+      console.log('Dashboard: Saved selected property to localStorage:', selectedProperty);
+    }
+  }, [selectedProperty]);
+
+  // Add debug logging for initial property load
+  useEffect(() => {
+    console.log('Dashboard initial property:', {
+      selectedProperty,
+      fromLocalStorage: localStorage.getItem('selectedProperty')
+    });
+  }, []);
+
   const fetchRoomsForProperty = async (propertyId) => {
     try {
       const response = await apiClient.get(`/properties/${propertyId}/rooms`);
@@ -108,12 +124,6 @@ const Dashboard = () => {
       );
 
       console.log('Fetching data for properties:', propertiesToFetch);
-
-      // If no property is selected and there are active properties, select the first one
-      if (!selectedProperty && propertiesToFetch.length > 0) {
-        handlePropertyChange(propertiesToFetch[0].property_id);
-        return;
-      }
 
       // Fetch data for the property
       for (const property of propertiesToFetch) {
@@ -186,10 +196,15 @@ const Dashboard = () => {
 
   const handlePropertyChange = useCallback((propertyId) => {
     console.log('Property changed to:', propertyId);
-    localStorage.setItem('selectedProperty', propertyId);
-    setSelectedProperty(propertyId);
-    setShouldRefetch(prev => prev + 1);
-  }, []);
+    if (propertyId) {
+      localStorage.setItem('selectedProperty', propertyId);
+      setSelectedProperty(propertyId);
+      // Only trigger a refetch if the property actually changed
+      if (propertyId !== selectedProperty) {
+        setShouldRefetch(prev => prev + 1);
+      }
+    }
+  }, [selectedProperty]);
 
   const getFilteredData = useCallback(() => {
     let filteredTickets = [...dashboardData.tickets];
