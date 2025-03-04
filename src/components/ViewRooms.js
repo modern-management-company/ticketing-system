@@ -43,9 +43,11 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useNavigate } from "react-router-dom";
 
 const ViewRooms = () => {
   const { auth } = useAuth();
+  const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [selectedFloor, setSelectedFloor] = useState('all');
@@ -343,6 +345,18 @@ const ViewRooms = () => {
     return date.toISOString().slice(0, 16);
   };
 
+  const handleRoomCardClick = (room) => {
+    // Navigate to tickets page with room information
+    navigate('/tickets', { 
+      state: { 
+        createTicket: true,
+        roomId: room.room_id,
+        roomName: room.name,
+        propertyId: selectedProperty
+      } 
+    });
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -457,10 +471,15 @@ const ViewRooms = () => {
                       display: 'flex',
                       flexDirection: 'column',
                       position: 'relative',
+                      cursor: 'pointer',
+                      '&:hover': {
+                        boxShadow: 6,
+                      },
                       ...(room.type?.toLowerCase() === 'public area' && {
                         borderLeft: '4px solid #9c27b0', // Purple border for public areas
                       })
                     }}
+                    onClick={() => handleRoomCardClick(room)}
                   >
                     <CardContent sx={{ flexGrow: 1 }}>
                       <Box sx={{
@@ -550,9 +569,10 @@ const ViewRooms = () => {
                       </Box>
                     </CardContent>
                     {(isManager || auth?.user?.role === 'super_admin' || ['Maintenance', 'Engineering'].includes(auth?.user?.group)) && (
-                      <CardActions sx={{ justifyContent: 'flex-end', p: 2 }}>
+                      <CardActions sx={{ justifyContent: 'flex-end', p: 2, mt: 'auto' }}>
                         <IconButton
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent card click from triggering
                             const roomToEdit = {
                               ...room,
                               type: room.type || roomTypes[0]
@@ -567,7 +587,10 @@ const ViewRooms = () => {
                           <EditIcon />
                         </IconButton>
                         <IconButton
-                          onClick={() => handleDeleteRoom(room.room_id)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent card click from triggering
+                            handleDeleteRoom(room.room_id);
+                          }}
                           color="error"
                           size="small"
                           title="Delete Room"

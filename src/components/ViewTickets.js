@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from '../context/AuthContext';
 import apiClient from "./apiClient";
+import { useLocation } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -44,6 +45,7 @@ import TicketKanbanBoard from './TicketKanbanBoard';
 
 const ViewTickets = () => {
   const { auth } = useAuth();
+  const location = useLocation();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -107,6 +109,32 @@ const ViewTickets = () => {
   useEffect(() => {
     fetchProperties();
   }, []);
+
+  // Check if we're coming from the rooms page with pre-selected room
+  useEffect(() => {
+    if (location.state?.createTicket) {
+      const { propertyId, roomId, roomName } = location.state;
+      
+      // Set the selected property
+      if (propertyId) {
+        setSelectedProperty(propertyId);
+      }
+      
+      // Open the create ticket dialog with pre-selected room
+      if (roomId) {
+        setTicketForm(prev => ({
+          ...prev,
+          room_id: roomId,
+          property_id: propertyId
+        }));
+        
+        // Open the dialog after a short delay to ensure property and rooms are loaded
+        setTimeout(() => {
+          setOpenDialog(true);
+        }, 300);
+      }
+    }
+  }, [location.state]);
 
   const fetchProperties = async () => {
     try {
@@ -320,6 +348,11 @@ const ViewTickets = () => {
       property_id: selectedProperty || '',
       room_id: ''
     });
+    
+    // Clear the location state to prevent dialog from reopening on refresh
+    if (location.state?.createTicket) {
+      window.history.replaceState({}, document.title);
+    }
   };
 
   const handleDeleteTicket = async (ticketId) => {
