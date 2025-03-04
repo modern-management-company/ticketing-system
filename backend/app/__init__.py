@@ -39,48 +39,25 @@ app.config.from_object(Config)
 # Set up logging
 setup_logging(app)
 
-# Define allowed origins
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://modernhotels.management",
-    "https://ticketing-system-gilt.vercel.app",
-    "https://ticketing-system-gilt.vercel.app/",
-    "http://vm.vasantika.net:3000",
-    "http://vm.vasantika.net",
-    "http://vm.vasantika.net:5000"
-]
-
-# Add CORS origins to app config
-app.config['CORS_ORIGINS'] = ALLOWED_ORIGINS
-
 # Update CORS configuration
 CORS(app, resources={
     r"/*": {
-        "origins": ALLOWED_ORIGINS,
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-        "allow_headers": [
-            "Content-Type", 
-            "Authorization", 
-            "Access-Control-Allow-Credentials",
-            "Access-Control-Allow-Private-Network"
+        "origins": [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://modernhotels.management",
+            "https://ticketing-system-gilt.vercel.app",
+            "http://vm.vasantika.net:3000",
+            "http://vm.vasantika.net",
+            "https://ticketing-system-6f4u.onrender.com"
         ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials", "X-Requested-With"],
         "expose_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True,
         "max_age": 600
     }
 })
-
-# Add headers for private network access
-@app.after_request
-def after_request(response):
-    origin = request.headers.get('Origin')
-    if origin and origin in app.config['CORS_ORIGINS']:
-        response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Access-Control-Allow-Private-Network'
-        response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS,PATCH'
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-    return response
 
 # Initialize extensions
 db = SQLAlchemy(app)

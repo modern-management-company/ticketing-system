@@ -1,61 +1,93 @@
 import axios from 'axios';
 
-// Use VM's domain instead of localhost
-const baseURL = process.env.NODE_ENV === 'development' 
-  ? 'http://vm.vasantika.net:5000'
-  : 'https://api.modernhotels.management';
+// Hardcode the API URL to ensure it's always used
+const API_URL = 'https://ticketing-system-6f4u.onrender.com';
+console.log('Using API URL:', API_URL);
 
 const apiClient = axios.create({
-  baseURL,
-  withCredentials: true,
+  baseURL: API_URL,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Private-Network': 'true'
-  }
+    'Accept': 'application/json'
+  },
+  // Add these settings for CORS
+  withCredentials: true
 });
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+const getStoredAuth = () => {
+  try {
+    const auth = localStorage.getItem('auth');
+    return auth ? JSON.parse(auth) : null;
+  } catch (error) {
+    console.error('Error parsing stored auth:', error);
+    localStorage.removeItem('auth');
+    return null;
+  }
+};
 
 // Function to set auth token
 export const setAuthToken = (token) => {
   if (token) {
-    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    apiClient.defaults.headers.common['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
   } else {
     delete apiClient.defaults.headers.common['Authorization'];
   }
 };
 
-// Add request interceptor
+// Add request interceptor to handle errors
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const auth = getStoredAuth();
+    if (auth?.token) {
+      // Ensure token is always properly formatted with Bearer prefix
+      const token = auth.token.startsWith('Bearer ') ? auth.token : `Bearer ${auth.token}`;
+      config.headers.Authorization = token;
     }
     return config;
   },
   (error) => {
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
-// Add response interceptor
+// Add response interceptor with better error handling
 apiClient.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
+  response => response,
+  error => {
     if (error.response) {
-      // Server responded with error status
-      console.error('Response error:', error.response.data);
-      return Promise.reject(error.response.data);
-    } else if (error.request) {
-      // Request was made but no response
-      console.error('Network error:', error);
-      return Promise.reject(new Error('Network error. Please check your connection.'));
-    } else {
-      // Something else happened
-      console.error('Error:', error.message);
+      // Log detailed error information
+      console.error('Response error:', {
+        status: error.response.status,
+        data: error.response.data,
+        headers: error.response.headers
+      });
+      
+      // Handle specific error codes
+      switch (error.response.status) {
+        case 405:
+          console.error('Method not allowed. Please check API endpoint configuration');
+          break;
+        case 401:
+          console.error('Unauthorized access');
+          break;
+        case 403:
+          console.error('Forbidden access');
+          break;
+        default:
+          console.error('Server error:', error.response.status);
+      }
       return Promise.reject(error);
+    } else if (error.request) {
+      console.error('Network error:', error);
+      throw new Error('Network error. Please check your connection.');
     }
+    return Promise.reject(error);
   }
 );
 
