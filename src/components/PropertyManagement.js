@@ -129,14 +129,22 @@ const PropertyManagement = () => {
   };
 
   const handlePropertyDelete = async (propertyId) => {
-    if (!window.confirm('Are you sure you want to delete this property?')) return;
+    const warningMessage = `WARNING: Deleting this property will permanently remove:\n\n` +
+      `• All rooms in the property\n` +
+      `• All tickets associated with the property\n` +
+      `• All tasks and task assignments\n` +
+      `• All service requests\n` +
+      `• All user and manager property assignments\n\n` +
+      `This action cannot be undone. Are you sure you want to proceed?`;
+
+    if (!window.confirm(warningMessage)) return;
     
     try {
       setError('');
       setSuccess('');
       
       await apiClient.delete(`/properties/${propertyId}`);
-      setSuccess('Property deleted successfully');
+      setSuccess('Property and all associated data deleted successfully');
       await fetchData();
     } catch (error) {
       console.error('Failed to delete property:', error);

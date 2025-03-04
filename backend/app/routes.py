@@ -1322,9 +1322,57 @@ def manage_property(property_id):
 
         elif request.method == 'DELETE':
             try:
+                # Get all rooms for this property
+                rooms = Room.query.filter_by(property_id=property_id).all()
+                room_ids = [room.room_id for room in rooms]
+
+                # Get all tickets for this property
+                tickets = Ticket.query.filter_by(property_id=property_id).all()
+                ticket_ids = [ticket.ticket_id for ticket in tickets]
+
+                # Get all tasks for this property
+                tasks = Task.query.filter_by(property_id=property_id).all()
+                task_ids = [task.task_id for task in tasks]
+
+                # Delete service requests first
+                ServiceRequest.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+
+                # Delete task assignments
+                if task_ids or ticket_ids:
+                    TaskAssignment.query.filter(
+                        db.or_(
+                            TaskAssignment.task_id.in_(task_ids) if task_ids else False,
+                            TaskAssignment.ticket_id.in_(ticket_ids) if ticket_ids else False
+                        )
+                    ).delete(synchronize_session=False)
+
+                # Delete tasks
+                if task_ids:
+                    Task.query.filter(Task.task_id.in_(task_ids)).delete(synchronize_session=False)
+
+                # Delete tickets
+                if ticket_ids:
+                    Ticket.query.filter(Ticket.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
+
+                # Delete rooms
+                if room_ids:
+                    Room.query.filter(Room.room_id.in_(room_ids)).delete(synchronize_session=False)
+
+                # Delete property manager assignments
+                PropertyManager.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+
+                # Delete user property assignments
+                UserProperty.query.filter_by(property_id=property_id).delete(synchronize_session=False)
+
+                # Finally delete the property
                 db.session.delete(property)
+                
+                # Commit all changes
                 db.session.commit()
-                return jsonify({'message': 'Property deleted successfully'})
+
+                app.logger.info(f"Property {property_id} and all associated data deleted successfully")
+                return jsonify({'message': 'Property and all associated data deleted successfully'})
+
             except Exception as e:
                 db.session.rollback()
                 app.logger.error(f"Error deleting property: {str(e)}")

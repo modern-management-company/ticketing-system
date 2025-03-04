@@ -3,51 +3,50 @@ import { useAuth } from '../context/AuthContext';
 import { Select, MenuItem, FormControl, InputLabel, CircularProgress, Box, Chip, Alert } from '@mui/material';
 import apiClient from './apiClient';
 
-const PropertySwitcher = ({ onPropertyChange }) => {
+const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
   const { auth } = useAuth();
   const [properties, setProperties] = useState([]);
-  const [selectedProperty, setSelectedProperty] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedProperty, setSelectedProperty] = useState(initialValue || '');
 
   useEffect(() => {
     fetchProperties();
   }, [auth]);
+
+  // Update selected property when initialValue changes
+  useEffect(() => {
+    if (initialValue) {
+      setSelectedProperty(initialValue);
+    }
+  }, [initialValue]);
 
   const fetchProperties = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await apiClient.get('/properties');
+      // Use different endpoints based on user role
+      const endpoint = auth.user.role === 'super_admin' 
+        ? '/properties'
+        : `/users/${auth.user.user_id}/managed-properties`;
+      
+      const response = await apiClient.get(endpoint);
       console.log('Properties response:', response.data);
       
       if (response.data) {
         // Filter only active properties
-        const activeProperties = response.data.filter(prop => prop.status === 'active');
+        const activeProperties = Array.isArray(response.data) 
+          ? response.data.filter(prop => prop.status === 'active')
+          : response.data.properties?.filter(prop => prop.status === 'active') || [];
+        
         setProperties(activeProperties);
         
-        // Set default property
-        if (activeProperties.length > 0) {
-          // If user has assigned properties, use the first assigned active one
-          if (auth.assigned_properties && auth.assigned_properties.length > 0) {
-            const assignedActiveProperty = auth.assigned_properties.find(p => 
-              activeProperties.some(ap => ap.property_id === p.property_id)
-            );
-            if (assignedActiveProperty) {
-              setSelectedProperty(assignedActiveProperty.property_id);
-              if (onPropertyChange) {
-                onPropertyChange(assignedActiveProperty.property_id);
-              }
-            }
-          } else {
-            // Otherwise use the first available active property
-            const defaultProperty = activeProperties[0].property_id;
-            setSelectedProperty(defaultProperty);
-            if (onPropertyChange) {
-              onPropertyChange(defaultProperty);
-            }
-          }
+        // If no property is selected, select the first one
+        if ((!selectedProperty || selectedProperty === '') && activeProperties.length > 0) {
+          const firstPropertyId = activeProperties[0].property_id;
+          setSelectedProperty(firstPropertyId);
+          onPropertyChange(firstPropertyId);
         }
       }
     } catch (error) {
@@ -58,16 +57,10 @@ const PropertySwitcher = ({ onPropertyChange }) => {
     }
   };
 
-  const handlePropertyChange = async (propertyId) => {
-    try {
-      setSelectedProperty(propertyId);
-      if (onPropertyChange) {
-        onPropertyChange(propertyId);
-      }
-    } catch (error) {
-      console.error('Failed to switch property:', error);
-      setError('Failed to switch property');
-    }
+  const handlePropertyChange = (event) => {
+    const newPropertyId = event.target.value;
+    setSelectedProperty(newPropertyId);
+    onPropertyChange(newPropertyId);
   };
 
   if (loading) return <CircularProgress size={24} />;
@@ -78,21 +71,9 @@ const PropertySwitcher = ({ onPropertyChange }) => {
     <FormControl sx={{ minWidth: 200 }}>
       <InputLabel>Select Property</InputLabel>
       <Select
-        value={selectedProperty || ''}
-        onChange={(e) => handlePropertyChange(e.target.value)}
+        value={selectedProperty}
+        onChange={handlePropertyChange}
         label="Select Property"
-        renderValue={(selected) => {
-          const property = properties.find(p => p.property_id === selected);
-          return (
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Chip 
-                label={property ? property.name : 'Select Property'} 
-                size="small"
-                color="primary"
-              />
-            </Box>
-          );
-        }}
       >
         {properties.map((property) => (
           <MenuItem key={property.property_id} value={property.property_id}>

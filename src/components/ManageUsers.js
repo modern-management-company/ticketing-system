@@ -34,8 +34,6 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import GroupIcon from '@mui/icons-material/Group';
-import BuildIcon from '@mui/icons-material/Build';
-import AddIcon from '@mui/icons-material/Add';
 
 const ManageUsers = () => {
   const { auth } = useAuth();
@@ -67,11 +65,7 @@ const ManageUsers = () => {
   const roles = ['user', 'manager', 'super_admin'];
   const groups = ['Front Desk', 'Maintenance', 'Housekeeping', 'Engineering', 'Executive'];
 
-  console.log('Auth context:', useAuth());
-  console.log('Full auth object:', auth);
-
   useEffect(() => {
-    console.log('Auth on mount:', auth);
     fetchData();
   }, []);
 
@@ -188,7 +182,35 @@ const ManageUsers = () => {
         return;
       }
 
-      if (!window.confirm('Are you sure you want to delete this user?')) {
+      // First check for associated tickets and tasks
+      const [ticketsResponse, tasksResponse] = await Promise.all([
+        apiClient.get(`/users/${userId}/tickets`),
+        apiClient.get(`/users/${userId}/tasks`)
+      ]);
+
+      const tickets = ticketsResponse.data?.tickets || [];
+      const tasks = tasksResponse.data?.tasks || [];
+
+      let warningMessage = `WARNING: Are you sure you want to delete user "${user.username}"?\n\n`;
+
+      if (tickets.length > 0 || tasks.length > 0) {
+        warningMessage += 'This user has:\n';
+        if (tickets.length > 0) {
+          warningMessage += `• ${tickets.length} ticket(s)\n`;
+        }
+        if (tasks.length > 0) {
+          warningMessage += `• ${tasks.length} task(s)\n`;
+        }
+        warningMessage += '\nDeleting this user will:\n';
+        warningMessage += '• Reassign all tickets to system\n';
+        warningMessage += '• Unassign all tasks\n';
+        warningMessage += '• Remove all property assignments\n\n';
+        warningMessage += 'This action cannot be undone. Do you want to proceed?';
+      } else {
+        warningMessage += 'This will remove the user and all their property assignments.\nThis action cannot be undone.';
+      }
+
+      if (!window.confirm(warningMessage)) {
         return;
       }
 
@@ -196,7 +218,8 @@ const ManageUsers = () => {
       setSuccess('User deleted successfully');
       await fetchData();
     } catch (error) {
-      setError('Failed to delete user');
+      console.error('Failed to delete user:', error);
+      setError(error.response?.data?.message || 'Failed to delete user');
     }
   };
 
@@ -205,49 +228,43 @@ const ManageUsers = () => {
       setError(null);
       setSuccess(null);
 
+      // Validate required fields
+      if (!userFormData.username || !userFormData.email) {
+        setError('Username and email are required');
+        return;
+      }
+
       const payload = {
         ...userFormData,
         property_ids: userFormData.assigned_properties,
         is_active: userFormData.is_active
       };
 
-      // Log the request details for debugging
-      console.log('Submitting user data:', {
-        method: editingUser ? 'PATCH' : 'POST',
-        endpoint: editingUser ? `/users/${editingUser.user_id}` : '/users',
-        payload
-      });
-
       let response;
-      try {
-        if (editingUser) {
-          response = await apiClient.patch(`/users/${editingUser.user_id}`, payload);
-        } else {
-          response = await apiClient.post('/users', payload);
+      if (editingUser) {
+        response = await apiClient.put(`/users/${editingUser.user_id}`, payload);
+        if (response.data?.user) {
+          setSuccess('User updated successfully');
+          setOpenUserDialog(false);
+          await fetchData(); // Refresh the user list
+          resetUserForm();
         }
-      } catch (apiError) {
-        // Log detailed error information
-        console.error('API Error:', {
-          status: apiError.response?.status,
-          data: apiError.response?.data,
-          message: apiError.message
-        });
-        throw apiError;
-      }
-
-      if (response.data?.user) {
-        setSuccess(editingUser ? 'User updated successfully' : 'User added successfully');
-        await fetchData();
-        setOpenUserDialog(false);
-        resetUserForm();
+      } else {
+        if (!userFormData.password) {
+          setError('Password is required for new users');
+          return;
+        }
+        response = await apiClient.post('/users', payload);
+        if (response.data?.user) {
+          setSuccess('User added successfully');
+          setOpenUserDialog(false);
+          await fetchData();
+          resetUserForm();
+        }
       }
     } catch (error) {
       console.error('Failed to save user:', error);
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.error || 
-                          error.message || 
-                          'Failed to save user';
-      setError(errorMessage);
+      setError(error.response?.data?.message || 'Failed to save user');
     }
   };
 
@@ -311,60 +328,28 @@ const ManageUsers = () => {
     setSelectedUser(null);
   };
 
-  const handleFixManagerProperties = async () => {
-    try {
-      setError('');
-      setSuccess('');
-      setLoading(true);
-
-      const response = await apiClient.post('/fix-manager-properties');
-      
-      if (response.data) {
-        setSuccess(response.data.msg);
-        // Refresh the users list to show updated relationships
-        await fetchData();
-      }
-    } catch (error) {
-      console.error('Failed to fix manager properties:', error);
-      setError(error.response?.data?.msg || 'Failed to fix manager properties');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (loading) return <CircularProgress />;
   if (error) return <Alert severity="error">{error}</Alert>;
 
   return (
     <Box p={3}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">Users Management</Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          {auth?.user?.role === 'super_admin' && (
-            <Button
-              variant="contained"
-              color="secondary"
-              startIcon={<BuildIcon />}
-              onClick={handleFixManagerProperties}
-              sx={{ mr: 2 }}
-            >
-              Fix Manager Properties
-            </Button>
-          )}
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => {
-              resetUserForm();
-              setOpenUserDialog(true);
-            }}
-          >
-            Add User
-          </Button>
-        </Box>
-      </Box>
+      <Typography variant="h4" gutterBottom>
+        Users Management
+      </Typography>
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={() => {
+          resetUserForm();
+          setOpenUserDialog(true);
+        }}
+        sx={{ mb: 2 }}
+      >
+        Add User
+      </Button>
 
       <TableContainer component={Paper}>
         <Table>

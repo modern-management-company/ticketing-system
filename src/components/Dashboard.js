@@ -63,7 +63,12 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedProperty, setSelectedProperty] = useState('all');
+  const [selectedProperty, setSelectedProperty] = useState(() => {
+    // Try to get the last selected property from localStorage
+    const savedProperty = localStorage.getItem('selectedProperty');
+    return savedProperty || '';
+  });
+  const [shouldRefetch, setShouldRefetch] = useState(0);
 
   const fetchRoomsForProperty = async (propertyId) => {
     try {
@@ -96,12 +101,21 @@ const Dashboard = () => {
       let allTasks = [];
       let roomsData = {};
       
-      // Fetch data for selected property or all properties
-      const propertiesToFetch = selectedProperty === 'all' 
-        ? properties.filter(p => p.status === 'active')
-        : properties.filter(p => p.property_id === selectedProperty && p.status === 'active');
+      // Fetch data only for the selected property
+      const propertiesToFetch = properties.filter(p => 
+        p.status === 'active' && 
+        (!selectedProperty || p.property_id === parseInt(selectedProperty))
+      );
 
-      // Fetch data for each property
+      console.log('Fetching data for properties:', propertiesToFetch);
+
+      // If no property is selected and there are active properties, select the first one
+      if (!selectedProperty && propertiesToFetch.length > 0) {
+        handlePropertyChange(propertiesToFetch[0].property_id);
+        return;
+      }
+
+      // Fetch data for the property
       for (const property of propertiesToFetch) {
         try {
           const [ticketsRes, tasksRes, roomsRes, managersRes] = await Promise.all([
@@ -164,20 +178,28 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [auth?.token, auth?.role, auth?.user_id, selectedProperty, logout, navigate]);
+  }, [auth?.token, auth?.role, auth?.user_id, selectedProperty, logout, navigate, shouldRefetch]);
 
   useEffect(() => {
     verifyAuthAndFetchData();
   }, [verifyAuthAndFetchData]);
 
+  const handlePropertyChange = useCallback((propertyId) => {
+    console.log('Property changed to:', propertyId);
+    localStorage.setItem('selectedProperty', propertyId);
+    setSelectedProperty(propertyId);
+    setShouldRefetch(prev => prev + 1);
+  }, []);
+
   const getFilteredData = useCallback(() => {
     let filteredTickets = [...dashboardData.tickets];
     let filteredTasks = [...dashboardData.tasks];
 
-    // Filter by selected property if not 'all'
-    if (selectedProperty !== 'all') {
-      filteredTickets = filteredTickets.filter(ticket => ticket.property_id === selectedProperty);
-      filteredTasks = filteredTasks.filter(task => task.property_id === selectedProperty);
+    // Always filter by selected property since 'all' option is removed
+    if (selectedProperty) {
+      const propertyId = parseInt(selectedProperty);
+      filteredTickets = filteredTickets.filter(ticket => ticket.property_id === propertyId);
+      filteredTasks = filteredTasks.filter(task => task.property_id === propertyId);
     }
 
     return { filteredTickets, filteredTasks };
@@ -298,7 +320,10 @@ const Dashboard = () => {
     <Box sx={{ flexGrow: 1, p: 3 }}>
       {/* Property Filter */}
       <Box sx={{ mb: 3 }}>
-        <PropertySwitcher onPropertyChange={setSelectedProperty} />
+        <PropertySwitcher 
+          onPropertyChange={handlePropertyChange} 
+          initialValue={selectedProperty}
+        />
       </Box>
 
       <Grid container spacing={3}>
