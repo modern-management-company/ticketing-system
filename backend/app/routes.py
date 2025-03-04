@@ -224,47 +224,93 @@ def create_ticket():
             db.session.add(new_ticket)
             db.session.commit()
 
-            # Find the appropriate manager based on category
+            # Enhanced category to group mapping for task assignment
             category = data['category']
+            
             # Map category to group name
             group_mapping = {
                 'Maintenance': 'Engineering',
                 'Housekeeping': 'Housekeeping',
-                'General': 'Front Desk'
+                'Front Desk': 'Front Desk',
+                'General': 'Front Desk',
+                'IT': 'IT',
+                'Security': 'Security',
+                'Food & Beverage': 'Food & Beverage',
+                'Accounting': 'Accounting'
+                # Add more mappings as needed
             }
-            group = group_mapping.get(category)
             
-            if group:
-                # Query active managers with matching group
+            # Get the appropriate group for this category
+            assigned_group = group_mapping.get(category)
+            assigned_manager = None
+            
+            if assigned_group:
+                # First try to find a manager with the specific group for this property
                 assigned_manager = User.query.filter_by(
-                    group=group,
+                    group=assigned_group,
                     is_active=True
                 ).join(PropertyManager).filter(
                     PropertyManager.property_id == data['property_id']
                 ).first()
-
-                if assigned_manager:
-                    # Create and assign a task
-                    task = Task(
-                        title=f"Task for Ticket: {data['title']}",
-                        description=f"Auto-generated task for ticket. Category: {category}\nDescription: {data['description']}",
-                        status='pending',
-                        priority=data['priority'],
-                        property_id=data['property_id'],
-                        assigned_to_id=assigned_manager.user_id
-                    )
-                    db.session.add(task)
-                    db.session.flush()  # This will populate the task_id
-                    
-                    # Create task assignment
-                    task_assignment = TaskAssignment(
-                        task_id=task.task_id,
-                        ticket_id=new_ticket.ticket_id,
-                        assigned_to_user_id=assigned_manager.user_id,
-                        status='Pending'
-                    )
-                    db.session.add(task_assignment)
-                    db.session.commit()
+                
+                # If no specific manager found, assign to Executive Manager
+                if not assigned_manager and category not in ['Maintenance', 'Housekeeping', 'Front Desk']:
+                    assigned_manager = User.query.filter_by(
+                        group='Executive',
+                        is_active=True
+                    ).join(PropertyManager).filter(
+                        PropertyManager.property_id == data['property_id']
+                    ).first()
+            
+            # If still no manager found, try to find any Executive Manager for this property
+            if not assigned_manager:
+                assigned_manager = User.query.filter_by(
+                    group='Executive',
+                    is_active=True
+                ).join(PropertyManager).filter(
+                    PropertyManager.property_id == data['property_id']
+                ).first()
+            
+            # Create and assign a task if we found a manager
+            if assigned_manager:
+                # Create and assign a task
+                task = Task(
+                    title=f"Task for Ticket #{new_ticket.ticket_id}: {data['title']}",
+                    description=f"Auto-generated task for ticket. Category: {category}\nDescription: {data['description']}",
+                    status='pending',
+                    priority=data['priority'],
+                    property_id=data['property_id'],
+                    assigned_to_id=assigned_manager.user_id
+                )
+                db.session.add(task)
+                db.session.flush()  # This will populate the task_id
+                
+                # Create task assignment
+                task_assignment = TaskAssignment(
+                    task_id=task.task_id,
+                    ticket_id=new_ticket.ticket_id,
+                    assigned_to_user_id=assigned_manager.user_id,
+                    status='Pending'
+                )
+                db.session.add(task_assignment)
+                
+                # Log the assignment
+                app.logger.info(f"Auto-assigned task for ticket #{new_ticket.ticket_id} to {assigned_manager.username} (Group: {assigned_manager.group})")
+                
+                # Send email notification to the assigned manager
+                try:
+                    property_name = "Unknown Property"
+                    property_obj = Property.query.get(data['property_id'])
+                    if property_obj:
+                        property_name = property_obj.name
+                        
+                    from app.services.email_service import EmailService
+                    email_service = EmailService()
+                    email_service.send_task_assignment_notification(assigned_manager, task, property_name)
+                except Exception as e:
+                    app.logger.error(f"Failed to send task assignment email: {str(e)}")
+                
+                db.session.commit()
 
             # Get property managers and super admins for notifications
             property_managers = User.query.join(PropertyManager).filter(
@@ -408,7 +454,7 @@ def create_property():
             
         app.logger.info(f"User role: {current_user.role}")
         if current_user.role not in ['super_admin', 'manager']:
-            app.logger.warning(f"Unauthorized property creation attempt by user {current_user.user_id} with role {current_user.role}")
+            app.logger.warning(f"Unauthorized property creation attempt by user {current_user.user_id}")
             return jsonify({"msg": "Unauthorized - Insufficient permissions"}), 403
             
         # Get and validate input data
@@ -432,16 +478,19 @@ def create_property():
             address=data['address'],
             type=data.get('type', 'residential'),
             status=data.get('status', 'active'),
-            description=data.get('description', ''),
-            manager_id=current_user.user_id if current_user.role == 'manager' else data.get('manager_id')
+            description=data.get('description', '')
         )
         
         db.session.add(new_property)
+        db.session.flush()  # Get the property_id
         
-        # If manager is creating the property, assign them to it
+        # If manager is creating the property, create property manager relationship
         if current_user.role == 'manager':
-            user_property = UserProperty(user_id=current_user.user_id, property_id=new_property.property_id)
-            db.session.add(user_property)
+            property_manager = PropertyManager(
+                property_id=new_property.property_id,
+                user_id=current_user.user_id
+            )
+            db.session.add(property_manager)
             
         db.session.commit()
         app.logger.info(f"Property created successfully: {new_property.property_id}")
@@ -450,7 +499,7 @@ def create_property():
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error creating property: {str(e)}")
-        return jsonify({"msg": "Internal server error"}), 500
+        return jsonify({"msg": f"Error creating property: {str(e)}"}), 500
 
 @app.route('/properties/<int:property_id>/rooms', methods=['GET'])
 @jwt_required()
@@ -2733,3 +2782,288 @@ def update_service_request(request_id):
         db.session.rollback()
         app.logger.error(f"Error updating service request: {str(e)}")
         return jsonify({'msg': 'Failed to update service request'}), 500
+
+# Add this route with the existing routes
+@app.route('/users', methods=['POST'])
+@jwt_required()
+def create_user():
+    try:
+        # Get current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+            
+        # Only super_admin and managers can create users
+        if current_user.role not in ['super_admin', 'manager']:
+            return jsonify({"msg": "Unauthorized - Insufficient permissions"}), 403
+            
+        # Get and validate input data
+        data = request.get_json()
+        if not data:
+            return jsonify({"msg": "No input data provided"}), 400
+            
+        # Validate required fields
+        required_fields = ['username', 'email', 'password', 'role']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        if missing_fields:
+            return jsonify({"msg": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+        # Check if username or email already exists
+        if User.query.filter_by(username=data['username']).first():
+            return jsonify({"msg": "Username already exists"}), 400
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({"msg": "Email already exists"}), 400
+
+        # Create new user with only the fields that exist in the model
+        new_user = User(
+            username=data['username'],
+            email=data['email'],
+            password=data['password'],
+            role=data['role'],
+            group=data.get('group'),
+            phone=data.get('phone')
+        )
+        
+        # Set is_active separately if the field exists in the model
+        if hasattr(new_user, 'is_active'):
+            new_user.is_active = data.get('is_active', True)
+        
+        db.session.add(new_user)
+        db.session.flush()  # Flush to get the user_id
+
+        # Handle property assignments
+        if 'property_ids' in data and data['property_ids']:
+            for property_id in data['property_ids']:
+                # Create UserProperty relationship
+                user_property = UserProperty(
+                    user_id=new_user.user_id,
+                    property_id=property_id
+                )
+                db.session.add(user_property)
+
+                # If user is a manager, also create PropertyManager relationship
+                if data['role'] == 'manager':
+                    property_manager = PropertyManager(
+                        user_id=new_user.user_id,
+                        property_id=property_id
+                    )
+                    db.session.add(property_manager)
+
+        db.session.commit()
+
+        # Send welcome email
+        try:
+            email_service = EmailService()
+            email_service.send_welcome_email(
+                new_user,
+                password=data['password'],
+                sender=current_user.username
+            )
+        except Exception as e:
+            app.logger.error(f"Failed to send welcome email: {str(e)}")
+            # Continue even if email fails
+
+        return jsonify({
+            "msg": "User created successfully",
+            "user": new_user.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error creating user: {str(e)}")
+        return jsonify({"msg": f"Error creating user: {str(e)}"}), 500
+
+@app.route('/users/<int:user_id>', methods=['PATCH'])
+@jwt_required()
+def update_user(user_id):
+    try:
+        # Get current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+            
+        # Only super_admin and managers can update users
+        if current_user.role not in ['super_admin', 'manager']:
+            return jsonify({"msg": "Unauthorized - Insufficient permissions"}), 403
+
+        # Get user to update
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"msg": "User not found"}), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"msg": "No input data provided"}), 400
+
+        # Handle role change
+        if 'role' in data and data['role'] != user.role:
+            old_role = user.role
+            new_role = data['role']
+            
+            # If changing to manager
+            if new_role == 'manager':
+                # Get all current user properties
+                user_properties = UserProperty.query.filter_by(user_id=user.user_id).all()
+                
+                # Add PropertyManager entries for all properties the user has access to
+                for up in user_properties:
+                    # Check if PropertyManager entry already exists
+                    existing_manager = PropertyManager.query.filter_by(
+                        user_id=user.user_id,
+                        property_id=up.property_id
+                    ).first()
+                    
+                    # If not exists, create it
+                    if not existing_manager:
+                        property_manager = PropertyManager(
+                            user_id=user.user_id,
+                            property_id=up.property_id
+                        )
+                        db.session.add(property_manager)
+            
+            # If changing from manager
+            elif old_role == 'manager':
+                # Just remove from property_managers but keep user_properties
+                PropertyManager.query.filter_by(user_id=user.user_id).delete()
+            
+            user.role = new_role
+
+        # Update other fields
+        if 'username' in data:
+            user.username = data['username']
+        if 'email' in data:
+            user.email = data['email']
+        if 'group' in data:
+            user.group = data['group']
+        if 'phone' in data:
+            user.phone = data['phone']
+        if 'is_active' in data:
+            user.is_active = data['is_active']
+        if 'password' in data:
+            user.set_password(data['password'])
+
+        # Handle property assignments
+        if 'property_ids' in data:
+            # Store old property assignments before deletion if user is a manager
+            old_property_ids = None
+            if user.role == 'manager':
+                old_property_ids = [p.property_id for p in user.assigned_properties]
+
+            # Remove all current property assignments
+            UserProperty.query.filter_by(user_id=user.user_id).delete()
+            if user.role == 'manager':
+                PropertyManager.query.filter_by(user_id=user.user_id).delete()
+            
+            # Add new property assignments
+            for property_id in data['property_ids']:
+                # Add UserProperty for all users
+                user_property = UserProperty(
+                    user_id=user.user_id,
+                    property_id=property_id
+                )
+                db.session.add(user_property)
+                
+                # Add PropertyManager only for managers
+                if user.role == 'manager':
+                    property_manager = PropertyManager(
+                        user_id=user.user_id,
+                        property_id=property_id
+                    )
+                    db.session.add(property_manager)
+
+        db.session.commit()
+        return jsonify({
+            "msg": "User updated successfully",
+            "user": user.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating user: {str(e)}")
+        return jsonify({"msg": f"Error updating user: {str(e)}"}), 500
+
+@app.route('/users/<int:user_id>/verify-properties', methods=['GET'])
+@jwt_required()
+def verify_user_properties(user_id):
+    """Debug endpoint to verify user property assignments"""
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"msg": "User not found"}), 404
+
+        # Get all property assignments
+        user_properties = UserProperty.query.filter_by(user_id=user.user_id).all()
+        manager_properties = PropertyManager.query.filter_by(user_id=user.user_id).all()
+
+        return jsonify({
+            "user": {
+                "user_id": user.user_id,
+                "username": user.username,
+                "role": user.role
+            },
+            "user_properties": [
+                {
+                    "property_id": up.property_id,
+                    "property_name": Property.query.get(up.property_id).name
+                } for up in user_properties
+            ],
+            "manager_properties": [
+                {
+                    "property_id": mp.property_id,
+                    "property_name": Property.query.get(mp.property_id).name
+                } for mp in manager_properties
+            ] if user.role == 'manager' else []
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error verifying user properties: {str(e)}")
+        return jsonify({"msg": f"Error verifying user properties: {str(e)}"}), 500
+
+@app.route('/fix-manager-properties', methods=['POST'])
+@jwt_required()
+def fix_manager_properties():
+    """Fix property manager relationships for all managers"""
+    try:
+        # Get current user
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({"msg": "Unauthorized - Super admin required"}), 403
+
+        # Get all managers
+        managers = User.query.filter_by(role='manager').all()
+        fixed_count = 0
+
+        for manager in managers:
+            # Get all user properties for this manager
+            user_properties = UserProperty.query.filter_by(user_id=manager.user_id).all()
+            
+            for up in user_properties:
+                # Check if PropertyManager entry exists
+                existing_manager = PropertyManager.query.filter_by(
+                    user_id=manager.user_id,
+                    property_id=up.property_id
+                ).first()
+                
+                # If not exists, create it
+                if not existing_manager:
+                    property_manager = PropertyManager(
+                        user_id=manager.user_id,
+                        property_id=up.property_id
+                    )
+                    db.session.add(property_manager)
+                    fixed_count += 1
+
+        db.session.commit()
+
+        return jsonify({
+            "msg": f"Fixed property manager relationships. Added {fixed_count} missing entries.",
+            "details": {
+                "total_managers": len(managers),
+                "managers_fixed": fixed_count
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error fixing manager properties: {str(e)}")
+        return jsonify({"msg": f"Error fixing manager properties: {str(e)}"}), 500
