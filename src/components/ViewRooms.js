@@ -20,7 +20,12 @@ import {
   Grid,
   Card,
   CardContent,
-  CardActions
+  CardActions,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
+  Tooltip
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import apiClient from './apiClient';
@@ -32,6 +37,7 @@ import PropertySwitcher from './PropertySwitcher';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 
 const ViewRooms = () => {
   const { auth } = useAuth();
@@ -51,6 +57,9 @@ const ViewRooms = () => {
   const [uploadError, setUploadError] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(null);
   const fileInputRef = React.useRef();
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploadResults, setUploadResults] = useState(null);
+  const [uploadInProgress, setUploadInProgress] = useState(false);
 
   const roomTypes = ['Single', 'Double', 'Suite', 'Conference', 'Other'];
   const roomStatuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];
@@ -197,38 +206,51 @@ const ViewRooms = () => {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (file.type !== 'text/csv') {
+    if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
       setUploadError('Please upload a CSV file');
       return;
     }
+
+    setUploadDialogOpen(true);
+    setUploadInProgress(true);
+    setUploadResults(null);
+    setUploadError(null);
+    setUploadSuccess(null);
 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('property_id', selectedProperty);
 
     try {
-      setUploadError(null);
-      setUploadSuccess(null);
-      setLoading(true);
-
       const response = await apiClient.post(`/properties/${selectedProperty}/rooms/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
+      setUploadResults(response.data);
       setUploadSuccess(response.data.msg);
       await fetchRooms();
     } catch (error) {
       console.error('Failed to upload rooms:', error);
-      setUploadError(error.response?.data?.msg || 'Failed to upload rooms');
+      const errorMsg = error.response?.data?.msg || 'Failed to upload rooms';
+      setUploadError(errorMsg);
+      setUploadResults({
+        msg: errorMsg,
+        errors: error.response?.data?.errors || []
+      });
     } finally {
-      setLoading(false);
+      setUploadInProgress(false);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
+  };
+
+  const closeUploadDialog = () => {
+    setUploadDialogOpen(false);
+    setUploadResults(null);
   };
 
   return (
@@ -259,27 +281,41 @@ const ViewRooms = () => {
               >
                 Add Room
               </Button>
-              <Button
-                variant="outlined"
-                startIcon={<FileDownloadIcon />}
-                onClick={downloadTemplate}
-              >
-                Download Template
-              </Button>
-              <Button
-                variant="outlined"
-                component="label"
-                startIcon={<CloudUploadIcon />}
-              >
-                Upload CSV
-                <input
-                  type="file"
-                  hidden
-                  accept=".csv"
-                  onChange={handleFileUpload}
-                  ref={fileInputRef}
-                />
-              </Button>
+              <Tooltip title="Download a CSV template to fill with room data">
+                <Button
+                  variant="outlined"
+                  startIcon={<FileDownloadIcon />}
+                  onClick={downloadTemplate}
+                >
+                  Download Template
+                </Button>
+              </Tooltip>
+              <Tooltip title="Upload a CSV file with room data. This will add new rooms and update existing ones.">
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  component="label"
+                  startIcon={<CloudUploadIcon />}
+                  sx={{ 
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                >
+                  Upload Rooms CSV
+                  <input
+                    type="file"
+                    hidden
+                    accept=".csv"
+                    onChange={handleFileUpload}
+                    ref={fileInputRef}
+                  />
+                </Button>
+              </Tooltip>
+              <Tooltip title="CSV file should have columns: name, type, floor, status, capacity (optional), description (optional)">
+                <IconButton color="primary">
+                  <HelpOutlineIcon />
+                </IconButton>
+              </Tooltip>
             </>
           )}
         </Box>
@@ -431,6 +467,71 @@ const ViewRooms = () => {
             color="primary"
           >
             {roomFormData.room_id ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Upload Results Dialog */}
+      <Dialog 
+        open={uploadDialogOpen} 
+        onClose={closeUploadDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>CSV Upload Results</DialogTitle>
+        <DialogContent>
+          {uploadInProgress ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : uploadResults ? (
+            <Box>
+              <Alert 
+                severity={uploadError ? "error" : "success"} 
+                sx={{ mb: 2 }}
+              >
+                {uploadResults.msg}
+              </Alert>
+              
+              {uploadResults.rooms_added > 0 && (
+                <Typography variant="body1" sx={{ mb: 1 }}>
+                  Rooms Added: {uploadResults.rooms_added}
+                </Typography>
+              )}
+              
+              {uploadResults.rooms_updated > 0 && (
+                <Typography variant="body1" sx={{ mb: 1 }}>
+                  Rooms Updated: {uploadResults.rooms_updated}
+                </Typography>
+              )}
+              
+              {uploadResults.errors && uploadResults.errors.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    Errors:
+                  </Typography>
+                  <Paper variant="outlined" sx={{ maxHeight: 200, overflow: 'auto' }}>
+                    <List dense>
+                      {uploadResults.errors.map((error, index) => (
+                        <React.Fragment key={index}>
+                          <ListItem>
+                            <ListItemText primary={error} />
+                          </ListItem>
+                          {index < uploadResults.errors.length - 1 && <Divider />}
+                        </React.Fragment>
+                      ))}
+                    </List>
+                  </Paper>
+                </Box>
+              )}
+            </Box>
+          ) : (
+            <Typography>Processing your file...</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeUploadDialog} disabled={uploadInProgress}>
+            Close
           </Button>
         </DialogActions>
       </Dialog>

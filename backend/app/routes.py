@@ -2383,23 +2383,140 @@ def upload_rooms(property_id):
         if not current_user:
             app.logger.error("User not found from JWT")
             return jsonify({"msg": "User not found"}), 404
+            
+        # Check if property exists
+        property = Property.query.get(property_id)
+        if not property:
+            return jsonify({"msg": "Property not found"}), 404
+            
+        # Check permissions - only managers and super_admins can upload rooms
+        if current_user.role not in ['manager', 'super_admin']:
+            return jsonify({"msg": "Unauthorized - Only managers can upload rooms"}), 403
 
-        # Add your upload logic here
-        # For example, you can use Flask's file upload handling
-        # to handle the file upload request
+        # Get the uploaded file
+        if 'file' not in request.files:
+            return jsonify({"msg": "No file part in the request"}), 400
+            
         file = request.files['file']
         if file.filename == '':
-            return jsonify({"msg": "No file uploaded"}), 400
+            return jsonify({"msg": "No file selected"}), 400
+            
+        if not file.filename.endswith('.csv'):
+            return jsonify({"msg": "Only CSV files are allowed"}), 400
 
-        # Save the file to a specific directory
-        file_path = os.path.join('uploads', file.filename)
-        file.save(file_path)
-
-        return jsonify({"msg": "File uploaded successfully"}), 200
+        # Create a temporary file to store the uploaded CSV
+        import tempfile
+        import csv
+        import os
+        
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        file.save(temp_file.name)
+        temp_file.close()
+        
+        # Process the CSV file
+        rooms_added = 0
+        rooms_updated = 0
+        errors = []
+        
+        try:
+            with open(temp_file.name, 'r', newline='', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                
+                # Validate headers
+                required_headers = ['name', 'type', 'floor', 'status']
+                if not all(header in reader.fieldnames for header in required_headers):
+                    return jsonify({
+                        "msg": "Invalid CSV format. Required headers: name, type, floor, status"
+                    }), 400
+                
+                # Process each row
+                for row_num, row in enumerate(reader, start=2):  # Start at 2 to account for header row
+                    try:
+                        # Check for required fields
+                        if not row['name'] or not row['type'] or not row['floor'] or not row['status']:
+                            errors.append(f"Row {row_num}: Missing required fields")
+                            continue
+                            
+                        # Validate status
+                        valid_statuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning']
+                        if row['status'] not in valid_statuses:
+                            errors.append(f"Row {row_num}: Invalid status '{row['status']}'. Must be one of: {', '.join(valid_statuses)}")
+                            continue
+                        
+                        # Convert data types
+                        try:
+                            floor = int(row['floor'])
+                        except ValueError:
+                            errors.append(f"Row {row_num}: Floor must be a number")
+                            continue
+                            
+                        # Convert capacity to integer if provided
+                        capacity = None
+                        if row.get('capacity') and row['capacity'].strip():
+                            try:
+                                capacity = int(row['capacity'])
+                            except ValueError:
+                                errors.append(f"Row {row_num}: Capacity must be a number")
+                                continue
+                            
+                        # Check if room already exists (by name and property_id)
+                        existing_room = Room.query.filter_by(
+                            name=row['name'],
+                            property_id=property_id
+                        ).first()
+                        
+                        if existing_room:
+                            # Update existing room
+                            existing_room.type = row['type']
+                            existing_room.floor = floor
+                            existing_room.status = row['status']
+                            existing_room.capacity = capacity
+                            existing_room.description = row.get('description', None)
+                            rooms_updated += 1
+                        else:
+                            # Create new room
+                            new_room = Room(
+                                name=row['name'],
+                                type=row['type'],
+                                floor=floor,
+                                status=row['status'],
+                                capacity=capacity,
+                                description=row.get('description', None),
+                                property_id=property_id
+                            )
+                            db.session.add(new_room)
+                            rooms_added += 1
+                            
+                    except Exception as e:
+                        errors.append(f"Row {row_num}: {str(e)}")
+                        
+                # Commit changes
+                db.session.commit()
+                
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error processing CSV: {str(e)}")
+            return jsonify({"msg": f"Error processing CSV: {str(e)}"}), 500
+        finally:
+            # Clean up the temporary file
+            os.unlink(temp_file.name)
+            
+        # Return results
+        result = {
+            "msg": f"CSV processed successfully. {rooms_added} rooms added, {rooms_updated} rooms updated.",
+            "rooms_added": rooms_added,
+            "rooms_updated": rooms_updated
+        }
+        
+        if errors:
+            result["errors"] = errors
+            result["msg"] += f" {len(errors)} errors encountered."
+            
+        return jsonify(result), 200
 
     except Exception as e:
-        app.logger.error(f"Error uploading file: {str(e)}")
-        return jsonify({"msg": "Internal server error"}), 500
+        app.logger.error(f"Error uploading rooms: {str(e)}")
+        return jsonify({"msg": f"Internal server error: {str(e)}"}), 500
 
 @app.route('/auth/reset-password', methods=['POST'])
 @jwt_required()
