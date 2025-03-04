@@ -25,7 +25,12 @@ import {
   ListItem,
   ListItemText,
   Divider,
-  Tooltip
+  Tooltip,
+  Switch,
+  FormControlLabel,
+  Checkbox,
+  FormGroup,
+  Autocomplete
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import apiClient from './apiClient';
@@ -52,7 +57,11 @@ const ViewRooms = () => {
     name: '',
     type: '',
     floor: '',
-    status: 'Available'
+    status: 'Available',
+    capacity: '',
+    amenities: [],
+    description: '',
+    last_cleaned: ''
   });
   const [uploadError, setUploadError] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(null);
@@ -60,9 +69,34 @@ const ViewRooms = () => {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploadResults, setUploadResults] = useState(null);
   const [uploadInProgress, setUploadInProgress] = useState(false);
+  const [hidePublicAreas, setHidePublicAreas] = useState(false);
 
   const roomTypes = ['Single', 'Double', 'Suite', 'Conference', 'Other'];
   const roomStatuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];
+  
+  // Common amenities list
+  const commonAmenities = [
+    'WiFi',
+    'TV',
+    'Air Conditioning',
+    'Heating',
+    'Mini-bar',
+    'Coffee Machine',
+    'Safe',
+    'Desk',
+    'Iron',
+    'Hair Dryer',
+    'Bathtub',
+    'Shower',
+    'Balcony',
+    'Ocean View',
+    'City View',
+    'Refrigerator',
+    'Microwave',
+    'Room Service',
+    'Wheelchair Accessible',
+    'Pet Friendly'
+  ];
 
   useEffect(() => {
     console.log('Full Auth context:', auth);
@@ -117,7 +151,27 @@ const ViewRooms = () => {
         return;
       }
 
-      const response = await apiClient.post(`/properties/${selectedProperty}/rooms`, roomFormData);
+      // Create a copy of the form data to modify
+      const formDataToSend = { ...roomFormData };
+      
+      // Ensure capacity is sent as a number if it's not empty
+      if (formDataToSend.capacity !== '' && formDataToSend.capacity !== null && formDataToSend.capacity !== undefined) {
+        formDataToSend.capacity = Number(formDataToSend.capacity);
+      } else {
+        // If empty, set to null so backend can handle it properly
+        formDataToSend.capacity = null;
+      }
+      
+      // Ensure amenities is always an array
+      if (!formDataToSend.amenities) {
+        formDataToSend.amenities = [];
+      }
+      
+      console.log('Sending room data for creation:', formDataToSend);
+
+      const response = await apiClient.post(`/properties/${selectedProperty}/rooms`, formDataToSend);
+      console.log('Room creation response:', response.data);
+      
       if (response.data) {
         setSuccess('Room added successfully');
         await fetchRooms();
@@ -126,19 +180,42 @@ const ViewRooms = () => {
       }
     } catch (error) {
       console.error('Failed to add room:', error);
-      setError(error.response?.data?.message || 'Failed to add room');
+      console.error('Error response:', error.response?.data);
+      setError(error.response?.data?.message || error.response?.data?.msg || 'Failed to add room');
     }
   };
 
   const handleEditRoom = async (roomId) => {
     try {
-      await apiClient.put(`/properties/${selectedProperty}/rooms/${roomId}`, roomFormData);
+      // Create a copy of the form data to modify
+      const formDataToSend = { ...roomFormData };
+      
+      // Ensure capacity is sent as a number if it's not empty
+      if (formDataToSend.capacity !== '' && formDataToSend.capacity !== null && formDataToSend.capacity !== undefined) {
+        formDataToSend.capacity = Number(formDataToSend.capacity);
+      } else {
+        // If empty, set to null so backend can handle it properly
+        formDataToSend.capacity = null;
+      }
+      
+      // Ensure amenities is always an array
+      if (!formDataToSend.amenities) {
+        formDataToSend.amenities = [];
+      }
+      
+      console.log('Sending room data for update:', formDataToSend);
+      
+      const response = await apiClient.put(`/properties/${selectedProperty}/rooms/${roomId}`, formDataToSend);
+      console.log('Room update response:', response.data);
+      
       setSuccess('Room updated successfully');
       await fetchRooms();
       setOpenDialog(false);
       resetForm();
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to update room');
+      console.error('Failed to update room:', error);
+      console.error('Error response:', error.response?.data);
+      setError(error.response?.data?.message || error.response?.data?.msg || 'Failed to update room');
     }
   };
 
@@ -169,7 +246,11 @@ const ViewRooms = () => {
       name: '',
       type: '',
       floor: '',
-      status: 'Available'
+      status: 'Available',
+      capacity: '',
+      amenities: [],
+      description: '',
+      last_cleaned: ''
     });
   };
 
@@ -178,8 +259,9 @@ const ViewRooms = () => {
     return [...new Set(floors)].sort((a, b) => a - b);
   };
 
-  const filteredRooms = rooms.filter(room =>
-    selectedFloor === 'all' || room.floor === selectedFloor
+  const filteredRooms = rooms.filter(room => 
+    (selectedFloor === 'all' || room.floor === selectedFloor) && 
+    !(hidePublicAreas && room.type?.toLowerCase() === 'public area')
   );
 
   const downloadTemplate = () => {
@@ -253,11 +335,19 @@ const ViewRooms = () => {
     setUploadResults(null);
   };
 
+  // Helper function to format date for datetime-local input
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    return date.toISOString().slice(0, 16);
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Room Management</Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
           <FormControl sx={{ minWidth: 120 }}>
             <InputLabel>Floor</InputLabel>
@@ -272,6 +362,18 @@ const ViewRooms = () => {
               ))}
             </Select>
           </FormControl>
+          
+          <FormControlLabel
+            control={
+              <Switch
+                checked={hidePublicAreas}
+                onChange={(e) => setHidePublicAreas(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Hide Public Areas"
+          />
+          
           {selectedProperty && isManager && (
             <>
               <Button
@@ -330,91 +432,169 @@ const ViewRooms = () => {
         loading ? (
           <CircularProgress />
         ) : (
-          <Grid container spacing={3}>
-            {filteredRooms.map((room) => (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={room.room_id}>
-                <Card
-                  sx={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    position: 'relative'
-                  }}
-                >
-                  <CardContent sx={{ flexGrow: 1 }}>
-                    <Box sx={{
-                      position: 'absolute',
-                      top: 10,
-                      right: 10,
+          <>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="subtitle1">
+                Showing {filteredRooms.length} of {rooms.length} rooms
+                {hidePublicAreas && (
+                  <Typography component="span" color="text.secondary" sx={{ ml: 1 }}>
+                    (Public Areas hidden)
+                  </Typography>
+                )}
+              </Typography>
+              {hidePublicAreas && rooms.some(room => room.type?.toLowerCase() === 'public area') && (
+                <Typography variant="body2" color="text.secondary">
+                  {rooms.filter(room => room.type?.toLowerCase() === 'public area').length} Public Areas hidden
+                </Typography>
+              )}
+            </Box>
+            <Grid container spacing={3}>
+              {filteredRooms.map((room) => (
+                <Grid item xs={12} sm={6} md={4} lg={3} key={room.room_id}>
+                  <Card
+                    sx={{
+                      height: '100%',
                       display: 'flex',
-                      gap: 1
-                    }}>
-                      <Chip
-                        label={room.status}
-                        size="small"
-                        color={
-                          room.status === 'Available' ? 'success' :
-                            room.status === 'Occupied' ? 'error' :
-                              room.status === 'Maintenance' ? 'warning' :
-                                'default'
-                        }
-                      />
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, mt: 1 }}>
-                      <MeetingRoomIcon sx={{ mr: 1, color: 'primary.main' }} />
-                      <Typography variant="h6" component="div">
-                        {room.name}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      <Typography color="textSecondary">
-                        Type: {room.type || 'N/A'}
-                      </Typography>
-                      <Typography color="textSecondary">
-                        Floor: {room.floor || 'N/A'}
-                      </Typography>
-                    </Box>
-                  </CardContent>
-                  {(isManager || auth?.user?.role === 'super_admin' || ['Maintenance', 'Engineering'].includes(auth?.user?.group)) && (
-                    <CardActions sx={{ justifyContent: 'flex-end', p: 2 }}>
-                      <IconButton
-                        onClick={() => {
-                          const roomToEdit = {
-                            ...room,
-                            type: room.type || roomTypes[0]
-                          };
-                          setRoomFormData(roomToEdit);
-                          setOpenDialog(true);
-                        }}
-                        color="primary"
-                        size="small"
-                        title="Edit Room"
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton
-                        onClick={() => handleDeleteRoom(room.room_id)}
-                        color="error"
-                        size="small"
-                        title="Delete Room"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </CardActions>
-                  )}
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+                      flexDirection: 'column',
+                      position: 'relative',
+                      ...(room.type?.toLowerCase() === 'public area' && {
+                        borderLeft: '4px solid #9c27b0', // Purple border for public areas
+                      })
+                    }}
+                  >
+                    <CardContent sx={{ flexGrow: 1 }}>
+                      <Box sx={{
+                        position: 'absolute',
+                        top: 10,
+                        right: 10,
+                        display: 'flex',
+                        gap: 1
+                      }}>
+                        <Chip
+                          label={room.status}
+                          size="small"
+                          color={
+                            room.status === 'Available' ? 'success' :
+                              room.status === 'Occupied' ? 'error' :
+                                room.status === 'Maintenance' ? 'warning' :
+                                  'default'
+                          }
+                        />
+                        {room.type?.toLowerCase() === 'public area' && (
+                          <Chip
+                            label="Public Area"
+                            size="small"
+                            color="secondary"
+                          />
+                        )}
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, mt: 1 }}>
+                        <MeetingRoomIcon sx={{ mr: 1, color: 'primary.main' }} />
+                        <Typography variant="h6" component="div">
+                          {room.name}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Typography color="textSecondary">
+                          Type: {room.type || 'N/A'}
+                        </Typography>
+                        <Typography color="textSecondary">
+                          Floor: {room.floor || 'N/A'}
+                        </Typography>
+                        {room.capacity && (
+                          <Typography color="textSecondary">
+                            Capacity: {room.capacity}
+                          </Typography>
+                        )}
+                        {room.amenities && room.amenities.length > 0 && (
+                          <Box>
+                            <Typography color="textSecondary" variant="body2">
+                              Amenities:
+                            </Typography>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                              {Array.isArray(room.amenities) ? (
+                                room.amenities.map((amenity, index) => (
+                                  <Chip 
+                                    key={index} 
+                                    label={amenity} 
+                                    size="small" 
+                                    variant="outlined" 
+                                    sx={{ fontSize: '0.7rem' }}
+                                  />
+                                ))
+                              ) : (
+                                <Typography variant="body2" color="textSecondary">
+                                  No amenities listed
+                                </Typography>
+                              )}
+                            </Box>
+                          </Box>
+                        )}
+                        {room.description && (
+                          <Typography color="textSecondary" variant="body2" sx={{ 
+                            mt: 1,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical'
+                          }}>
+                            {room.description}
+                          </Typography>
+                        )}
+                        {room.last_cleaned && (
+                          <Typography color="textSecondary" variant="body2" sx={{ mt: 1 }}>
+                            Last Cleaned: {new Date(room.last_cleaned).toLocaleDateString()}
+                          </Typography>
+                        )}
+                      </Box>
+                    </CardContent>
+                    {(isManager || auth?.user?.role === 'super_admin' || ['Maintenance', 'Engineering'].includes(auth?.user?.group)) && (
+                      <CardActions sx={{ justifyContent: 'flex-end', p: 2 }}>
+                        <IconButton
+                          onClick={() => {
+                            const roomToEdit = {
+                              ...room,
+                              type: room.type || roomTypes[0]
+                            };
+                            setRoomFormData(roomToEdit);
+                            setOpenDialog(true);
+                          }}
+                          color="primary"
+                          size="small"
+                          title="Edit Room"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton
+                          onClick={() => handleDeleteRoom(room.room_id)}
+                          color="error"
+                          size="small"
+                          title="Delete Room"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </CardActions>
+                    )}
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </>
         )
       ) : (
         <Alert severity="info">Please select a property to view rooms</Alert>
       )}
 
-      <Dialog open={openDialog} onClose={() => {
-        setOpenDialog(false);
-        resetForm();
-      }}>
+      <Dialog 
+        open={openDialog} 
+        onClose={() => {
+          setOpenDialog(false);
+          resetForm();
+        }}
+        maxWidth="md"
+        fullWidth
+      >
         <DialogTitle>
           {roomFormData.room_id ? 'Edit Room' : 'Add New Room'}
         </DialogTitle>
@@ -427,12 +607,15 @@ const ViewRooms = () => {
               fullWidth
               required
             />
+            
             <TextField
               label="Room Type"
-              value={roomFormData.type}
+              value={roomFormData.type || ''}
               onChange={(e) => setRoomFormData({ ...roomFormData, type: e.target.value })}
               fullWidth
+              helperText="Enter any room type (e.g. Single, Double, Suite, Public Area, etc.)"
             />
+            
             <TextField
               label="Floor"
               value={roomFormData.floor}
@@ -440,10 +623,11 @@ const ViewRooms = () => {
               fullWidth
               type="number"
             />
+            
             <FormControl fullWidth>
               <InputLabel>Status</InputLabel>
               <Select
-                value={roomFormData.status}
+                value={roomFormData.status || 'Available'}
                 onChange={(e) => setRoomFormData({ ...roomFormData, status: e.target.value })}
                 label="Status"
               >
@@ -452,6 +636,93 @@ const ViewRooms = () => {
                 ))}
               </Select>
             </FormControl>
+            
+            <TextField
+              label="Capacity"
+              value={roomFormData.capacity || ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Allow empty string or positive numbers
+                if (value === '' || (Number(value) >= 0 && !isNaN(Number(value)))) {
+                  setRoomFormData({ ...roomFormData, capacity: value });
+                }
+              }}
+              fullWidth
+              type="number"
+              inputProps={{ min: 0 }}
+              helperText="Number of people the room can accommodate"
+            />
+            
+            <Autocomplete
+              multiple
+              id="amenities-select"
+              options={commonAmenities.sort()}
+              value={Array.isArray(roomFormData.amenities) ? roomFormData.amenities : []}
+              onChange={(event, newValue) => {
+                setRoomFormData({ ...roomFormData, amenities: newValue });
+              }}
+              freeSolo
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    variant="outlined"
+                    label={option}
+                    {...getTagProps({ index })}
+                    size="small"
+                  />
+                ))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Amenities"
+                  helperText="Select from common amenities or type and press Enter to add custom ones"
+                  fullWidth
+                />
+              )}
+              filterSelectedOptions
+              autoHighlight
+              clearOnBlur
+              sx={{ mb: 2 }}
+            />
+            
+            <TextField
+              label="Description"
+              value={roomFormData.description || ''}
+              onChange={(e) => setRoomFormData({ ...roomFormData, description: e.target.value })}
+              fullWidth
+              multiline
+              rows={3}
+            />
+            
+            <TextField
+              label="Last Cleaned"
+              type="datetime-local"
+              value={formatDateForInput(roomFormData.last_cleaned)}
+              onChange={(e) => setRoomFormData({ ...roomFormData, last_cleaned: e.target.value })}
+              fullWidth
+              InputLabelProps={{
+                shrink: true,
+              }}
+            />
+            
+            {roomFormData.room_id && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 2 }}>
+                <Typography variant="caption" color="textSecondary">
+                  Room ID: {roomFormData.room_id}
+                </Typography>
+                {roomFormData.created_at && (
+                  <Typography variant="caption" color="textSecondary">
+                    Created: {new Date(roomFormData.created_at).toLocaleString()}
+                  </Typography>
+                )}
+                {roomFormData.updated_at && (
+                  <Typography variant="caption" color="textSecondary">
+                    Last Updated: {new Date(roomFormData.updated_at).toLocaleString()}
+                  </Typography>
+                )}
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

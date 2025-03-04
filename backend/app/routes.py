@@ -560,30 +560,54 @@ def create_property_room(property_id):
             return jsonify({"msg": "Property not found or access denied"}), 404
 
         data = request.get_json()
+        app.logger.info(f"Received POST request to create room with data: {data}")
+        
         if not data or not data.get('name'):
             return jsonify({"msg": "Room name is required"}), 400
+
+        # Process capacity
+        capacity = None
+        if 'capacity' in data and data['capacity'] not in ('', None):
+            try:
+                capacity = int(data['capacity'])
+            except (ValueError, TypeError) as e:
+                app.logger.warning(f"Invalid capacity value: {data['capacity']}, error: {str(e)}")
+                return jsonify({"msg": f"Invalid capacity value: {str(e)}"}), 400
+        
+        # Process amenities
+        amenities = []
+        if 'amenities' in data and data['amenities'] is not None:
+            amenities = data['amenities']
+            if not isinstance(amenities, list):
+                app.logger.warning(f"Invalid amenities format: {amenities}")
+                return jsonify({"msg": "Amenities must be an array"}), 400
 
         new_room = Room(
             name=data['name'],
             property_id=property_id,
             type=data.get('type', 'standard'),
             floor=data.get('floor'),
-            status=data.get('status', 'available')
+            status=data.get('status', 'available'),
+            capacity=capacity,
+            amenities=amenities,
+            description=data.get('description')
         )
+
+        # Handle last_cleaned if provided
+        if 'last_cleaned' in data and data['last_cleaned']:
+            try:
+                new_room.last_cleaned = datetime.fromisoformat(data['last_cleaned'].replace('Z', '+00:00'))
+            except (ValueError, TypeError) as e:
+                app.logger.warning(f"Invalid date format for last_cleaned: {data['last_cleaned']}")
+                return jsonify({"msg": f"Invalid date format for last_cleaned: {str(e)}"}), 400
 
         db.session.add(new_room)
         db.session.commit()
 
-        app.logger.info(f"Room created successfully for property {property_id}")
+        app.logger.info(f"Room created successfully for property {property_id}: {new_room.to_dict()}")
         return jsonify({
             "msg": "Room created successfully",
-            "room": {
-                'room_id': new_room.room_id,
-                'name': new_room.name,
-                'type': new_room.type,
-                'floor': new_room.floor,
-                'status': new_room.status
-            }
+            "room": new_room.to_dict()
         }), 201
 
     except Exception as e:
@@ -633,16 +657,79 @@ def manage_property_room(property_id, room_id):
 
         if request.method == 'PUT':
             data = request.get_json()
+            app.logger.info(f"Received PUT request for room {room_id} with data: {data}")
+            old_status = room.status
+            
+            # Update all editable fields
             if data.get('name'):
                 room.name = data['name']
-            if data.get('type'):
+            if 'type' in data:
                 room.type = data['type']
             if 'floor' in data:
                 room.floor = data['floor']
-            if data.get('status'):
+            if 'status' in data:
                 room.status = data['status']
+            
+            # Handle capacity - ensure it's properly converted to an integer
+            if 'capacity' in data:
+                try:
+                    if data['capacity'] == '' or data['capacity'] is None:
+                        room.capacity = None
+                    else:
+                        room.capacity = int(data['capacity'])
+                    app.logger.info(f"Updated capacity to: {room.capacity}")
+                except (ValueError, TypeError) as e:
+                    app.logger.warning(f"Invalid capacity value: {data['capacity']}, error: {str(e)}")
+                    return jsonify({"msg": f"Invalid capacity value: {str(e)}"}), 400
+            
+            if 'description' in data:
+                room.description = data['description']
+            
+            # Handle amenities - ensure it's properly stored as a list
+            if 'amenities' in data:
+                if data['amenities'] is None:
+                    room.amenities = []
+                else:
+                    room.amenities = data['amenities']
+                app.logger.info(f"Updated amenities to: {room.amenities}")
+            
+            if 'last_cleaned' in data and data['last_cleaned']:
+                try:
+                    # Parse the datetime string
+                    room.last_cleaned = datetime.fromisoformat(data['last_cleaned'].replace('Z', '+00:00'))
+                except (ValueError, TypeError) as e:
+                    app.logger.warning(f"Invalid date format for last_cleaned: {data['last_cleaned']}")
+                    return jsonify({"msg": f"Invalid date format for last_cleaned: {str(e)}"}), 400
 
             db.session.commit()
+            app.logger.info(f"Room {room_id} updated successfully with data: {room.to_dict()}")
+            
+            # Send notifications if status was changed
+            if old_status != room.status:
+                # Get all managers and admins for this property
+                property_managers = User.query.join(PropertyManager).filter(
+                    PropertyManager.property_id == property.property_id
+                ).all()
+                
+                super_admins = User.query.filter_by(role='super_admin').all()
+                
+                # Combine unique recipients
+                recipients = list(set(property_managers + super_admins))
+
+                # Send email notifications
+                try:
+                    email_service = EmailService()
+                    email_service.send_room_status_notification(
+                        room=room,
+                        property_name=property.name,
+                        old_status=old_status,
+                        new_status=room.status,
+                        recipients=recipients
+                    )
+                except Exception as e:
+                    app.logger.error(f"Failed to send room status notification: {str(e)}")
+                    # Don't return error, just log it since the room was updated successfully
+            
             app.logger.info(f"Room {room_id} updated successfully")
             return jsonify({"msg": "Room updated successfully", "room": room.to_dict()})
 
@@ -660,17 +747,48 @@ def manage_property_room(property_id, room_id):
 
         elif request.method == 'PATCH':
             data = request.get_json()
+            app.logger.info(f"Received PATCH request for room {room_id} with data: {data}")
             old_status = room.status
 
-            # Update room fields
-            for field in ['name', 'type', 'floor', 'status', 'capacity', 'description']:
+            # Update basic fields
+            for field in ['name', 'type', 'floor', 'status', 'description']:
                 if field in data:
                     setattr(room, field, data[field])
+            
+            # Handle capacity - ensure it's properly converted to an integer
+            if 'capacity' in data:
+                try:
+                    if data['capacity'] == '' or data['capacity'] is None:
+                        room.capacity = None
+                    else:
+                        room.capacity = int(data['capacity'])
+                    app.logger.info(f"Updated capacity to: {room.capacity}")
+                except (ValueError, TypeError) as e:
+                    app.logger.warning(f"Invalid capacity value: {data['capacity']}, error: {str(e)}")
+                    return jsonify({"msg": f"Invalid capacity value: {str(e)}"}), 400
+            
+            # Handle amenities - ensure it's properly stored as a list
+            if 'amenities' in data:
+                if data['amenities'] is None:
+                    room.amenities = []
+                else:
+                    room.amenities = data['amenities']
+                app.logger.info(f"Updated amenities to: {room.amenities}")
+            
+            # Handle last_cleaned separately due to datetime conversion
+            if 'last_cleaned' in data and data['last_cleaned']:
+                try:
+                    # Parse the datetime string
+                    room.last_cleaned = datetime.fromisoformat(data['last_cleaned'].replace('Z', '+00:00'))
+                except (ValueError, TypeError) as e:
+                    app.logger.warning(f"Invalid date format for last_cleaned: {data['last_cleaned']}")
+                    return jsonify({"msg": f"Invalid date format for last_cleaned: {str(e)}"}), 400
 
             db.session.commit()
-
+            app.logger.info(f"Room {room_id} patched successfully with data: {room.to_dict()}")
+            
             # Send notifications if status was changed
-            if 'status' in data and old_status != room.status:
+            if old_status != room.status:
                 # Get all managers and admins for this property
                 property_managers = User.query.join(PropertyManager).filter(
                     PropertyManager.property_id == property.property_id
@@ -692,8 +810,8 @@ def manage_property_room(property_id, room_id):
                 )
 
             return jsonify({
-                "msg": "Property updated successfully",
-                "property": property.to_dict()
+                "msg": "Room updated successfully",
+                "room": room.to_dict()
             }), 200
 
     except Exception as e:
