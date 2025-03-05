@@ -743,7 +743,7 @@ const ViewTasks = () => {
               >
                 {statuses.map((status) => (
                   <MenuItem key={status} value={status}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                    {status && typeof status === 'string' ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown'}
                   </MenuItem>
                 ))}
               </Select>

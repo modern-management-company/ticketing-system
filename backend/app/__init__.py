@@ -65,14 +65,17 @@ migrate = Migrate(app, db)
 
 # Configure JWT settings
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-this')
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
 app.config['JWT_ERROR_MESSAGE_KEY'] = 'message'
-app.config['JWT_TOKEN_LOCATION'] = ['headers']
+app.config['JWT_TOKEN_LOCATION'] = ['headers', 'cookies']
 app.config['JWT_HEADER_NAME'] = 'Authorization'
 app.config['JWT_HEADER_TYPE'] = 'Bearer'
 app.config['JWT_IDENTITY_CLAIM'] = 'identity'
 app.config['JWT_BLACKLIST_ENABLED'] = False
+app.config['JWT_COOKIE_SECURE'] = False
+app.config['JWT_COOKIE_CSRF_PROTECT'] = False
+app.config['JWT_COOKIE_SAMESITE'] = 'Lax'
 app.config['EMAIL_PASSWORD'] = os.getenv('EMAIL_PASSWORD', '')
 jwt = JWTManager(app)
 

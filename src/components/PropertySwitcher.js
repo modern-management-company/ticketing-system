@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Select, MenuItem, FormControl, InputLabel, CircularProgress, Box, Chip, Alert } from '@mui/material';
-import apiClient from './apiClient';
 
 const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
-  const { auth } = useAuth();
+  const { auth, fetchProperties } = useAuth();
   const [properties, setProperties] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(initialValue || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchProperties();
+    loadProperties();
   }, [auth]);
 
   // Update local state when initialValue changes
@@ -30,17 +29,23 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
     });
   }, [selectedProperty, properties, initialValue]);
 
-  const fetchProperties = async () => {
+  const loadProperties = async () => {
+    if (!fetchProperties) {
+      console.error('fetchProperties is not available in AuthContext');
+      return;
+    }
+    
     try {
       setLoading(true);
       setError(null);
       
-      const response = await apiClient.get('/properties');
-      console.log('Properties response:', response.data);
+      // Use the cached properties from AuthContext
+      const propertiesData = await fetchProperties();
+      console.log('Properties loaded:', propertiesData);
       
-      if (response.data) {
+      if (propertiesData) {
         // Filter only active properties
-        const activeProperties = response.data.filter(prop => prop.status === 'active');
+        const activeProperties = propertiesData.filter(prop => prop.status === 'active');
         setProperties(activeProperties);
         
         // If we have an initialValue or selectedProperty, make sure it's in the properties list
@@ -65,7 +70,7 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
         // Set default property only if no property is currently selected
         else if (activeProperties.length > 0 && !currentPropertyId) {
           // If user has assigned properties, use the first assigned active one
-          if (auth.assigned_properties && auth.assigned_properties.length > 0) {
+          if (auth?.assigned_properties && auth.assigned_properties.length > 0) {
             const assignedActiveProperty = auth.assigned_properties.find(p => 
               activeProperties.some(ap => ap.property_id === p.property_id)
             );
@@ -86,7 +91,7 @@ const PropertySwitcher = ({ onPropertyChange, initialValue }) => {
         }
       }
     } catch (error) {
-      console.error('Failed to fetch properties:', error);
+      console.error('Failed to load properties:', error);
       setError('Failed to load properties');
     } finally {
       setLoading(false);

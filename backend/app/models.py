@@ -1,5 +1,5 @@
 from app import db
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import create_access_token
 
@@ -75,6 +75,10 @@ class User(db.Model):
             'last_login': self.last_login.isoformat() if self.last_login else None,
             'csrf': None  # Disable CSRF for now
         }
+        
+        # If no expires_delta is provided, use the default from app config
+        if expires_delta is None:
+            expires_delta = timedelta(days=7)  # Default to 7 days
         
         return create_access_token(
             identity=identity,

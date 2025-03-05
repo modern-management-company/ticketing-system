@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -44,14 +44,20 @@ const Layout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const authChecked = useRef(false);
 
   useEffect(() => {
-    if (!auth?.isAuthenticated || !auth?.token) {
-      navigate('/login');
+    // Only check authentication once when the component mounts
+    if (!authChecked.current) {
+      if (!auth?.isAuthenticated || !auth?.token || !auth?.user) {
+        navigate('/login');
+      }
+      authChecked.current = true;
     }
   }, [auth, navigate]);
 
-  if (!auth?.isAuthenticated || !auth?.token) {
+  // If not authenticated and we've already checked, return null
+  if (!auth?.isAuthenticated || !auth?.token || !auth?.user) {
     return null;
   }
 
@@ -116,6 +122,11 @@ const Layout = () => {
       }
     ];
 
+    // Make sure auth.user exists before checking role
+    if (!auth?.user) {
+      return baseItems;
+    }
+
     switch (auth.user.role) {
       case 'super_admin':
         return [...baseItems, ...managerItems, ...adminItems];
@@ -130,8 +141,8 @@ const Layout = () => {
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Toolbar>
         <Typography variant="h6" noWrap>
-          {auth.user.role === 'super_admin' ? 'Admin Panel' :
-           auth.user.role === 'manager' ? 'Manager Panel' : 'User Panel'}
+          {auth?.user?.role === 'super_admin' ? 'Admin Panel' :
+           auth?.user?.role === 'manager' ? 'Manager Panel' : 'User Panel'}
         </Typography>
       </Toolbar>
       <Divider />
@@ -176,12 +187,12 @@ const Layout = () => {
       <Divider />
       <Box sx={{ p: 2 }}>
         <Typography variant="body2" color="textSecondary" gutterBottom>
-          Logged in as: {auth.user.username}
+          Logged in as: {auth?.user?.username || 'User'}
         </Typography>
         <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
-          Role: {auth.user.role}
+          Role: {auth?.user?.role || 'Unknown'}
         </Typography>
-        {auth.user.group && (
+        {auth?.user?.group && (
           <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
             Group: {auth.user.group}
           </Typography>
@@ -193,7 +204,6 @@ const Layout = () => {
           startIcon={<LogoutIcon />}
           onClick={() => {
             logout();
-            navigate('/login');
           }}
         >
           Logout
@@ -222,8 +232,11 @@ const Layout = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div">
-            {location.pathname.split('/').pop().charAt(0).toUpperCase() + 
-             location.pathname.split('/').pop().slice(1)}
+            {location?.pathname ? 
+              (location.pathname.split('/').pop() || 'Home').charAt(0).toUpperCase() + 
+              (location.pathname.split('/').pop() || 'Home').slice(1)
+              : 'Home'
+            }
           </Typography>
         </Toolbar>
       </AppBar>

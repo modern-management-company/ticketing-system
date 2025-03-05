@@ -3,7 +3,7 @@ from app import app, db
 from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest
 from app.services import EmailService, EmailTestService
 import os
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity, get_jwt, set_access_cookies, set_refresh_cookies, unset_jwt_cookies
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -158,20 +158,95 @@ def login():
         user.last_login = datetime.utcnow()
         db.session.commit()
 
+        # Check if remember_me is set
+        remember_me = data.get('remember_me', False)
+        
+        # Set token expiration based on remember_me
+        if remember_me:
+            # Longer expiration for "remember me" (30 days)
+            access_token_expires = timedelta(days=30)
+            refresh_token_expires = timedelta(days=60)
+        else:
+            # Default expiration (7 days for access, 30 days for refresh)
+            access_token_expires = timedelta(days=7)
+            refresh_token_expires = timedelta(days=30)
+
         # Generate token with user data
         user_data = user.to_dict()
-        access_token = user.get_token()
+        access_token = user.get_token(expires_delta=access_token_expires)
+        refresh_token = create_refresh_token(
+            identity={"user_id": user.user_id},
+            expires_delta=refresh_token_expires
+        )
         
-        app.logger.info(f"Successful login for user: {user.username}")
-        return jsonify({
+        response = jsonify({
             "msg": "Login successful",
             "token": access_token,
+            "refresh_token": refresh_token,
             "user": user_data
-        }), 200
+        })
+        
+        # Set cookies for both tokens
+        set_access_cookies(response, access_token)
+        set_refresh_cookies(response, refresh_token)
+        
+        app.logger.info(f"Successful login for user: {user.username}")
+        return response, 200
 
     except Exception as e:
         app.logger.error(f"Login error: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500
+
+@app.route('/refresh', methods=['POST'])
+@jwt_required(refresh=True)
+def refresh():
+    """Refresh access token using refresh token"""
+    try:
+        identity = get_jwt_identity()
+        if not identity or 'user_id' not in identity:
+            return jsonify({"msg": "Invalid refresh token"}), 401
+            
+        user = User.query.get(identity['user_id'])
+        if not user:
+            return jsonify({"msg": "User not found"}), 401
+            
+        if not user.is_active:
+            return jsonify({"msg": "User account is inactive"}), 401
+        
+        # Generate new access token
+        access_token = user.get_token()
+        
+        response = jsonify({
+            "msg": "Token refreshed successfully",
+            "token": access_token,
+            "user": user.to_dict()
+        })
+        
+        # Set the JWT access cookies in the response
+        set_access_cookies(response, access_token)
+        
+        return response, 200
+    except Exception as e:
+        app.logger.error(f"Token refresh error: {str(e)}")
+        return jsonify({"msg": "Failed to refresh token"}), 401
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    """Handle user logout by clearing cookies"""
+    try:
+        app.logger.info("User logout initiated")
+        response = jsonify({"msg": "Successfully logged out"})
+        unset_jwt_cookies(response)
+        
+        # Explicitly clear access and refresh tokens
+        response.set_cookie('access_token_cookie', '', expires=0, httponly=True, samesite='Lax')
+        response.set_cookie('refresh_token_cookie', '', expires=0, httponly=True, samesite='Lax')
+        
+        app.logger.info("User logout successful - cookies cleared")
+        return response, 200
+    except Exception as e:
+        app.logger.error(f"Error during logout: {str(e)}")
+        return jsonify({"msg": "Error during logout"}), 500
 
 @app.route('/tickets', methods=['POST'])
 @jwt_required()
