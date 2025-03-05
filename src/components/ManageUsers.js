@@ -379,12 +379,12 @@ const ManageUsers = () => {
                     >
                       {roles.map((role) => (
                         <MenuItem key={role} value={role}>
-                          {role.charAt(0).toUpperCase() + role.slice(1)}
+                          {role && role.charAt(0).toUpperCase() + role.slice(1)}
                         </MenuItem>
                       ))}
                     </Select>
                   ) : (
-                    user.role.charAt(0).toUpperCase() + user.role.slice(1)
+                    user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Unknown'
                   )}
                 </TableCell>
                 <TableCell>
@@ -539,7 +539,7 @@ const ManageUsers = () => {
               >
                 {roles.map((role) => (
                   <MenuItem key={role} value={role}>
-                    {role.charAt(0).toUpperCase() + role.slice(1)}
+                    {role && role.charAt(0).toUpperCase() + role.slice(1)}
                   </MenuItem>
                 ))}
               </Select>

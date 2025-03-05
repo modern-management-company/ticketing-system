@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import apiClient from "./apiClient";
 import { useAuth } from '../context/AuthContext';
 import {
@@ -29,6 +29,7 @@ import PropertySwitcher from './PropertySwitcher';
 
 const ServiceRequests = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { auth } = useAuth();
   const [requests, setRequests] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(null);
@@ -90,6 +91,31 @@ const ServiceRequests = () => {
       fetchRooms();
     }
   }, [selectedProperty]);
+
+  useEffect(() => {
+    // Check if we have state from navigation
+    if (location.state?.createRequest) {
+      const { roomId, roomName, propertyId } = location.state;
+      
+      // Set the selected property
+      if (propertyId) {
+        setSelectedProperty(propertyId);
+      }
+      
+      // Open the dialog and pre-fill the room
+      setRequestForm(prev => ({
+        ...prev,
+        room_id: roomId,
+        property_id: propertyId
+      }));
+      
+      // Clear the navigation state to prevent reopening on refresh
+      setTimeout(() => {
+        setOpenDialog(true);
+        navigate(location.pathname, { replace: true });
+      }, 100);
+    }
+  }, [location.state, navigate]);
 
   const fetchRequests = async () => {
     try {
@@ -305,14 +331,19 @@ const ServiceRequests = () => {
       )}
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>New Service Request</DialogTitle>
+        <DialogTitle>
+          {location.state?.createRequest 
+            ? `New Service Request for ${location.state.roomName || 'Room'}`
+            : 'New Service Request'
+          }
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
             <FormControl fullWidth>
               <InputLabel>Room</InputLabel>
               <Select
                 value={requestForm.room_id}
-                onChange={(e) => setRequestForm({ ...requestForm, room_id: e.target.value })}
+                onChange={(e) => setRequestForm({ ...requestForm, room_id: e.target.value, property_id: selectedProperty })}
                 label="Room"
                 required
               >

@@ -500,7 +500,7 @@ const Dashboard = () => {
                               </Typography>
                               {Object.entries(roomTypes).map(([type, count]) => (
                                 <Typography key={type} variant="body2" sx={{ pl: 2 }}>
-                                  • {type.charAt(0).toUpperCase() + type.slice(1)}: {count}
+                                  • {type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Unknown'}: {count}
                                 </Typography>
                               ))}
                               <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 1 }}>

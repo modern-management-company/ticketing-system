@@ -44,7 +44,7 @@ import TableViewIcon from '@mui/icons-material/TableView';
 import TicketKanbanBoard from './TicketKanbanBoard';
 
 const ViewTickets = () => {
-  const { auth } = useAuth();
+  const { auth, fetchProperties } = useAuth();
   const location = useLocation();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +107,7 @@ const ViewTickets = () => {
 
   // Add properties fetching
   useEffect(() => {
-    fetchProperties();
+    loadProperties();
   }, []);
 
   // Check if we're coming from the rooms page with pre-selected room
@@ -136,16 +136,22 @@ const ViewTickets = () => {
     }
   }, [location.state]);
 
-  const fetchProperties = async () => {
+  const loadProperties = async () => {
+    if (!fetchProperties) {
+      console.error('fetchProperties is not available in AuthContext');
+      return;
+    }
+    
     try {
-      const response = await apiClient.get('/properties');
-      if (response.data) {
+      // Use the cached properties from AuthContext
+      const propertiesData = await fetchProperties();
+      if (propertiesData) {
         // Filter only active properties
-        const activeProperties = response.data.filter(prop => prop.status === 'active');
+        const activeProperties = propertiesData.filter(prop => prop.status === 'active');
         setProperties(activeProperties);
       }
     } catch (error) {
-      console.error('Failed to fetch properties:', error);
+      console.error('Failed to load properties:', error);
       setError('Failed to load properties');
     }
   };
