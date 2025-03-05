@@ -8,7 +8,7 @@ const cache = new Map();
 const CACHE_DURATION = 60000; // 1 minute in milliseconds
 
 // Retry configuration
-const MAX_RETRIES = 2;
+const MAX_RETRIES = 1; // Reduce from 2 to 1
 const RETRY_DELAY = 1000; // 1 second
 
 // Export constants for use in other files
@@ -16,7 +16,7 @@ export { MAX_RETRIES };
 
 const apiClient = axios.create({
   baseURL: API_URL,
-  timeout: 15000, // 15 seconds timeout
+  timeout: 30000, // Increase back to 30 seconds timeout
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
@@ -55,15 +55,15 @@ apiClient.interceptors.request.use(
   (config) => {
     // Special handling for authentication-related endpoints
     if (config.url === '/logout' || config.url === '/login' || config.url === '/refresh') {
-      config.timeout = 5000; // Shorter timeout for auth requests
-      config.retryCount = MAX_RETRIES; // Don't retry auth requests
+      config.timeout = 10000; // Increase timeout for auth requests to 10 seconds
+      config.retryCount = 0; // Don't retry auth requests
       config.noCache = true; // Don't cache auth requests
       return config;
     }
     
     // Special handling for token verification - use a shorter timeout and cache results
     if (config.url === '/verify-token') {
-      config.timeout = 5000; // Shorter timeout for verification
+      config.timeout = 10000; // Increase timeout for verification to 10 seconds
       
       // Only cache verification results for 5 minutes
       const cacheKey = `${config.url}${JSON.stringify(config.params || {})}`;
@@ -98,17 +98,13 @@ apiClient.interceptors.request.use(
     const auth = getStoredAuth();
     if (auth?.token) {
       // Ensure token is always properly formatted with Bearer prefix
-      const token = auth.token.startsWith('Bearer ') ? auth.token : `Bearer ${auth.token}`;
-      config.headers.Authorization = token;
+      setAuthToken(auth.token);
     }
-    
-    // Add retry count to config
-    config.retryCount = config.retryCount || 0;
-    
+
     return config;
   },
   (error) => {
-    console.error('Request interceptor error:', error);
+    console.error('Request error:', error);
     return Promise.reject(error);
   }
 );

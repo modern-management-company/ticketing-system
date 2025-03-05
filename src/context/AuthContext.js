@@ -121,25 +121,52 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const refreshToken = useCallback(async () => {
+    // Prevent multiple simultaneous refresh attempts
+    if (refreshing) {
+      console.log('Token refresh already in progress, skipping');
+      return false;
+    }
+    
     try {
       setRefreshing(true);
       const savedAuth = localStorage.getItem('auth');
       if (!savedAuth) {
+        console.log('No stored auth data for token refresh');
         return false;
       }
 
       const authData = JSON.parse(savedAuth);
       if (!authData.refresh_token) {
+        console.log('No refresh token available');
         return false;
       }
 
+      // Check if we've tried refreshing recently (within the last minute)
+      const lastRefreshAttempt = sessionStorage.getItem('lastRefreshAttempt');
+      const now = Date.now();
+      
+      if (lastRefreshAttempt && now - parseInt(lastRefreshAttempt, 10) < 60000) {
+        console.log('Token refresh attempted too recently, skipping');
+        return false;
+      }
+      
+      // Mark that we're attempting a refresh
+      sessionStorage.setItem('lastRefreshAttempt', now.toString());
+
+      console.log('Attempting to refresh token');
       const response = await apiClient.post('/refresh', {}, {
         headers: {
           'Authorization': `Bearer ${authData.refresh_token}`
-        }
+        },
+        timeout: 15000 // 15 second timeout
       });
 
       const { token, user } = response.data;
+      
+      if (!token) {
+        console.error('No token received from refresh endpoint');
+        return false;
+      }
       
       // Update stored auth data
       const updatedAuth = {
@@ -160,15 +187,17 @@ export const AuthProvider = ({ children }) => {
       
       // Don't clear property cache on token refresh
       // This ensures we maintain the property cache across token refreshes
-      
+      console.log('Token refresh successful');
       return updatedAuth;
     } catch (error) {
       console.error('Error refreshing token:', error);
+      // Clear the refresh attempt timestamp so we can try again soon if needed
+      sessionStorage.removeItem('lastRefreshAttempt');
       return false;
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [refreshing]);
 
   // Token verification with caching
   const verifyToken = useCallback(async (token) => {
@@ -184,7 +213,7 @@ export const AuthProvider = ({ children }) => {
     const verifiedUser = sessionStorage.getItem('verifiedUser');
     
     const now = Date.now();
-    const VERIFICATION_CACHE_TIME = 5 * 60 * 1000; // 5 minutes
+    const VERIFICATION_CACHE_TIME = 15 * 60 * 1000; // Increase to 15 minutes
     
     // If we have a cached verification that's still valid and it's the same token
     if (lastVerified && verifiedToken && verifiedUser && 
@@ -205,13 +234,32 @@ export const AuthProvider = ({ children }) => {
       }
     }
     
+    // Before making a network request, check if we're online
+    if (!navigator.onLine) {
+      console.warn('Device is offline. Using cached data if available.');
+      if (verifiedUser && verifiedToken) {
+        try {
+          const user = JSON.parse(verifiedUser);
+          return {
+            valid: true,
+            user: user,
+            fromCache: true
+          };
+        } catch (error) {
+          console.error('Error parsing cached user data in offline mode:', error);
+        }
+      }
+      // If we're offline and don't have cached data, return invalid
+      return { valid: false, offlineMode: true };
+    }
+    
     try {
       // Set auth token for this request
       setAuthToken(token);
       
-      // Verify token with server
+      // Verify token with server - using a more reasonable timeout
       const response = await apiClient.get('/verify-token', {
-        timeout: 5000, // 5 second timeout for verification
+        timeout: 15000, // 15 second timeout for verification
         headers: {
           'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`
         }
@@ -250,12 +298,13 @@ export const AuthProvider = ({ children }) => {
               fromCache: true
             };
           }
-        } catch (parseError) {
-          console.error('Error parsing cached user data:', parseError);
+        } catch (innerError) {
+          console.error('Error parsing cached user data after network error:', innerError);
         }
       }
       
-      return { valid: false };
+      // If the error is something else, or we don't have cached data, return invalid
+      return { valid: false, error: error.message };
     }
   }, []);
 
@@ -328,53 +377,51 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(async () => {
     try {
-      // Only attempt to call the logout endpoint if we have a token
-      if (auth?.token) {
-        try {
-          // Call the logout endpoint to clear cookies
-          await apiClient.post('/logout', {}, {
-            // Set a shorter timeout for logout
-            timeout: 5000,
-            // Don't retry logout requests
-            retryCount: MAX_RETRIES // Set to MAX_RETRIES to prevent retries
-          });
-        } catch (error) {
-          // Just log the error but continue with local logout
-          console.error('Error during server logout:', error);
+      // Only attempt server logout if we have a token
+      const authData = localStorage.getItem('auth');
+      if (authData) {
+        const parsedAuth = JSON.parse(authData);
+        
+        if (parsedAuth?.token) {
+          // Set the token before logout call
+          setAuthToken(parsedAuth.token);
+          
+          // Simple logout - no retry, short timeout, ignore errors
+          try {
+            await apiClient.post('/logout', {}, {
+              timeout: 3000, // Very short timeout
+              retries: 0, // No retries
+            });
+            console.log('Server logout successful');
+          } catch (error) {
+            // Just log the error and continue with local logout
+            console.warn('Server logout failed, continuing with local logout:', error.message);
+          }
         }
       }
+    } catch (error) {
+      console.warn('Error during logout attempt:', error.message);
     } finally {
-      // Always clear local storage and state, even if server logout fails
+      // Always clear local storage and state
       localStorage.removeItem('auth');
-      sessionStorage.removeItem('lastTokenVerified');
       sessionStorage.removeItem('verifiedToken');
       sessionStorage.removeItem('verifiedUser');
-      
-      // Clear property cache
+      sessionStorage.removeItem('lastTokenVerified');
       sessionStorage.removeItem('cachedProperties');
       sessionStorage.removeItem('propertiesLastFetched');
-      setProperties([]);
-      setPropertiesLastFetched(0);
-      
-      // Clear all auth-related cookies
-      document.cookie.split(';').forEach(cookie => {
-        const [name] = cookie.trim().split('=');
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
-      });
-      
-      // Clear auth state and token
-      setAuthToken(null);
+      sessionStorage.removeItem('lastRefreshAttempt');
+            
+      // Clear auth state
       setAuth(null);
+      setAuthToken(null);
       
-      // Clear API cache on logout
-      if (typeof apiClient.clearCache === 'function') {
-        apiClient.clearCache();
-      }
+      // Clear API cache
+      apiClient.clearCache && apiClient.clearCache();
       
-      // Force reload the page to ensure clean state
+      // Instead of navigating, reload the page to ensure a clean state
       window.location.href = '/login';
     }
-  }, [auth]);
+  }, []);
 
   // Setup token refresh interval - reduced frequency
   useEffect(() => {
