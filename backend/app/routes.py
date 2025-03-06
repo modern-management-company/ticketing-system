@@ -1,7 +1,7 @@
 from flask import request, jsonify, current_app
 from app import app, db
 from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest
-from app.services import EmailService, EmailTestService
+from app.services import AsyncEmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity, get_jwt, set_access_cookies, set_refresh_cookies, unset_jwt_cookies
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -13,6 +13,9 @@ import logging
 import secrets
 from sqlalchemy import or_
 from app.services.sms_service import SMSService
+
+# Create a single instance of AsyncEmailService to be used throughout the file
+email_service = AsyncEmailService()
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -105,7 +108,6 @@ def register():
         db.session.commit()
 
         # Send welcome email with credentials
-        email_service = EmailService()
         email_sent = email_service.send_user_registration_email(new_user, original_password, None)
         
         if not email_sent:
@@ -379,8 +381,6 @@ def create_ticket():
                     if property_obj:
                         property_name = property_obj.name
                         
-                    from app.services.email_service import EmailService
-                    email_service = EmailService()
                     email_service.send_task_assignment_notification(assigned_manager, task, property_name)
                 except Exception as e:
                     app.logger.error(f"Failed to send task assignment email: {str(e)}")
@@ -401,8 +401,6 @@ def create_ticket():
             property_name = Property.query.get(data['property_id']).name
 
             # Send notifications
-            from app.services.email_service import EmailService
-            email_service = EmailService()
             notifications_sent = email_service.send_ticket_notification(
                 new_ticket,
                 property_name,
@@ -793,7 +791,6 @@ def manage_property_room(property_id, room_id):
 
                 # Send email notifications
                 try:
-                    email_service = EmailService()
                     email_service.send_room_status_notification(
                         room=room,
                         property_name=property.name,
@@ -875,7 +872,6 @@ def manage_property_room(property_id, room_id):
                 recipients = list(set(property_managers + super_admins))
 
                 # Send email notifications
-                email_service = EmailService()
                 email_service.send_room_status_notification(
                     room=room,
                     property_name=property.name,
@@ -943,7 +939,6 @@ def assign_task():
                 if property:
                     property_name = property.name
 
-            email_service = EmailService()
             email_sent = email_service.send_task_assignment_notification(user, task, property_name)
             app.logger.info(f"Task assignment email {'sent successfully' if email_sent else 'failed to send'} to {user.email}")
         except Exception as e:
@@ -1113,7 +1108,6 @@ def manage_task(task_id):
                         assigned_user = User.query.get(data['assigned_to_id'])
                         property = Property.query.get(task.property_id)
                         if assigned_user and property:
-                            email_service = EmailService()
                             notifications_sent = email_service.send_task_assignment_notification(
                                 assigned_user,
                                 task,
@@ -1258,7 +1252,6 @@ def create_task():
                 assigned_user = User.query.get(data['assigned_to_id'])
                 property = Property.query.get(data['property_id'])
                 if assigned_user and property:
-                    email_service = EmailService()
                     notifications_sent = email_service.send_task_assignment_notification(
                         assigned_user, task, property.name
                     )
@@ -1376,7 +1369,6 @@ def manage_user(user_id):
 
             # Send notifications based on changes
             try:
-                email_service = EmailService()
                 admin_emails = [user.email for user in User.query.filter_by(role='super_admin').all()]
                 
                 # Determine notification type based on changes
@@ -1410,7 +1402,6 @@ def manage_user(user_id):
             
             # Send deletion notification
             try:
-                email_service = EmailService()
                 admin_emails = [user.email for user in User.query.filter_by(role='super_admin').all()]
                 
                 changes = ["Account scheduled for deletion"]
@@ -1595,7 +1586,6 @@ def manage_property(property_id):
                 recipients = list(set(property_managers + super_admins))
 
                 # Send email notifications
-                email_service = EmailService()
                 email_service.send_property_status_notification(
                     property=property,
                     old_status=old_status,
@@ -2048,7 +2038,6 @@ def admin_change_password(user_id):
     
     # Send email if requested
     if data.get('send_email', True):
-        email_service = EmailService()
         email_sent = email_service.send_user_registration_email(user, data['new_password'], current_user)
         if not email_sent:
             app.logger.error(f"Failed to send password change email to user {user.username}")
@@ -2500,8 +2489,6 @@ def manage_ticket(ticket_id):
                     updated_by = f"{current_user.username} ({current_user.group})" if current_user else "Unknown"
 
                     # Send notification
-                    from app.services.email_service import EmailService
-                    email_service = EmailService()
                     email_service.send_ticket_notification(
                         ticket,
                         property_name,
@@ -2548,8 +2535,6 @@ def manage_ticket(ticket_id):
                 db.session.commit()
 
                 # Send deletion notification
-                from app.services.email_service import EmailService
-                email_service = EmailService()
                 email_service.send_ticket_notification(
                     ticket_info,
                     property_name,
@@ -2736,9 +2721,6 @@ def reset_password():
         db.session.commit()
 
         # Send email notifications
-        email_service = EmailService()
-        
-        # Notify the user whose password was reset
         email_service.send_password_reset_notification(
             user=target_user,
             reset_by=current_user,
@@ -2787,8 +2769,7 @@ def request_password_reset():
         db.session.commit()
 
         # Send reset email
-        email_service = EmailService()
-        email_service.send_password_reset_link(
+        email_service.send_password_reset_notification(
             user=user,
             reset_token=reset_token
         )
@@ -3163,8 +3144,7 @@ def create_user():
 
         # Send welcome email
         try:
-            email_service = EmailService()
-            email_service.send_welcome_email(
+            email_service.send_user_registration_email(
                 new_user,
                 password=data['password'],
                 sender=current_user.username
