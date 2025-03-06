@@ -1,7 +1,7 @@
 from flask import request, jsonify, current_app
 from app import app, db
 from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest
-from app.services import AsyncEmailService, EmailTestService
+from app.services import AsyncEmailService, EmailTestService, AsyncSMSService
 import os
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity, get_jwt, set_access_cookies, set_refresh_cookies, unset_jwt_cookies
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -12,10 +12,12 @@ from app.decorators import handle_errors
 import logging
 import secrets
 from sqlalchemy import or_
-from app.services.sms_service import SMSService
 
 # Create a single instance of AsyncEmailService to be used throughout the file
 email_service = AsyncEmailService()
+
+# Create a single instance of AsyncSMSService to be used throughout the file
+sms_service = AsyncSMSService()
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -382,8 +384,15 @@ def create_ticket():
                         property_name = property_obj.name
                         
                     email_service.send_task_assignment_notification(assigned_manager, task, property_name)
+                    
+                    # Also send SMS notification if the assigned manager has a phone number
+                    if assigned_manager.phone:
+                        sms_service.send_sms(
+                            assigned_manager.phone,
+                            f"New task assigned: [{task.priority}] {task.title} for {property_name}"
+                        )
                 except Exception as e:
-                    app.logger.error(f"Failed to send task assignment email: {str(e)}")
+                    app.logger.error(f"Failed to send task assignment notification: {str(e)}")
                 
                 db.session.commit()
 
@@ -407,6 +416,19 @@ def create_ticket():
                 recipients,
                 notification_type="new"
             )
+            
+            # Send SMS for high priority tickets to managers
+            if new_ticket.priority in ['High', 'Urgent']:
+                for recipient in recipients:
+                    # Only send to managers and super admins with phone numbers
+                    if recipient.phone and recipient.role in ['manager', 'super_admin']:
+                        try:
+                            sms_service.send_sms(
+                                recipient.phone,
+                                f"HIGH PRIORITY TICKET: #{new_ticket.ticket_id} {new_ticket.title} at {property_name}"
+                            )
+                        except Exception as e:
+                            app.logger.error(f"Failed to send SMS notification: {str(e)}")
 
             response_data = {
                 'msg': 'Ticket created successfully',
@@ -798,6 +820,19 @@ def manage_property_room(property_id, room_id):
                         new_status=room.status,
                         recipients=recipients
                     )
+                    
+                    # Send SMS notifications for maintenance status changes
+                    if room.status == 'Maintenance' or old_status == 'Maintenance':
+                        for recipient in recipients:
+                            # Send to maintenance staff and managers with phone numbers
+                            if recipient.phone and (recipient.group == 'Maintenance' or recipient.role == 'manager'):
+                                try:
+                                    sms_service.send_sms(
+                                        recipient.phone,
+                                        f"Room status change: {room.name} at {property.name} changed from {old_status} to {room.status}"
+                                    )
+                                except Exception as e:
+                                    app.logger.error(f"Failed to send SMS notification: {str(e)}")
                 except Exception as e:
                     app.logger.error(f"Failed to send room status notification: {str(e)}")
                     # Don't return error, just log it since the room was updated successfully
@@ -879,6 +914,19 @@ def manage_property_room(property_id, room_id):
                     new_status=room.status,
                     recipients=recipients
                 )
+                
+                # Send SMS notifications for maintenance status changes
+                if room.status == 'Maintenance' or old_status == 'Maintenance':
+                    for recipient in recipients:
+                        # Send to maintenance staff and managers with phone numbers
+                        if recipient.phone and (recipient.group == 'Maintenance' or recipient.role == 'manager'):
+                            try:
+                                sms_service.send_sms(
+                                    recipient.phone,
+                                    f"Room status change: {room.name} at {property.name} changed from {old_status} to {room.status}"
+                                )
+                            except Exception as e:
+                                app.logger.error(f"Failed to send SMS notification: {str(e)}")
 
             return jsonify({
                 "msg": "Room updated successfully",
@@ -941,14 +989,28 @@ def assign_task():
 
             email_sent = email_service.send_task_assignment_notification(user, task, property_name)
             app.logger.info(f"Task assignment email {'sent successfully' if email_sent else 'failed to send'} to {user.email}")
+            
+            # Send SMS if user has a phone number
+            sms_sent = False
+            if user.phone:
+                try:
+                    sms_service.send_sms(
+                        user.phone,
+                        f"New task assigned: [{task.priority}] {task.title} for {property_name}"
+                    )
+                    sms_sent = True
+                    app.logger.info(f"Task assignment SMS sent successfully to {user.phone}")
+                except Exception as e:
+                    app.logger.error(f"Failed to send task assignment SMS: {str(e)}")
         except Exception as e:
-            app.logger.error(f"Failed to send task assignment email: {str(e)}")
+            app.logger.error(f"Failed to send task assignment notification: {str(e)}")
             # Don't return error, just log it since the task was created successfully
 
         return jsonify({
             'message': 'Task assigned successfully!', 
             'task_id': task.task_id,
-            'email_sent': email_sent if 'email_sent' in locals() else False
+            'email_sent': email_sent if 'email_sent' in locals() else False,
+            'sms_sent': sms_sent
         })
 
     except Exception as e:
@@ -1114,8 +1176,19 @@ def manage_task(task_id):
                                 property.name
                             )
                             app.logger.info(f"Task assignment email {'sent successfully' if notifications_sent else 'failed to send'} to {assigned_user.email}")
+                            
+                            # Send SMS notification if user has a phone number
+                            if assigned_user.phone:
+                                try:
+                                    sms_service.send_sms(
+                                        assigned_user.phone,
+                                        f"Task reassigned to you: [{task.priority}] {task.title} for {property.name}"
+                                    )
+                                    app.logger.info(f"Task reassignment SMS sent successfully to {assigned_user.phone}")
+                                except Exception as e:
+                                    app.logger.error(f"Failed to send task reassignment SMS: {str(e)}")
                     except Exception as e:
-                        app.logger.error(f"Failed to send task assignment email: {str(e)}")
+                        app.logger.error(f"Failed to send task assignment notification: {str(e)}")
 
                 # Get the updated task with user information
                 task_data = task.to_dict()
@@ -1247,6 +1320,7 @@ def create_task():
 
         # Send email notification if user is assigned
         notifications_sent = False
+        sms_sent = False
         if data.get('assigned_to_id'):
             try:
                 assigned_user = User.query.get(data['assigned_to_id'])
@@ -1255,13 +1329,25 @@ def create_task():
                     notifications_sent = email_service.send_task_assignment_notification(
                         assigned_user, task, property.name
                     )
+                    
+                    # Send SMS notification if user has a phone number
+                    if assigned_user.phone:
+                        try:
+                            sms_service.send_sms(
+                                assigned_user.phone,
+                                f"New task assigned: [{task.priority}] {task.title} for {property.name}"
+                            )
+                            sms_sent = True
+                        except Exception as e:
+                            app.logger.error(f"Failed to send task assignment SMS: {str(e)}")
             except Exception as e:
-                app.logger.error(f"Failed to send email notification: {str(e)}")
+                app.logger.error(f"Failed to send notifications: {str(e)}")
 
         return jsonify({
             'msg': 'Task created successfully',
             'task': task.to_dict(),
-            'notifications_sent': notifications_sent
+            'notifications_sent': notifications_sent,
+            'sms_sent': sms_sent
         }), 201
 
     except Exception as e:
@@ -1592,6 +1678,20 @@ def manage_property(property_id):
                     new_status=property.status,
                     recipients=recipients
                 )
+                
+                # Send SMS notifications for critical status changes
+                if property.status == 'Maintenance' or property.status == 'Emergency':
+                    for recipient in recipients:
+                        # Only send to managers and maintenance staff with phone numbers
+                        if recipient.phone and (recipient.role in ['manager', 'super_admin'] or 
+                                               (recipient.group and recipient.group.lower() == 'maintenance')):
+                            try:
+                                sms_service.send_sms(
+                                    recipient.phone,
+                                    f"PROPERTY STATUS CHANGE: {property.name} changed from {old_status} to {property.status}"
+                                )
+                            except Exception as e:
+                                app.logger.error(f"Failed to send property status SMS: {str(e)}")
 
             return jsonify({
                 "msg": "Property updated successfully",
@@ -2497,6 +2597,25 @@ def manage_ticket(ticket_id):
                         changes=changes,
                         updated_by=updated_by
                     )
+                    
+                    # Send SMS for high priority tickets
+                    if ticket.priority in ['High', 'Urgent']:
+                        for recipient in recipients:
+                            # Only send to managers and personnel in relevant departments with phone numbers
+                            if recipient.phone and (recipient.role in ['manager', 'super_admin'] or 
+                                                  (recipient.group and recipient.group.lower() in ['maintenance', 'housekeeping'])):
+                                try:
+                                    # Build a concise message with key changes
+                                    change_summary = ', '.join(changes[:3])  # Limit to first 3 changes to keep SMS brief
+                                    if len(changes) > 3:
+                                        change_summary += f" and {len(changes) - 3} more"
+                                        
+                                    sms_service.send_sms(
+                                        recipient.phone,
+                                        f"UPDATED TICKET #{ticket.ticket_id}: {ticket.title} - {change_summary}"
+                                    )
+                                except Exception as e:
+                                    app.logger.error(f"Failed to send ticket update SMS: {str(e)}")
 
                 return jsonify({
                     'msg': 'Ticket updated successfully',
@@ -2541,6 +2660,19 @@ def manage_ticket(ticket_id):
                     recipients,
                     notification_type="deleted"
                 )
+                
+                # Send SMS notification for high priority ticket deletion
+                if ticket_info.get('priority') in ['High', 'Urgent']:
+                    for recipient in recipients:
+                        # Only send to managers with phone numbers
+                        if recipient.phone and recipient.role in ['manager', 'super_admin']:
+                            try:
+                                sms_service.send_sms(
+                                    recipient.phone,
+                                    f"DELETED: High priority ticket #{ticket_info.get('ticket_id')} - {ticket_info.get('title')}"
+                                )
+                            except Exception as e:
+                                app.logger.error(f"Failed to send ticket deletion SMS: {str(e)}")
 
                 return jsonify({'msg': 'Ticket deleted successfully'}), 200
 
@@ -2726,6 +2858,17 @@ def reset_password():
             reset_by=current_user,
             is_self_reset=(str(current_user.user_id) == str(data['user_id']))
         )
+        
+        # Also send SMS notification if user has a phone number
+        if target_user.phone:
+            try:
+                # For security, send notification to the user whose password was reset
+                sms_service.send_sms(
+                    target_user.phone,
+                    f"Your password was reset by {current_user.username} at {datetime.now().strftime('%H:%M on %d %b')}. Contact admin if unauthorized."
+                )
+            except Exception as e:
+                app.logger.error(f"Failed to send password reset SMS: {str(e)}")
 
         # If reset by admin/manager, send admin alert
         if str(current_user.user_id) != str(data['user_id']):
@@ -2773,6 +2916,16 @@ def request_password_reset():
             user=user,
             reset_token=reset_token
         )
+        
+        # Send SMS if the user has a phone number
+        if user.phone:
+            try:
+                sms_service.send_sms(
+                    user.phone,
+                    f"Password reset requested for your account. If you didn't request this, contact support immediately."
+                )
+            except Exception as e:
+                app.logger.error(f"Failed to send password reset SMS: {str(e)}")
 
         # Send admin alert
         super_admins = User.query.filter_by(role='super_admin').all()
@@ -2940,7 +3093,7 @@ def create_service_request():
 
                 # Send SMS notification if staff has phone number
                 if staff.phone:
-                    sms_service = SMSService()
+                    # Use the global sms_service instance
                     sms_service.send_housekeeping_request_notification(
                         room.name,
                         f"{data['request_group']} - {data['request_type']}",
@@ -3049,7 +3202,7 @@ def update_service_request(request_id):
                     ).all()
 
                     if staff_members:
-                        sms_service = SMSService()
+                        # Use the global sms_service instance
                         for staff in staff_members:
                             if staff.phone:  # Only send if staff has phone number
                                 sms_service.send_housekeeping_request_notification(
