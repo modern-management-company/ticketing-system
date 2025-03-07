@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   Box,
   Typography,
@@ -44,6 +44,8 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useNavigate } from "react-router-dom";
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import RoomServiceIcon from '@mui/icons-material/RoomService';
 
 const ViewRooms = () => {
   const { auth } = useAuth();
@@ -72,6 +74,8 @@ const ViewRooms = () => {
   const [uploadResults, setUploadResults] = useState(null);
   const [uploadInProgress, setUploadInProgress] = useState(false);
   const [hidePublicAreas, setHidePublicAreas] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [actionDialogOpen, setActionDialogOpen] = useState(false);
 
   const roomTypes = ['Single', 'Double', 'Suite', 'Conference', 'Other'];
   const roomStatuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];
@@ -346,15 +350,37 @@ const ViewRooms = () => {
   };
 
   const handleRoomCardClick = (room) => {
-    // Navigate to tickets page with room information
+    // Show dialog to choose between ticket or service request
+    setSelectedRoom(room);
+    setActionDialogOpen(true);
+  };
+
+  const navigateToTickets = () => {
+    if (!selectedRoom) return;
+    
     navigate('/tickets', { 
       state: { 
         createTicket: true,
-        roomId: room.room_id,
-        roomName: room.name,
+        roomId: selectedRoom.room_id,
+        roomName: selectedRoom.name,
         propertyId: selectedProperty
       } 
     });
+    setActionDialogOpen(false);
+  };
+
+  const navigateToServiceRequests = () => {
+    if (!selectedRoom) return;
+    
+    navigate('/service-requests', { 
+      state: { 
+        createRequest: true,
+        roomId: selectedRoom.room_id,
+        roomName: selectedRoom.name,
+        propertyId: selectedProperty
+      } 
+    });
+    setActionDialogOpen(false);
   };
 
   return (
@@ -826,6 +852,48 @@ const ViewRooms = () => {
         <DialogActions>
           <Button onClick={closeUploadDialog} disabled={uploadInProgress}>
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Action Dialog */}
+      <Dialog
+        open={actionDialogOpen}
+        onClose={() => setActionDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {selectedRoom ? `Actions for ${selectedRoom.name}` : 'Choose Action'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            What would you like to create for this room?
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={navigateToTickets}
+              startIcon={<AssignmentIcon />}
+              size="large"
+            >
+              Create Ticket
+            </Button>
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={navigateToServiceRequests}
+              startIcon={<RoomServiceIcon />}
+              size="large"
+            >
+              Create Service Request
+            </Button>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setActionDialogOpen(false)}>
+            Cancel
           </Button>
         </DialogActions>
       </Dialog>
