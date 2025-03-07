@@ -1,4 +1,5 @@
 import threading
+from flask import current_app
 from app.services.email_service import EmailService
 
 class AsyncEmailService:
@@ -8,7 +9,8 @@ class AsyncEmailService:
     """
     
     def __init__(self):
-        self.email_service = EmailService()
+        # Don't initialize EmailService here - will do it lazily in _send_async
+        pass
     
     def _send_async(self, method_name, *args, **kwargs):
         """
@@ -19,11 +21,13 @@ class AsyncEmailService:
             *args: Positional arguments to pass to the method
             **kwargs: Keyword arguments to pass to the method
         """
-        email_method = getattr(self.email_service, method_name)
-        
         def _task():
             try:
-                email_method(*args, **kwargs)
+                # Create EmailService inside the thread with app context
+                with current_app.app_context():
+                    email_service = EmailService()
+                    email_method = getattr(email_service, method_name)
+                    email_method(*args, **kwargs)
             except Exception as e:
                 # Log the error but don't propagate it since we're in a background thread
                 import logging

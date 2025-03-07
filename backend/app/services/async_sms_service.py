@@ -1,4 +1,5 @@
 import threading
+from flask import current_app
 from app.services.sms_service import SMSService
 
 class AsyncSMSService:
@@ -8,7 +9,8 @@ class AsyncSMSService:
     """
     
     def __init__(self):
-        self.sms_service = SMSService()
+        # Don't initialize SMSService here - will do it lazily in _send_async
+        pass
     
     def _send_async(self, method_name, *args, **kwargs):
         """
@@ -19,11 +21,13 @@ class AsyncSMSService:
             *args: Positional arguments to pass to the method
             **kwargs: Keyword arguments to pass to the method
         """
-        sms_method = getattr(self.sms_service, method_name)
-        
         def _task():
             try:
-                sms_method(*args, **kwargs)
+                # Create SMSService inside the thread with app context
+                with current_app.app_context():
+                    sms_service = SMSService()
+                    sms_method = getattr(sms_service, method_name)
+                    sms_method(*args, **kwargs)
             except Exception as e:
                 # Log the error but don't propagate it since we're in a background thread
                 import logging

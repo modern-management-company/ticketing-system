@@ -1,6 +1,6 @@
 from flask import request, jsonify, current_app
 from app import app, db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, SMSSettings
 from app.services import AsyncEmailService, EmailTestService, AsyncSMSService
 import os
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity, get_jwt, set_access_cookies, set_refresh_cookies, unset_jwt_cookies
@@ -13,11 +13,23 @@ import logging
 import secrets
 from sqlalchemy import or_
 
-# Create a single instance of AsyncEmailService to be used throughout the file
-email_service = AsyncEmailService()
+# Lazily loaded service instances
+_email_service = None
+_sms_service = None
 
-# Create a single instance of AsyncSMSService to be used throughout the file
-sms_service = AsyncSMSService()
+def get_email_service():
+    """Get a lazily-initialized instance of AsyncEmailService"""
+    global _email_service
+    if _email_service is None:
+        _email_service = AsyncEmailService()
+    return _email_service
+
+def get_sms_service():
+    """Get a lazily-initialized instance of AsyncSMSService"""
+    global _sms_service
+    if _sms_service is None:
+        _sms_service = AsyncSMSService()
+    return _sms_service
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -110,7 +122,7 @@ def register():
         db.session.commit()
 
         # Send welcome email with credentials
-        email_sent = email_service.send_user_registration_email(new_user, original_password, None)
+        email_sent = get_email_service().send_user_registration_email(new_user, original_password, None)
         
         if not email_sent:
             app.logger.warning(f"Failed to send welcome email to {new_user.email}")
@@ -383,11 +395,11 @@ def create_ticket():
                     if property_obj:
                         property_name = property_obj.name
                         
-                    email_service.send_task_assignment_notification(assigned_manager, task, property_name)
+                    get_email_service().send_task_assignment_notification(assigned_manager, task, property_name)
                     
                     # Also send SMS notification if the assigned manager has a phone number
                     if assigned_manager.phone:
-                        sms_service.send_sms(
+                        get_sms_service().send_sms(
                             assigned_manager.phone,
                             f"New task assigned: [{task.priority}] {task.title} for {property_name}"
                         )
@@ -410,7 +422,7 @@ def create_ticket():
             property_name = Property.query.get(data['property_id']).name
 
             # Send notifications
-            notifications_sent = email_service.send_ticket_notification(
+            notifications_sent = get_email_service().send_ticket_notification(
                 new_ticket,
                 property_name,
                 recipients,
@@ -423,7 +435,7 @@ def create_ticket():
                     # Only send to managers and super admins with phone numbers
                     if recipient.phone and recipient.role in ['manager', 'super_admin']:
                         try:
-                            sms_service.send_sms(
+                            get_sms_service().send_sms(
                                 recipient.phone,
                                 f"HIGH PRIORITY TICKET: #{new_ticket.ticket_id} {new_ticket.title} at {property_name}"
                             )
@@ -813,7 +825,7 @@ def manage_property_room(property_id, room_id):
 
                 # Send email notifications
                 try:
-                    email_service.send_room_status_notification(
+                    get_email_service().send_room_status_notification(
                         room=room,
                         property_name=property.name,
                         old_status=old_status,
@@ -827,7 +839,7 @@ def manage_property_room(property_id, room_id):
                             # Send to maintenance staff and managers with phone numbers
                             if recipient.phone and (recipient.group == 'Maintenance' or recipient.role == 'manager'):
                                 try:
-                                    sms_service.send_sms(
+                                    get_sms_service().send_sms(
                                         recipient.phone,
                                         f"Room status change: {room.name} at {property.name} changed from {old_status} to {room.status}"
                                     )
@@ -907,7 +919,7 @@ def manage_property_room(property_id, room_id):
                 recipients = list(set(property_managers + super_admins))
 
                 # Send email notifications
-                email_service.send_room_status_notification(
+                get_email_service().send_room_status_notification(
                     room=room,
                     property_name=property.name,
                     old_status=old_status,
@@ -921,7 +933,7 @@ def manage_property_room(property_id, room_id):
                         # Send to maintenance staff and managers with phone numbers
                         if recipient.phone and (recipient.group == 'Maintenance' or recipient.role == 'manager'):
                             try:
-                                sms_service.send_sms(
+                                get_sms_service().send_sms(
                                     recipient.phone,
                                     f"Room status change: {room.name} at {property.name} changed from {old_status} to {room.status}"
                                 )
@@ -987,14 +999,14 @@ def assign_task():
                 if property:
                     property_name = property.name
 
-            email_sent = email_service.send_task_assignment_notification(user, task, property_name)
+            email_sent = get_email_service().send_task_assignment_notification(user, task, property_name)
             app.logger.info(f"Task assignment email {'sent successfully' if email_sent else 'failed to send'} to {user.email}")
             
             # Send SMS if user has a phone number
             sms_sent = False
             if user.phone:
                 try:
-                    sms_service.send_sms(
+                    get_sms_service().send_sms(
                         user.phone,
                         f"New task assigned: [{task.priority}] {task.title} for {property_name}"
                     )
@@ -1170,7 +1182,7 @@ def manage_task(task_id):
                         assigned_user = User.query.get(data['assigned_to_id'])
                         property = Property.query.get(task.property_id)
                         if assigned_user and property:
-                            notifications_sent = email_service.send_task_assignment_notification(
+                            notifications_sent = get_email_service().send_task_assignment_notification(
                                 assigned_user,
                                 task,
                                 property.name
@@ -1180,7 +1192,7 @@ def manage_task(task_id):
                             # Send SMS notification if user has a phone number
                             if assigned_user.phone:
                                 try:
-                                    sms_service.send_sms(
+                                    get_sms_service().send_sms(
                                         assigned_user.phone,
                                         f"Task reassigned to you: [{task.priority}] {task.title} for {property.name}"
                                     )
@@ -1326,14 +1338,14 @@ def create_task():
                 assigned_user = User.query.get(data['assigned_to_id'])
                 property = Property.query.get(data['property_id'])
                 if assigned_user and property:
-                    notifications_sent = email_service.send_task_assignment_notification(
+                    notifications_sent = get_email_service().send_task_assignment_notification(
                         assigned_user, task, property.name
                     )
                     
                     # Send SMS notification if user has a phone number
                     if assigned_user.phone:
                         try:
-                            sms_service.send_sms(
+                            get_sms_service().send_sms(
                                 assigned_user.phone,
                                 f"New task assigned: [{task.priority}] {task.title} for {property.name}"
                             )
@@ -1469,7 +1481,7 @@ def manage_user(user_id):
                 else:
                     notification_type = 'update'
                 
-                email_service.send_user_management_notification(
+                get_email_service().send_user_management_notification(
                     user=target_user,
                     changes=changes,
                     updated_by=current_user.username,
@@ -1491,7 +1503,7 @@ def manage_user(user_id):
                 admin_emails = [user.email for user in User.query.filter_by(role='super_admin').all()]
                 
                 changes = ["Account scheduled for deletion"]
-                email_service.send_user_management_notification(
+                get_email_service().send_user_management_notification(
                     user=target_user,
                     changes=changes,
                     updated_by=current_user.username,
@@ -1672,7 +1684,7 @@ def manage_property(property_id):
                 recipients = list(set(property_managers + super_admins))
 
                 # Send email notifications
-                email_service.send_property_status_notification(
+                get_email_service().send_property_status_notification(
                     property=property,
                     old_status=old_status,
                     new_status=property.status,
@@ -1686,7 +1698,7 @@ def manage_property(property_id):
                         if recipient.phone and (recipient.role in ['manager', 'super_admin'] or 
                                                (recipient.group and recipient.group.lower() == 'maintenance')):
                             try:
-                                sms_service.send_sms(
+                                get_sms_service().send_sms(
                                     recipient.phone,
                                     f"PROPERTY STATUS CHANGE: {property.name} changed from {old_status} to {property.status}"
                                 )
@@ -2138,7 +2150,7 @@ def admin_change_password(user_id):
     
     # Send email if requested
     if data.get('send_email', True):
-        email_sent = email_service.send_user_registration_email(user, data['new_password'], current_user)
+        email_sent = get_email_service().send_user_registration_email(user, data['new_password'], current_user)
         if not email_sent:
             app.logger.error(f"Failed to send password change email to user {user.username}")
             return jsonify({'message': 'Password updated but failed to send email'}), 200
@@ -2589,7 +2601,7 @@ def manage_ticket(ticket_id):
                     updated_by = f"{current_user.username} ({current_user.group})" if current_user else "Unknown"
 
                     # Send notification
-                    email_service.send_ticket_notification(
+                    get_email_service().send_ticket_notification(
                         ticket,
                         property_name,
                         recipients,
@@ -2610,7 +2622,7 @@ def manage_ticket(ticket_id):
                                     if len(changes) > 3:
                                         change_summary += f" and {len(changes) - 3} more"
                                         
-                                    sms_service.send_sms(
+                                    get_sms_service().send_sms(
                                         recipient.phone,
                                         f"UPDATED TICKET #{ticket.ticket_id}: {ticket.title} - {change_summary}"
                                     )
@@ -2654,7 +2666,7 @@ def manage_ticket(ticket_id):
                 db.session.commit()
 
                 # Send deletion notification
-                email_service.send_ticket_notification(
+                get_email_service().send_ticket_notification(
                     ticket_info,
                     property_name,
                     recipients,
@@ -2667,7 +2679,7 @@ def manage_ticket(ticket_id):
                         # Only send to managers with phone numbers
                         if recipient.phone and recipient.role in ['manager', 'super_admin']:
                             try:
-                                sms_service.send_sms(
+                                get_sms_service().send_sms(
                                     recipient.phone,
                                     f"DELETED: High priority ticket #{ticket_info.get('ticket_id')} - {ticket_info.get('title')}"
                                 )
@@ -2853,7 +2865,7 @@ def reset_password():
         db.session.commit()
 
         # Send email notifications
-        email_service.send_password_reset_notification(
+        get_email_service().send_password_reset_notification(
             user=target_user,
             reset_by=current_user,
             is_self_reset=(str(current_user.user_id) == str(data['user_id']))
@@ -2863,7 +2875,7 @@ def reset_password():
         if target_user.phone:
             try:
                 # For security, send notification to the user whose password was reset
-                sms_service.send_sms(
+                get_sms_service().send_sms(
                     target_user.phone,
                     f"Your password was reset by {current_user.username} at {datetime.now().strftime('%H:%M on %d %b')}. Contact admin if unauthorized."
                 )
@@ -2875,7 +2887,7 @@ def reset_password():
             super_admins = User.query.filter_by(role='super_admin').all()
             admin_emails = [admin.email for admin in super_admins]
             if admin_emails:
-                email_service.send_admin_alert(
+                get_email_service().send_admin_alert(
                     subject="Password Reset Alert",
                     message=f"""
                         <p>A password reset was performed:</p>
@@ -2912,7 +2924,7 @@ def request_password_reset():
         db.session.commit()
 
         # Send reset email
-        email_service.send_password_reset_notification(
+        get_email_service().send_password_reset_notification(
             user=user,
             reset_token=reset_token
         )
@@ -2920,7 +2932,7 @@ def request_password_reset():
         # Send SMS if the user has a phone number
         if user.phone:
             try:
-                sms_service.send_sms(
+                get_sms_service().send_sms(
                     user.phone,
                     f"Password reset requested for your account. If you didn't request this, contact support immediately."
                 )
@@ -2931,7 +2943,7 @@ def request_password_reset():
         super_admins = User.query.filter_by(role='super_admin').all()
         admin_emails = [admin.email for admin in super_admins]
         if admin_emails:
-            email_service.send_admin_alert(
+            get_email_service().send_admin_alert(
                 subject="Password Reset Request",
                 message=f"""
                     <p>A password reset was requested:</p>
@@ -3094,7 +3106,7 @@ def create_service_request():
                 # Send SMS notification if staff has phone number
                 if staff.phone:
                     # Use the global sms_service instance
-                    sms_service.send_housekeeping_request_notification(
+                    get_sms_service().send_housekeeping_request_notification(
                         room.name,
                         f"{data['request_group']} - {data['request_type']}",
                         staff.phone
@@ -3205,7 +3217,7 @@ def update_service_request(request_id):
                         # Use the global sms_service instance
                         for staff in staff_members:
                             if staff.phone:  # Only send if staff has phone number
-                                sms_service.send_housekeeping_request_notification(
+                                get_sms_service().send_housekeeping_request_notification(
                                     service_request.room.name,
                                     f"Request completed: {service_request.request_type}",
                                     staff.phone
@@ -3297,7 +3309,7 @@ def create_user():
 
         # Send welcome email
         try:
-            email_service.send_user_registration_email(
+            get_email_service().send_user_registration_email(
                 new_user,
                 password=data['password'],
                 sender=current_user.username
@@ -3510,3 +3522,111 @@ def fix_manager_properties():
         db.session.rollback()
         app.logger.error(f"Error fixing manager properties: {str(e)}")
         return jsonify({"msg": f"Error fixing manager properties: {str(e)}"}), 500
+
+@app.route('/api/settings/sms', methods=['GET'])
+@jwt_required()
+def get_sms_settings():
+    """Get SMS settings"""
+    try:
+        # Only super_admin can access SMS settings
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({"msg": "Unauthorized access"}), 403
+            
+        # Get the most recent SMS settings
+        sms_settings = SMSSettings.query.order_by(SMSSettings.id.desc()).first()
+        
+        if not sms_settings:
+            # If no settings exist, return defaults
+            return jsonify({
+                "account_sid": "",
+                "auth_token": "",
+                "from_number": "",
+                "enable_sms_notifications": False
+            }), 200
+            
+        return jsonify(sms_settings.to_dict()), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error getting SMS settings: {str(e)}")
+        return jsonify({"msg": "Failed to get SMS settings"}), 500
+
+@app.route('/api/settings/sms', methods=['POST'])
+@jwt_required()
+def update_sms_settings():
+    """Update SMS settings"""
+    try:
+        # Only super_admin can update SMS settings
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({"msg": "Unauthorized access"}), 403
+            
+        data = request.get_json()
+        if not data:
+            return jsonify({"msg": "No input data provided"}), 400
+            
+        required_fields = ['account_sid', 'auth_token', 'from_number', 'enable_sms_notifications']
+        if not all(field in data for field in required_fields):
+            return jsonify({"msg": "Missing required fields"}), 400
+            
+        # Create new SMS settings entry (this allows tracking changes over time)
+        new_settings = SMSSettings(
+            account_sid=data['account_sid'],
+            auth_token=data['auth_token'],
+            from_number=data['from_number'],
+            enable_sms_notifications=data['enable_sms_notifications']
+        )
+        
+        db.session.add(new_settings)
+        db.session.commit()
+        
+        app.logger.info(f"SMS settings updated by {current_user.username}")
+        return jsonify({"msg": "SMS settings updated successfully"}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating SMS settings: {str(e)}")
+        return jsonify({"msg": "Failed to update SMS settings"}), 500
+
+@app.route('/api/test-sms', methods=['POST'])
+@jwt_required()
+def test_sms():
+    """Test SMS sending with current settings"""
+    try:
+        # Only super_admin can test SMS
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({"msg": "Unauthorized access"}), 403
+            
+        data = request.get_json()
+        if not data or 'phone_number' not in data:
+            return jsonify({"msg": "Phone number is required"}), 400
+            
+        phone_number = data['phone_number']
+        
+        # Get SMS service
+        sms_service = get_sms_service()
+        
+        # Send a test message
+        result = sms_service.send_sms(
+            phone_number, 
+            "This is a test message from your property management system."
+        )
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "msg": "Test SMS sent successfully"
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "msg": "Failed to send test SMS. Check SMS settings and logs."
+            }), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error testing SMS: {str(e)}")
+        return jsonify({
+            "success": False,
+            "msg": f"Error: {str(e)}"
+        }), 500
