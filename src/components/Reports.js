@@ -412,6 +412,7 @@ const Reports = () => {
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
                       <TableCell>Assigned To</TableCell>
+                      <TableCell>Related To</TableCell>
                       <TableCell>Due Date</TableCell>
                     </TableRow>
                   </TableHead>
@@ -423,6 +424,15 @@ const Reports = () => {
                         <TableCell>{task.status}</TableCell>
                         <TableCell>{task.priority}</TableCell>
                         <TableCell>{task.assigned_to || 'Unassigned'}</TableCell>
+                        <TableCell>
+                          {task.related_ticket ? (
+                            `Ticket #${task.related_ticket.ticket_id}`
+                          ) : task.related_request ? (
+                            `Service Request #${task.related_request.request_id}`
+                          ) : (
+                            'None'
+                          )}
+                        </TableCell>
                         <TableCell>
                           {task.due_date ? format(new Date(task.due_date), 'MM/dd/yyyy') : 'No due date'}
                         </TableCell>

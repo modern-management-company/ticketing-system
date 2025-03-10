@@ -2877,6 +2877,7 @@ def create_service_request():
                 task_assignment = TaskAssignment(
                     task_id=task.task_id,
                     ticket_id=new_request.request_id,  # Use request_id as ticket_id
+                    is_service_request=True,
                     assigned_to_user_id=staff.user_id,
                     status='Pending'
                 )
@@ -2982,7 +2983,8 @@ def update_service_request(request_id):
                     service_request.assigned_task.status = 'completed'
                     # Update all task assignments
                     for assignment in TaskAssignment.query.filter_by(task_id=service_request.assigned_task_id).all():
-                        assignment.status = 'Completed'
+                        if assignment.is_service_request:
+                            assignment.status = 'Completed'
 
                     # Send SMS notification to staff members
                     staff_members = User.query.filter_by(
