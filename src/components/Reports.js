@@ -23,7 +23,8 @@ import {
   TableRow,
   TextField,
   Dialog,
-  DialogContent
+  DialogContent,
+  Autocomplete
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -53,6 +54,8 @@ const Reports = () => {
   const [tabValue, setTabValue] = useState(0);
   const [selectedProperty, setSelectedProperty] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedRoom, setSelectedRoom] = useState('all');
+  const [rooms, setRooms] = useState([]);
   const [openDatePicker, setOpenDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -81,11 +84,33 @@ const Reports = () => {
     }
   };
 
+  const fetchRooms = async () => {
+    if (!selectedProperty) return;
+    
+    try {
+      const response = await apiClient.get(`/properties/${selectedProperty}/rooms`);
+      if (response.data && Array.isArray(response.data.rooms)) {
+        setRooms(response.data.rooms);
+      } else {
+        setRooms([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch rooms:', error);
+      setError('Failed to load rooms');
+    }
+  };
+
+  useEffect(() => {
+    if (selectedProperty) {
+      fetchRooms();
+    }
+  }, [selectedProperty]);
+
   useEffect(() => {
     if (selectedProperty && selectedDate) {
       fetchReportData();
     }
-  }, [selectedProperty, selectedDate]);
+  }, [selectedProperty, selectedDate, selectedRoom]);
 
   const fetchReportData = async () => {
     try {
@@ -93,16 +118,66 @@ const Reports = () => {
       setError(null);
 
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      const [ticketsRes, tasksRes, requestsRes] = await Promise.all([
+      
+      // First fetch all data without room filtering
+      const [ticketsRes, requestsRes, tasksRes] = await Promise.all([
         apiClient.get(`/properties/${selectedProperty}/tickets?date=${formattedDate}`),
-        apiClient.get(`/properties/${selectedProperty}/tasks?date=${formattedDate}`),
-        apiClient.get(`/service-requests?property_id=${selectedProperty}`)
+        apiClient.get(`/service-requests?property_id=${selectedProperty}`),
+        apiClient.get(`/properties/${selectedProperty}/tasks?date=${formattedDate}`)
       ]);
 
+      let allTickets = ticketsRes.data?.tickets || [];
+      let allRequests = requestsRes.data?.requests || [];
+      let allTasks = tasksRes.data?.tasks || [];
+      
+      console.log('Raw data fetched:', {
+        tickets: allTickets,
+        requests: allRequests,
+        tasks: allTasks
+      });
+      
+      // Apply client-side filtering if a room is selected
+      if (selectedRoom !== 'all') {
+        console.log('Filtering by room:', selectedRoom);
+        
+        // Filter tickets by room
+        allTickets = allTickets.filter(ticket => {
+          // Check common room ID fields - adjust based on your actual data structure
+          return ticket.room_id === selectedRoom || 
+                 ticket.room?.room_id === selectedRoom ||
+                 ticket.room_number === selectedRoom;
+        });
+        
+        // Filter service requests by room
+        allRequests = allRequests.filter(request => {
+          // Check common room ID fields - adjust based on your actual data structure
+          return request.room_id === selectedRoom || 
+                 request.room?.room_id === selectedRoom ||
+                 request.room_number === selectedRoom;
+        });
+        
+        console.log('Filtered tickets and requests:', {
+          filteredTickets: allTickets,
+          filteredRequests: allRequests
+        });
+        
+        // Filter tasks based on their relation to filtered tickets and requests
+        const ticketIds = new Set(allTickets.map(t => t.ticket_id));
+        const requestIds = new Set(allRequests.map(r => r.request_id));
+        
+        // Keep only tasks related to the filtered tickets/requests
+        allTasks = allTasks.filter(task => {
+          return (task.ticket_id && ticketIds.has(task.ticket_id)) ||
+                 (task.request_id && requestIds.has(task.request_id));
+        });
+        
+        console.log('Filtered tasks:', allTasks);
+      }
+
       setReportData({
-        tickets: ticketsRes.data?.tickets || [],
-        tasks: tasksRes.data?.tasks || [],
-        requests: requestsRes.data?.requests || []
+        tickets: allTickets,
+        tasks: allTasks,
+        requests: allRequests
       });
     } catch (error) {
       setError('Failed to fetch report data');
@@ -216,7 +291,52 @@ const Reports = () => {
             </Dialog>
           </LocalizationProvider>
         </Grid>
+        
+        <Grid item xs={12} md={4}>
+          <FormControl fullWidth>
+            <InputLabel>Filter by Room</InputLabel>
+            <Select
+              value={selectedRoom}
+              onChange={(e) => setSelectedRoom(e.target.value)}
+              label="Filter by Room"
+              disabled={!selectedProperty || rooms.length === 0}
+            >
+              <MenuItem value="all">All Rooms</MenuItem>
+              {rooms.map((room) => (
+                <MenuItem key={room.room_id} value={room.room_id}>
+                  {room.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
       </Grid>
+
+      {selectedRoom !== 'all' && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            Filtering by room: {rooms.find(r => r.room_id === selectedRoom)?.name || selectedRoom}
+          </Typography>
+          <Typography variant="body2">
+            Showing: {reportData.tickets.length} tickets, {reportData.requests.length} requests, 
+            {reportData.tasks.length} tasks
+          </Typography>
+        </Alert>
+      )}
+
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Grid container spacing={2}>
+          <Grid item xs={4}>
+            <Typography variant="h6">Tickets: {reportData.tickets.length}</Typography>
+          </Grid>
+          <Grid item xs={4}>
+            <Typography variant="h6">Service Requests: {reportData.requests.length}</Typography>
+          </Grid>
+          <Grid item xs={4}>
+            <Typography variant="h6">Related Tasks: {reportData.tasks.length}</Typography>
+          </Grid>
+        </Grid>
+      </Paper>
 
       <Paper sx={{ width: '100%', mb: 2 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
