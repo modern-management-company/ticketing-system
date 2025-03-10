@@ -425,10 +425,10 @@ const Reports = () => {
                         <TableCell>{task.priority}</TableCell>
                         <TableCell>{task.assigned_to || 'Unassigned'}</TableCell>
                         <TableCell>
-                          {task.related_ticket ? (
-                            `Ticket #${task.related_ticket.ticket_id}`
-                          ) : task.related_request ? (
-                            `Service Request #${task.related_request.request_id}`
+                          {task.related_type === 'ticket' ? (
+                            `Ticket #${task.related_id}`
+                          ) : task.related_type === 'service_request' ? (
+                            `Service Request #${task.related_id}`
                           ) : (
                             'None'
                           )}

@@ -1630,7 +1630,11 @@ def task_report():
         'task_id': task.task_id,
         'ticket_id': task.ticket_id,
         'assigned_to_user_id': task.assigned_to_user_id,
-        'status': task.status
+        'status': task.status,
+        # Add ticket_type while maintaining existing fields
+        'ticket_type': task.ticket_type,  # This will be 'ticket' or 'service_request'
+        # Keep backward compatibility by providing type info in multiple formats
+        'is_service_request': task.ticket_type == 'service_request'
     } for task in tasks]
     return jsonify({'tasks': task_data})
 
