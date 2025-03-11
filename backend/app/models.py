@@ -224,8 +224,16 @@ class TaskAssignment(db.Model):
     assigned_to_user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
     status = db.Column(db.String(50), default='Pending')
 
+    # Boolean column (defaults to False, meaning it's a Ticket)
+    is_service_request = db.Column(db.Boolean, default=False)
+
+    # Relationships
     ticket = db.relationship('Ticket', backref=db.backref('task_assignments', lazy=True))
     user = db.relationship('User', backref=db.backref('task_assignments', lazy=True))
+
+    def get_task_type(self):
+        """Determine if task is for a Ticket or Service Request."""
+        return "Service Request" if self.is_service_request else "Ticket"
 
 class UserProperty(db.Model):
     __tablename__ = 'user_properties'

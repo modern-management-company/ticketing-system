@@ -372,7 +372,7 @@ const ViewRooms = () => {
   const navigateToServiceRequests = () => {
     if (!selectedRoom) return;
     
-    navigate('/service-requests', { 
+    navigate('/requests', { 
       state: { 
         createRequest: true,
         roomId: selectedRoom.room_id,

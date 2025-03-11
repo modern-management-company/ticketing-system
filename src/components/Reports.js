@@ -61,6 +61,8 @@ const Reports = () => {
   const [tabValue, setTabValue] = useState(0);
   const [selectedProperty, setSelectedProperty] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedRoom, setSelectedRoom] = useState('all');
+  const [rooms, setRooms] = useState([]);
   const [openDatePicker, setOpenDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -671,6 +673,32 @@ const Reports = () => {
         )}
       </Grid>
 
+      {selectedRoom !== 'all' && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            Filtering by room: {rooms.find(r => r.room_id === selectedRoom)?.name || selectedRoom}
+          </Typography>
+          <Typography variant="body2">
+            Showing: {reportData.tickets.length} tickets, {reportData.requests.length} requests, 
+            {reportData.tasks.length} tasks
+          </Typography>
+        </Alert>
+      )}
+
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Grid container spacing={2}>
+          <Grid item xs={4}>
+            <Typography variant="h6">Tickets: {reportData.tickets.length}</Typography>
+          </Grid>
+          <Grid item xs={4}>
+            <Typography variant="h6">Service Requests: {reportData.requests.length}</Typography>
+          </Grid>
+          <Grid item xs={4}>
+            <Typography variant="h6">Related Tasks: {reportData.tasks.length}</Typography>
+          </Grid>
+        </Grid>
+      </Paper>
+
       <Paper sx={{ width: '100%', mb: 2 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
           <Tab label={`Tickets Report (${reportData.tickets.length})`} />
@@ -797,6 +825,7 @@ const Reports = () => {
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
                       <TableCell>Assigned To</TableCell>
+                      <TableCell>Related To</TableCell>
                       <TableCell>Due Date</TableCell>
                       <TableCell>Related Items</TableCell>
                     </TableRow>

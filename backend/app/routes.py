@@ -1807,7 +1807,11 @@ def task_report():
         'task_id': task.task_id,
         'ticket_id': task.ticket_id,
         'assigned_to_user_id': task.assigned_to_user_id,
-        'status': task.status
+        'status': task.status,
+        # Add ticket_type while maintaining existing fields
+        'ticket_type': task.ticket_type,  # This will be 'ticket' or 'service_request'
+        # Keep backward compatibility by providing type info in multiple formats
+        'is_service_request': task.ticket_type == 'service_request'
     } for task in tasks]
     return jsonify({'tasks': task_data})
 
@@ -3098,6 +3102,7 @@ def create_service_request():
                 task_assignment = TaskAssignment(
                     task_id=task.task_id,
                     ticket_id=new_request.request_id,  # Use request_id as ticket_id
+                    is_service_request=True,
                     assigned_to_user_id=staff.user_id,
                     status='Pending'
                 )
@@ -3203,7 +3208,8 @@ def update_service_request(request_id):
                     service_request.assigned_task.status = 'completed'
                     # Update all task assignments
                     for assignment in TaskAssignment.query.filter_by(task_id=service_request.assigned_task_id).all():
-                        assignment.status = 'Completed'
+                        if assignment.is_service_request:
+                            assignment.status = 'Completed'
 
                     # Send SMS notification to staff members
                     staff_members = User.query.filter_by(
