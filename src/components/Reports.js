@@ -72,8 +72,6 @@ const Reports = () => {
     requests: []
   });
   const [properties, setProperties] = useState([]);
-  const [rooms, setRooms] = useState([]);
-  const [selectedRoom, setSelectedRoom] = useState('');
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedAssignee, setSelectedAssignee] = useState('');
