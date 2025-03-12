@@ -77,6 +77,7 @@ const ViewTasks = () => {
   const [orderBy, setOrderBy] = useState('task_id');
   const [order, setOrder] = useState('asc');
   const [viewMode, setViewMode] = useState('table');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -171,6 +172,8 @@ const ViewTasks = () => {
 
   const handleCreateOrEdit = async () => {
     try {
+      if (isSubmitting) return;
+      
       if (!selectedProperty) {
         setError('Please select a property first');
         return;
@@ -186,6 +189,7 @@ const ViewTasks = () => {
         return;
       }
 
+      setIsSubmitting(true);
       console.log('Creating/Editing task with data:', {
         ...taskForm,
         property_id: selectedProperty
@@ -217,6 +221,8 @@ const ViewTasks = () => {
       console.error('Failed to save task:', error);
       console.error('Error response:', error.response?.data);
       setError(error.response?.data?.msg || error.response?.data?.message || 'Failed to save task');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -783,9 +789,14 @@ const ViewTasks = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleCreateOrEdit} variant="contained" color="primary">
-            {editingTask ? 'Update' : 'Create'}
+          <Button onClick={handleCloseDialog} disabled={isSubmitting}>Cancel</Button>
+          <Button 
+            onClick={handleCreateOrEdit} 
+            variant="contained" 
+            color="primary"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Submitting...' : (editingTask ? 'Update' : 'Create')}
           </Button>
         </DialogActions>
       </Dialog>

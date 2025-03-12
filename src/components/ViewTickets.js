@@ -68,6 +68,7 @@ const ViewTickets = () => {
   const [orderBy, setOrderBy] = useState('ticket_id');
   const [order, setOrder] = useState('asc');
   const [viewMode, setViewMode] = useState('table');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
@@ -113,14 +114,14 @@ const ViewTickets = () => {
   // Check if we're coming from the rooms page with pre-selected room
   useEffect(() => {
     if (location.state?.createTicket) {
-      const { propertyId, roomId, roomName } = location.state;
+      const { propertyId, roomId } = location.state;
       
       // Set the selected property
       if (propertyId) {
         setSelectedProperty(propertyId);
       }
       
-      // Open the create ticket dialog with pre-selected room
+      // Pre-populate form data
       if (roomId) {
         setTicketForm(prev => ({
           ...prev,
@@ -128,11 +129,14 @@ const ViewTickets = () => {
           property_id: propertyId
         }));
         
-        // Open the dialog after a short delay to ensure property and rooms are loaded
+        // Open the dialog after a short delay
         setTimeout(() => {
           setOpenDialog(true);
         }, 300);
       }
+      
+      // Clear location state immediately
+      window.history.replaceState({}, document.title);
     }
   }, [location.state]);
 
@@ -261,6 +265,8 @@ const ViewTickets = () => {
 
   const handleCreateOrEdit = async () => {
     try {
+      if (isSubmitting) return; // Prevent multiple submissions
+      
       if (!selectedProperty) {
         setError('Please select a property first');
         return;
@@ -276,6 +282,7 @@ const ViewTickets = () => {
         return;
       }
 
+      setIsSubmitting(true); // Set submitting state
       const ticketData = {
         ...ticketForm,
         property_id: selectedProperty
@@ -302,6 +309,8 @@ const ViewTickets = () => {
       console.error('Failed to save ticket:', error);
       console.error('Error response:', error.response?.data);
       setError(error.response?.data?.msg || error.message || 'Failed to save ticket');
+    } finally {
+      setIsSubmitting(false); // Reset submitting state
     }
   };
 
@@ -841,9 +850,14 @@ const ViewTickets = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleCreateOrEdit} variant="contained" color="primary">
-            {editingTicket ? 'Update' : 'Create'}
+          <Button onClick={handleCloseDialog} disabled={isSubmitting}>Cancel</Button>
+          <Button 
+            onClick={handleCreateOrEdit} 
+            variant="contained" 
+            color="primary"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Submitting...' : (editingTicket ? 'Update' : 'Create')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -38,6 +38,7 @@ const ServiceRequests = () => {
   const [success, setSuccess] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [rooms, setRooms] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [requestForm, setRequestForm] = useState({
     room_id: '',
@@ -109,10 +110,12 @@ const ServiceRequests = () => {
         property_id: propertyId
       }));
       
-      // Clear the navigation state to prevent reopening on refresh
+      // Clear the navigation state immediately
+      navigate(location.pathname, { replace: true });
+      
+      // Open dialog after a short delay to ensure state is set
       setTimeout(() => {
         setOpenDialog(true);
-        navigate(location.pathname, { replace: true });
       }, 100);
     }
   }, [location.state, navigate]);
@@ -146,6 +149,8 @@ const ServiceRequests = () => {
 
   const handleCreateRequest = async () => {
     try {
+      if (isSubmitting) return; // Prevent multiple submissions
+      
       setError(null);
       setSuccess(null);
 
@@ -155,6 +160,7 @@ const ServiceRequests = () => {
         return;
       }
 
+      setIsSubmitting(true); // Set submitting state
       const response = await apiClient.post('/service-requests', requestForm);
       setSuccess('Service request created successfully');
       await fetchRequests();
@@ -163,13 +169,18 @@ const ServiceRequests = () => {
     } catch (error) {
       console.error('Failed to create request:', error);
       setError(error.response?.data?.message || 'Failed to create request');
+    } finally {
+      setIsSubmitting(false); // Reset submitting state
     }
   };
 
   const handleCompleteRequest = async (requestId) => {
     try {
+      if (isSubmitting) return; // Prevent multiple submissions
+      
       setError(null);
       setSuccess(null);
+      setIsSubmitting(true); // Set submitting state
 
       await apiClient.patch(`/service-requests/${requestId}`, {
         status: 'completed'
@@ -180,6 +191,8 @@ const ServiceRequests = () => {
     } catch (error) {
       console.error('Failed to update request:', error);
       setError(error.response?.data?.message || 'Failed to update request');
+    } finally {
+      setIsSubmitting(false); // Reset submitting state
     }
   };
 
@@ -319,8 +332,9 @@ const ServiceRequests = () => {
                       color="success"
                       variant="contained"
                       size="small"
+                      disabled={isSubmitting}
                     >
-                      Mark Complete
+                      {isSubmitting ? 'Processing...' : 'Mark Complete'}
                     </Button>
                   </CardActions>
                 )}
@@ -431,9 +445,14 @@ const ServiceRequests = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-          <Button onClick={handleCreateRequest} variant="contained" color="primary">
-            Create Request
+          <Button onClick={() => setOpenDialog(false)} disabled={isSubmitting}>Cancel</Button>
+          <Button 
+            onClick={handleCreateRequest} 
+            variant="contained" 
+            color="primary"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Creating...' : 'Create Request'}
           </Button>
         </DialogActions>
       </Dialog>
