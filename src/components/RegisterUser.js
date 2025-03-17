@@ -8,7 +8,9 @@ import {
   Snackbar,
   Alert,
   Link,
-  Paper
+  Paper,
+  FormControlLabel,
+  Checkbox
 } from "@mui/material";
 import apiClient from "./apiClient";
 
@@ -18,6 +20,8 @@ const RegisterUser = ({ isAdminRegistration = false }) => {
     username: "",
     email: "",
     password: "",
+    phone: "",
+    consentToSms: false,
     role: isAdminRegistration ? "super_admin" : "user"
   });
   const [loading, setLoading] = useState(false);
@@ -55,6 +59,13 @@ const RegisterUser = ({ isAdminRegistration = false }) => {
         return;
       }
 
+      // Validate phone number if provided
+      if (formData.phone && !formData.phone.match(/^\+?[1-9]\d{1,14}$/)) {
+        setError("Please enter a valid phone number in international format (e.g., +1234567890)");
+        setLoading(false);
+        return;
+      }
+
       // Register user
       const response = await apiClient.post("/register", formData);
       console.log('Registration response:', response.data);
@@ -66,6 +77,8 @@ const RegisterUser = ({ isAdminRegistration = false }) => {
         username: "",
         email: "",
         password: "",
+        phone: "",
+        consentToSms: false,
         role: isAdminRegistration ? "super_admin" : "user"
       });
 
@@ -131,12 +144,37 @@ const RegisterUser = ({ isAdminRegistration = false }) => {
             required
             disabled={loading}
           />
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Phone Number"
+            placeholder="+1234567890"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            disabled={loading}
+          />
+          
+          <FormControlLabel 
+            control={
+              <Checkbox 
+                checked={formData.consentToSms}
+                onChange={(e) => setFormData({ ...formData, consentToSms: e.target.checked })}
+                disabled={loading || !formData.phone}
+              />
+            } 
+            label="I agree to receive SMS notifications" 
+            sx={{ mt: 1, display: 'block' }}
+          />
+          
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, mb: 2 }}>
+            Standard message and data rates may apply. You can opt out at any time.
+          </Typography>
           
           <Button
             type="submit"
             variant="contained"
             fullWidth
-            sx={{ mt: 3, mb: 2 }}
+            sx={{ mt: 1, mb: 2 }}
             disabled={loading}
           >
             {loading ? "Registering..." : "Register"}
