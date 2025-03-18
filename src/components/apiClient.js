@@ -83,8 +83,13 @@ apiClient.interceptors.response.use(
       }
       return Promise.reject(error);
     } else if (error.request) {
-      console.error('Network error:', error);
-      throw new Error('Network error. Please check your connection.');
+      // Handle network errors and timeouts more gracefully
+      if (error.code === 'ECONNABORTED') {
+        console.log('Request timeout:', error.message);
+      } else {
+        console.log('Network issue:', error.message);
+      }
+      return Promise.reject(error);
     }
     return Promise.reject(error);
   }
