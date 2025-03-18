@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from "./apiClient"; 
 import {
@@ -30,7 +30,9 @@ import {
   Card,
   CardContent,
   CardActions,
-  TableSortLabel
+  TableSortLabel,
+  ToggleButton,
+  ToggleButtonGroup
 } from "@mui/material";
 import { useAuth } from '../context/AuthContext';
 import EditIcon from '@mui/icons-material/Edit';
@@ -49,6 +51,10 @@ import CloseIcon from '@mui/icons-material/Close';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import TableViewIcon from '@mui/icons-material/TableView';
 import KanbanBoard from './TasksKanbanBoard';
+import ArchiveIcon from '@mui/icons-material/Archive';
+import UnarchiveIcon from '@mui/icons-material/Unarchive';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import RestoreIcon from '@mui/icons-material/Restore';
 
 const ViewTasks = () => {
   const navigate = useNavigate();
@@ -78,6 +84,7 @@ const ViewTasks = () => {
   const [order, setOrder] = useState('asc');
   const [viewMode, setViewMode] = useState('table');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -384,6 +391,26 @@ const ViewTasks = () => {
     });
   };
 
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => {
+      const isCompleted = task.status.toLowerCase() === 'completed';
+      return showCompleted ? isCompleted : !isCompleted;
+    });
+  }, [tasks, showCompleted]);
+
+  const handleArchiveTask = async (taskId) => {
+    try {
+      await apiClient.patch(`/tasks/${taskId}`, { 
+        status: 'completed',
+        archived_at: new Date().toISOString()
+      });
+      await fetchTasks();
+      setMessage('Task archived successfully');
+    } catch (error) {
+      setError('Failed to archive task');
+    }
+  };
+
   const TaskCard = ({ task }) => (
     <Card sx={{ mb: 2 }}>
       <CardContent>
@@ -456,27 +483,58 @@ const ViewTasks = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">Tasks</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h5">
+            {showCompleted ? 'Completed Tasks' : 'Active Tasks'}
+          </Typography>
+          <ToggleButtonGroup
+            value={showCompleted}
+            exclusive
+            onChange={(e, value) => setShowCompleted(value)}
+            size="small"
+          >
+            <ToggleButton value={false}>
+              <Tooltip title="View Active Tasks">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AssignmentIcon />
+                  Active
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value={true}>
+              <Tooltip title="View Completed Tasks">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CheckCircleIcon />
+                  Completed
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<ImportExportIcon />}
-            onClick={() => setOpenImportDialog(true)}
-            disabled={!selectedProperty}
-          >
-            Import from Ticket
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-            disabled={!selectedProperty}
-          >
-            Create Task
-          </Button>
+          {!showCompleted && (
+            <>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<ImportExportIcon />}
+                onClick={() => setOpenImportDialog(true)}
+                disabled={!selectedProperty}
+              >
+                Import from Ticket
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenDialog()}
+                disabled={!selectedProperty}
+              >
+                Create Task
+              </Button>
+            </>
+          )}
           <Tooltip title={viewMode === 'table' ? 'Switch to Kanban View' : 'Switch to Table View'}>
             <IconButton onClick={() => setViewMode(viewMode === 'table' ? 'kanban' : 'table')}>
               {viewMode === 'table' ? <ViewWeekIcon /> : <TableViewIcon />}
@@ -507,7 +565,7 @@ const ViewTasks = () => {
         <>
           {viewMode === 'kanban' ? (
             <KanbanBoard
-              tasks={tasks}
+              tasks={filteredTasks}
               users={users}
               onTaskMove={handleStatusChange}
               onEditTask={handleOpenDialog}
@@ -516,7 +574,7 @@ const ViewTasks = () => {
             />
           ) : isMobile ? (
             <Box sx={{ mt: 2 }}>
-              {tasks.map((task) => (
+              {filteredTasks.map((task) => (
                 <TaskCard key={task.task_id} task={task} />
               ))}
             </Box>
@@ -601,7 +659,7 @@ const ViewTasks = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {sortTasks(tasks).map((task) => (
+                  {sortTasks(filteredTasks).map((task) => (
                     <TableRow key={task.task_id}>
                       <TableCell>{task.task_id}</TableCell>
                       <TableCell>{task.title}</TableCell>
@@ -643,22 +701,43 @@ const ViewTasks = () => {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Button
-                            startIcon={<EditIcon />}
-                            onClick={() => handleOpenDialog(task)}
-                            size="small"
-                          >
-                            Edit
-                          </Button>
-                          {(auth?.user?.role === 'super_admin' || 
-                            managers.some(m => m.user_id === auth?.user?.user_id)) && (
+                          {!showCompleted ? (
+                            <>
+                              <Button
+                                startIcon={<EditIcon />}
+                                onClick={() => handleOpenDialog(task)}
+                                size="small"
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                startIcon={<CheckCircleIcon />}
+                                onClick={() => handleStatusChange(task.task_id, 'completed')}
+                                size="small"
+                                color="success"
+                              >
+                                Mark Complete
+                              </Button>
+                              {(auth?.user?.role === 'super_admin' || 
+                                managers.some(m => m.user_id === auth?.user?.user_id)) && (
+                                <Button
+                                  startIcon={<DeleteIcon />}
+                                  onClick={() => handleDeleteTask(task.task_id)}
+                                  size="small"
+                                  color="error"
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </>
+                          ) : (
                             <Button
-                              startIcon={<DeleteIcon />}
-                              onClick={() => handleDeleteTask(task.task_id)}
+                              startIcon={<RestoreIcon />}
+                              onClick={() => handleStatusChange(task.task_id, 'pending')}
                               size="small"
-                              color="error"
+                              color="primary"
                             >
-                              Delete
+                              Reopen
                             </Button>
                           )}
                         </Box>
