@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useAuth } from '../context/AuthContext';
 import apiClient from "./apiClient";
 import { useLocation } from "react-router-dom";
@@ -31,7 +31,9 @@ import {
   CardActions,
   Grid,
   TableSortLabel,
-  Tooltip
+  Tooltip,
+  ToggleButtonGroup,
+  ToggleButton
 } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -42,6 +44,11 @@ import CloseIcon from '@mui/icons-material/Close';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import TableViewIcon from '@mui/icons-material/TableView';
 import TicketKanbanBoard from './TicketKanbanBoard';
+import ArchiveIcon from '@mui/icons-material/Archive';
+import UnarchiveIcon from '@mui/icons-material/Unarchive';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import RestoreIcon from '@mui/icons-material/Restore';
 
 const ViewTickets = () => {
   const { auth } = useAuth();
@@ -69,6 +76,7 @@ const ViewTickets = () => {
   const [order, setOrder] = useState('asc');
   const [viewMode, setViewMode] = useState('table');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
@@ -430,6 +438,13 @@ const ViewTickets = () => {
     });
   };
 
+  const filteredTickets = useMemo(() => {
+    return tickets.filter(ticket => {
+      const isCompleted = ticket.status.toLowerCase() === 'completed';
+      return showCompleted ? isCompleted : !isCompleted;
+    });
+  }, [tickets, showCompleted]);
+
   const TicketCard = ({ ticket }) => (
     <Card sx={{ mb: 2 }}>
       <CardContent>
@@ -522,18 +537,47 @@ const ViewTickets = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">Tickets</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h5">
+            {showCompleted ? 'Completed Tickets' : 'Active Tickets'}
+          </Typography>
+          <ToggleButtonGroup
+            value={showCompleted}
+            exclusive
+            onChange={(e, value) => setShowCompleted(value)}
+            size="small"
+          >
+            <ToggleButton value={false}>
+              <Tooltip title="View Active Tickets">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AssignmentIcon />
+                  Active
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value={true}>
+              <Tooltip title="View Completed Tickets">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CheckCircleIcon />
+                  Completed
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-            disabled={!selectedProperty}
-          >
-            Create Ticket
-          </Button>
+          {!showCompleted && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+              disabled={!selectedProperty}
+            >
+              Create Ticket
+            </Button>
+          )}
           <Tooltip title={viewMode === 'table' ? 'Switch to Kanban View' : 'Switch to Table View'}>
             <IconButton onClick={() => setViewMode(viewMode === 'table' ? 'kanban' : 'table')}>
               {viewMode === 'table' ? <ViewWeekIcon /> : <TableViewIcon />}
@@ -564,7 +608,7 @@ const ViewTickets = () => {
         <>
           {viewMode === 'kanban' ? (
             <TicketKanbanBoard
-              tickets={tickets}
+              tickets={filteredTickets}
               onTicketMove={(ticketId, newStatus) => handleStatusChange(ticketId, newStatus)}
               onEditTicket={handleOpenDialog}
               onDeleteTicket={handleDeleteTicket}
@@ -572,7 +616,7 @@ const ViewTickets = () => {
             />
           ) : isMobile ? (
             <Box sx={{ mt: 2 }}>
-              {tickets.map((ticket) => (
+              {filteredTickets.map((ticket) => (
                 <TicketCard key={ticket.ticket_id} ticket={ticket} />
               ))}
             </Box>
@@ -675,7 +719,7 @@ const ViewTickets = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {sortTickets(tickets).map((ticket) => (
+                  {sortTickets(filteredTickets).map((ticket) => (
                     <TableRow key={ticket.ticket_id}>
                       <TableCell>{ticket.ticket_id}</TableCell>
                       <TableCell>{ticket.title}</TableCell>
@@ -717,23 +761,44 @@ const ViewTickets = () => {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Button
-                            startIcon={<EditIcon />}
-                            onClick={() => handleOpenDialog(ticket)}
-                            size="small"
-                          >
-                            Edit
-                          </Button>
-                          {(auth?.user?.role === 'super_admin' || 
-                            managers.some(m => m.user_id === auth?.user?.user_id) || 
-                            ticket.created_by_id === auth?.user?.user_id) && (
+                          {!showCompleted ? (
+                            <>
+                              <Button
+                                startIcon={<EditIcon />}
+                                onClick={() => handleOpenDialog(ticket)}
+                                size="small"
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                startIcon={<CheckCircleIcon />}
+                                onClick={() => handleStatusChange(ticket.ticket_id, 'completed')}
+                                size="small"
+                                color="success"
+                              >
+                                Mark Complete
+                              </Button>
+                              {(auth?.user?.role === 'super_admin' || 
+                                managers.some(m => m.user_id === auth?.user?.user_id) || 
+                                ticket.created_by_id === auth?.user?.user_id) && (
+                                <Button
+                                  startIcon={<DeleteIcon />}
+                                  onClick={() => handleDeleteTicket(ticket.ticket_id)}
+                                  size="small"
+                                  color="error"
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </>
+                          ) : (
                             <Button
-                              startIcon={<DeleteIcon />}
-                              onClick={() => handleDeleteTicket(ticket.ticket_id)}
+                              startIcon={<RestoreIcon />}
+                              onClick={() => handleStatusChange(ticket.ticket_id, 'open')}
                               size="small"
-                              color="error"
+                              color="primary"
                             >
-                              Delete
+                              Reopen
                             </Button>
                           )}
                         </Box>
