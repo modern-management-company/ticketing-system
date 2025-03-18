@@ -24,7 +24,9 @@ import {
   TextField,
   Dialog,
   DialogContent,
-  Autocomplete
+  Autocomplete,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -33,6 +35,7 @@ import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import PropertySwitcher from './PropertySwitcher';
+import { Chip } from '@mui/material';
 
 const TabPanel = (props) => {
   const { children, value, index, ...other } = props;
@@ -65,6 +68,7 @@ const Reports = () => {
     requests: []
   });
   const [properties, setProperties] = useState([]);
+  const [hideCompleted, setHideCompleted] = useState(true);
 
   useEffect(() => {
     fetchProperties();
@@ -110,7 +114,7 @@ const Reports = () => {
     if (selectedProperty && selectedDate) {
       fetchReportData();
     }
-  }, [selectedProperty, selectedDate, selectedRoom]);
+  }, [selectedProperty, selectedDate, selectedRoom, hideCompleted]);
 
   const fetchReportData = async () => {
     try {
@@ -119,7 +123,6 @@ const Reports = () => {
 
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
       
-      // First fetch all data without room filtering
       const [ticketsRes, requestsRes, tasksRes] = await Promise.all([
         apiClient.get(`/properties/${selectedProperty}/tickets?date=${formattedDate}`),
         apiClient.get(`/service-requests?property_id=${selectedProperty}`),
@@ -129,49 +132,41 @@ const Reports = () => {
       let allTickets = ticketsRes.data?.tickets || [];
       let allRequests = requestsRes.data?.requests || [];
       let allTasks = tasksRes.data?.tasks || [];
+
+      // Filter out completed items if hideCompleted is true
+      if (hideCompleted) {
+        allTickets = allTickets.filter(ticket => 
+          ticket.status.toLowerCase() !== 'completed'
+        );
+        allRequests = allRequests.filter(request => 
+          request.status.toLowerCase() !== 'completed'
+        );
+        allTasks = allTasks.filter(task => 
+          task.status.toLowerCase() !== 'completed'
+        );
+      }
       
-      console.log('Raw data fetched:', {
-        tickets: allTickets,
-        requests: allRequests,
-        tasks: allTasks
-      });
-      
-      // Apply client-side filtering if a room is selected
+      // Apply room filtering if a specific room is selected
       if (selectedRoom !== 'all') {
-        console.log('Filtering by room:', selectedRoom);
+        allTickets = allTickets.filter(ticket => 
+          ticket.room_id === selectedRoom || 
+          ticket.room?.room_id === selectedRoom ||
+          ticket.room_number === selectedRoom
+        );
         
-        // Filter tickets by room
-        allTickets = allTickets.filter(ticket => {
-          // Check common room ID fields - adjust based on your actual data structure
-          return ticket.room_id === selectedRoom || 
-                 ticket.room?.room_id === selectedRoom ||
-                 ticket.room_number === selectedRoom;
-        });
+        allRequests = allRequests.filter(request => 
+          request.room_id === selectedRoom || 
+          request.room?.room_id === selectedRoom ||
+          request.room_number === selectedRoom
+        );
         
-        // Filter service requests by room
-        allRequests = allRequests.filter(request => {
-          // Check common room ID fields - adjust based on your actual data structure
-          return request.room_id === selectedRoom || 
-                 request.room?.room_id === selectedRoom ||
-                 request.room_number === selectedRoom;
-        });
-        
-        console.log('Filtered tickets and requests:', {
-          filteredTickets: allTickets,
-          filteredRequests: allRequests
-        });
-        
-        // Filter tasks based on their relation to filtered tickets and requests
         const ticketIds = new Set(allTickets.map(t => t.ticket_id));
         const requestIds = new Set(allRequests.map(r => r.request_id));
         
-        // Keep only tasks related to the filtered tickets/requests
-        allTasks = allTasks.filter(task => {
-          return (task.ticket_id && ticketIds.has(task.ticket_id)) ||
-                 (task.request_id && requestIds.has(task.request_id));
-        });
-        
-        console.log('Filtered tasks:', allTasks);
+        allTasks = allTasks.filter(task => 
+          (task.ticket_id && ticketIds.has(task.ticket_id)) ||
+          (task.request_id && requestIds.has(task.request_id))
+        );
       }
 
       setReportData({
@@ -265,10 +260,10 @@ const Reports = () => {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <PropertySwitcher onPropertyChange={setSelectedProperty} />
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <LocalizationProvider dateAdapter={AdapterDateFns}>
             <TextField
               fullWidth
@@ -292,7 +287,7 @@ const Reports = () => {
           </LocalizationProvider>
         </Grid>
         
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <FormControl fullWidth>
             <InputLabel>Filter by Room</InputLabel>
             <Select
@@ -310,30 +305,67 @@ const Reports = () => {
             </Select>
           </FormControl>
         </Grid>
+
+        <Grid item xs={12} md={3}>
+          <Paper sx={{ p: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={hideCompleted}
+                  onChange={(e) => setHideCompleted(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label="Hide Completed Items"
+            />
+          </Paper>
+        </Grid>
       </Grid>
 
-      {selectedRoom !== 'all' && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          <Typography variant="body2">
-            Filtering by room: {rooms.find(r => r.room_id === selectedRoom)?.name || selectedRoom}
-          </Typography>
-          <Typography variant="body2">
-            Showing: {reportData.tickets.length} tickets, {reportData.requests.length} requests, 
-            {reportData.tasks.length} tasks
-          </Typography>
-        </Alert>
-      )}
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <Typography variant="subtitle2" color="textSecondary">
+              Active Filters:
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+              {selectedRoom !== 'all' && (
+                <Chip
+                  label={`Room: ${rooms.find(r => r.room_id === selectedRoom)?.name || selectedRoom}`}
+                  onDelete={() => setSelectedRoom('all')}
+                  color="primary"
+                  variant="outlined"
+                />
+              )}
+              {hideCompleted && (
+                <Chip
+                  label="Hiding Completed Items"
+                  onDelete={() => setHideCompleted(false)}
+                  color="primary"
+                  variant="outlined"
+                />
+              )}
+            </Box>
+          </Grid>
+        </Grid>
+      </Paper>
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2}>
           <Grid item xs={4}>
-            <Typography variant="h6">Tickets: {reportData.tickets.length}</Typography>
+            <Typography variant="h6">
+              Active Tickets: {reportData.tickets.length}
+            </Typography>
           </Grid>
           <Grid item xs={4}>
-            <Typography variant="h6">Service Requests: {reportData.requests.length}</Typography>
+            <Typography variant="h6">
+              Active Service Requests: {reportData.requests.length}
+            </Typography>
           </Grid>
           <Grid item xs={4}>
-            <Typography variant="h6">Related Tasks: {reportData.tasks.length}</Typography>
+            <Typography variant="h6">
+              Active Tasks: {reportData.tasks.length}
+            </Typography>
           </Grid>
         </Grid>
       </Paper>
