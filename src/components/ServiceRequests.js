@@ -21,7 +21,8 @@ import {
   Grid,
   Alert,
   CircularProgress,
-  Chip
+  Chip,
+  Autocomplete
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -85,6 +86,21 @@ const ServiceRequests = () => {
     { value: 'high', label: 'High' },
     { value: 'urgent', label: 'Urgent' }
   ];
+
+  const sortRooms = (rooms) => {
+    return [...rooms].sort((a, b) => {
+      const roomA = a.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const roomB = b.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      
+      const numA = parseInt(roomA);
+      const numB = parseInt(roomB);
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+      
+      return roomA.localeCompare(roomB);
+    });
+  };
 
   useEffect(() => {
     if (selectedProperty) {
@@ -353,21 +369,37 @@ const ServiceRequests = () => {
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-            <FormControl fullWidth>
-              <InputLabel>Room</InputLabel>
-              <Select
-                value={requestForm.room_id}
-                onChange={(e) => setRequestForm({ ...requestForm, room_id: e.target.value, property_id: selectedProperty })}
-                label="Room"
-                required
-              >
-                {rooms.map((room) => (
-                  <MenuItem key={room.room_id} value={room.room_id}>
-                    {room.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              options={sortRooms(rooms)}
+              getOptionLabel={(option) => option.name || ''}
+              value={rooms.find(room => room.room_id === requestForm.room_id) || null}
+              onChange={(event, newValue) => {
+                setRequestForm({
+                  ...requestForm,
+                  room_id: newValue?.room_id || '',
+                  property_id: selectedProperty
+                });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Room"
+                  required
+                  error={requestForm.room_id === '' && requestForm.touched}
+                />
+              )}
+              freeSolo
+              autoSelect
+              autoComplete
+              clearOnBlur={false}
+              filterOptions={(options, { inputValue }) => {
+                // Custom filter to match room numbers
+                const filtered = options.filter(option =>
+                  option.name.toLowerCase().includes(inputValue.toLowerCase())
+                );
+                return filtered;
+              }}
+            />
 
             <FormControl fullWidth>
               <InputLabel>Request Group</InputLabel>
