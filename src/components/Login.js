@@ -33,7 +33,7 @@ const Login = () => {
       if (auth?.isAuthenticated && auth?.token) {
         try {
           await apiClient.get('/verify-token');
-          const from = location.state?.from?.pathname || '/';
+          const from = location.state?.from?.pathname || '/home';
           navigate(from, { replace: true });
         } catch (error) {
           console.warn('Token verification failed:', error);
@@ -95,7 +95,7 @@ const Login = () => {
 
       if (response.data && response.data.token) {
         await login(response.data);
-        const from = location.state?.from?.pathname || '/';
+        const from = location.state?.from?.pathname || '/home';
         navigate(from, { replace: true });
       } else {
         throw new Error('Invalid login response');
@@ -123,7 +123,7 @@ const Login = () => {
         position: 'relative',
       }}>
         <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
-          Sign in to Ticketing System
+          Sign in to your account
         </Typography>
         
         {error && (
