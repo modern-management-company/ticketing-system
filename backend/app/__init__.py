@@ -12,7 +12,7 @@ import json
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
-from app.routes import send_daily_reports
+from app.scheduler import send_daily_reports
 
 # Configure logging
 def setup_logging(app):
