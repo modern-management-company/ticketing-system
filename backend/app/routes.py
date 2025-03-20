@@ -1,11 +1,11 @@
-from flask import request, jsonify, current_app
+from flask import request, jsonify, render_template_string
 from app import app, db
 from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest
 from app.services import EmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from collections import defaultdict
 from app.middleware import handle_errors
 from app.decorators import handle_errors
@@ -13,6 +13,7 @@ import logging
 import secrets
 from sqlalchemy import or_
 from app.services.sms_service import SMSService
+import pytz
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -3308,3 +3309,201 @@ def fix_manager_properties():
         db.session.rollback()
         app.logger.error(f"Error fixing manager properties: {str(e)}")
         return jsonify({"msg": f"Error fixing manager properties: {str(e)}"}), 500
+
+# Add this new endpoint
+@app.route('/reports/daily/<int:property_id>', methods=['GET'])
+@jwt_required()
+@handle_errors
+def get_daily_property_report(property_id):
+    today = datetime.now(UTC).date()
+    
+    # Get property details
+    property = Property.query.get_or_404(property_id)
+    
+    # Get all tickets for this property
+    tickets = Ticket.query.filter(
+        Ticket.property_id == property_id,
+        db.or_(
+            # Get open tickets
+            Ticket.status != 'completed',
+            # Get tickets that were closed today
+            db.and_(
+                Ticket.status == 'completed',
+                db.func.date(Ticket.updated_at) == today
+            )
+        )
+    ).all()
+
+    # Get all tasks
+    tasks = Task.query.filter(
+        Task.property_id == property_id,
+        db.or_(
+            Task.status != 'completed',
+            db.and_(
+                Task.status == 'completed',
+                db.func.date(Task.updated_at) == today
+            )
+        )
+    ).all()
+
+    # Get all service requests
+    service_requests = ServiceRequest.query.filter(
+        ServiceRequest.property_id == property_id,
+        db.or_(
+            ServiceRequest.status != 'completed',
+            db.and_(
+                ServiceRequest.status == 'completed',
+                db.func.date(ServiceRequest.completed_at) == today
+            )
+        )
+    ).all()
+
+    report_data = {
+        'property': property.to_dict(),
+        'date': today.strftime('%Y-%m-%d'),
+        'tickets': {
+            'open': [t.to_dict() for t in tickets if t.status != 'completed'],
+            'closed_today': [t.to_dict() for t in tickets if t.status == 'completed' and 
+                           t.updated_at.date() == today]
+        },
+        'tasks': {
+            'open': [t.to_dict() for t in tasks if t.status != 'completed'],
+            'closed_today': [t.to_dict() for t in tasks if t.status == 'completed' and 
+                           t.updated_at.date() == today]
+        },
+        'service_requests': {
+            'open': [r.to_dict() for r in service_requests if r.status != 'completed'],
+            'closed_today': [r.to_dict() for r in service_requests if r.status == 'completed' and 
+                           r.completed_at and r.completed_at.date() == today]
+        }
+    }
+
+    return jsonify(report_data)
+
+# Add a function to send daily reports
+def send_daily_reports():
+    """Send daily reports to executive users for their assigned properties"""
+    try:
+        # Get Eastern timezone
+        eastern = pytz.timezone('America/New_York')
+        current_time = datetime.now(eastern)
+        
+        # Get all active users in Executive group
+        executive_users = User.query.filter_by(
+            is_active=True,
+            group='Executive'
+        ).all()
+        
+        app.logger.info(f"Sending daily reports to {len(executive_users)} executive users")
+        
+        # Create email service instance
+        email_service = EmailService()
+        
+        for user in executive_users:
+            # Get user's assigned properties
+            properties = user.assigned_properties.all()
+            
+            if not properties:
+                app.logger.debug(f"No properties assigned to executive user: {user.username}")
+                continue
+                
+            # Generate reports for each property
+            property_reports = []
+            for property in properties:
+                # Get report data using the endpoint logic
+                report_data = get_daily_property_report(property.property_id)
+                if has_activity(report_data):  # Only include properties with activity
+                    property_reports.append(report_data)
+            
+            if property_reports:
+                # Generate email HTML with executive-focused summary
+                email_html = render_template_string("""
+                    <h2>Executive Daily Property Report - {{ date }}</h2>
+                    
+                    <h3>Summary Across All Properties</h3>
+                    <table style="border-collapse: collapse; width: 100%; margin-bottom: 20px;">
+                        <tr style="background-color: #f2f2f2;">
+                            <th style="border: 1px solid #ddd; padding: 8px;">Property</th>
+                            <th style="border: 1px solid #ddd; padding: 8px;">Open Tickets</th>
+                            <th style="border: 1px solid #ddd; padding: 8px;">Closed Today</th>
+                            <th style="border: 1px solid #ddd; padding: 8px;">Open Tasks</th>
+                            <th style="border: 1px solid #ddd; padding: 8px;">Open Service Requests</th>
+                        </tr>
+                        {% for report in reports %}
+                        <tr>
+                            <td style="border: 1px solid #ddd; padding: 8px;">{{ report.property.name }}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">{{ report.tickets.open|length }}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">{{ report.tickets.closed_today|length }}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">{{ report.tasks.open|length }}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">{{ report.service_requests.open|length }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+
+                    {% for report in reports %}
+                    <div style="margin-bottom: 30px;">
+                        <h3 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
+                            {{ report.property.name }}
+                        </h3>
+                        
+                        <h4 style="color: #e74c3c;">Critical/High Priority Items</h4>
+                        <ul>
+                        {% for ticket in report.tickets.open %}
+                            {% if ticket.priority in ['Critical', 'High'] %}
+                            <li>Ticket: {{ ticket.title }} - {{ ticket.priority }} priority</li>
+                            {% endif %}
+                        {% endfor %}
+                        {% for task in report.tasks.open %}
+                            {% if task.priority in ['Critical', 'High'] %}
+                            <li>Task: {{ task.title }} - Due: {{ task.due_date }}</li>
+                            {% endif %}
+                        {% endfor %}
+                        </ul>
+
+                        <h4 style="color: #2980b9;">Open Items Summary</h4>
+                        <ul>
+                            <li>Tickets: {{ report.tickets.open|length }} open, {{ report.tickets.closed_today|length }} closed today</li>
+                            <li>Tasks: {{ report.tasks.open|length }} open</li>
+                            <li>Service Requests: {{ report.service_requests.open|length }} pending</li>
+                        </ul>
+
+                        {% if report.tickets.closed_today %}
+                        <h4 style="color: #27ae60;">Completed Today</h4>
+                        <ul>
+                        {% for ticket in report.tickets.closed_today %}
+                            <li>{{ ticket.title }}</li>
+                        {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    
+                    <p style="color: #7f8c8d; font-size: 12px;">
+                        This is an automated daily report for executive management.
+                        Generated on {{ date }} Eastern Time.
+                    </p>
+                """, reports=property_reports, 
+                     date=current_time.strftime('%Y-%m-%d %I:%M %p'))
+
+                # Update email subject with Eastern Time
+                email_service.send_email(
+                    recipient_email=user.email,
+                    subject=f"Executive Daily Property Report - {current_time.strftime('%Y-%m-%d')}",
+                    html_content=email_html
+                )
+                
+                app.logger.info(f"Daily report sent to executive user: {user.username}")
+
+    except Exception as e:
+        app.logger.error(f"Error sending daily reports: {str(e)}")
+
+def has_activity(report_data):
+    """Check if there's any activity to report"""
+    return (
+        len(report_data['tickets']['open']) > 0 or
+        len(report_data['tickets']['closed_today']) > 0 or
+        len(report_data['tasks']['open']) > 0 or
+        len(report_data['tasks']['closed_today']) > 0 or
+        len(report_data['service_requests']['open']) > 0 or
+        len(report_data['service_requests']['closed_today']) > 0
+    )

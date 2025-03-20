@@ -9,6 +9,10 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 import json
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+import pytz
+from app.routes import send_daily_reports
 
 # Configure logging
 def setup_logging(app):
@@ -139,3 +143,19 @@ from app import routes, models
 with app.app_context():
     db.create_all()
     app.logger.info('Database tables created')
+
+def init_scheduler():
+    scheduler = BackgroundScheduler(timezone=pytz.timezone('America/New_York'))
+    
+    # Schedule daily reports to run at 6 PM Eastern Time
+    scheduler.add_job(
+        send_daily_reports,
+        trigger=CronTrigger(hour=18, minute=0),  # 6 PM Eastern Time
+        id='daily_reports',
+        name='Send daily property reports',
+        replace_existing=True
+    )
+    scheduler.start()
+
+# Add this to your app initialization
+init_scheduler()
