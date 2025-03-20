@@ -1,6 +1,4 @@
 from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager, get_jwt_identity, jwt_required
 from flask_cors import CORS
 from config import Config
@@ -12,6 +10,7 @@ import json
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
+from app.extensions import db, migrate
 from app.scheduler import send_daily_reports
 
 # Configure logging
@@ -64,8 +63,8 @@ CORS(app, resources={
 })
 
 # Initialize extensions
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
+db.init_app(app)
+migrate.init_app(app, db)
 
 # Configure JWT settings
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-this')

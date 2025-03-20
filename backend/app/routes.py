@@ -1,11 +1,11 @@
-from flask import request, jsonify, render_template_string
-from app import app, db
+from flask import request, jsonify
+from app.extensions import app, db
 from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest
 from app.services import EmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta
 from collections import defaultdict
 from app.middleware import handle_errors
 from app.decorators import handle_errors
@@ -13,7 +13,6 @@ import logging
 import secrets
 from sqlalchemy import or_
 from app.services.sms_service import SMSService
-import pytz
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -3309,3 +3308,111 @@ def fix_manager_properties():
         db.session.rollback()
         app.logger.error(f"Error fixing manager properties: {str(e)}")
         return jsonify({"msg": f"Error fixing manager properties: {str(e)}"}), 500
+
+@app.route('/api/reports/send-email', methods=['POST'])
+@jwt_required()
+def send_report_email():
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        
+        if not current_user:
+            return jsonify({'error': 'User not found'}), 404
+            
+        data = request.get_json()
+        property_id = data.get('property_id')
+        date = data.get('date')
+        report_type = data.get('type')  # 'tickets', 'tasks', or 'requests'
+        
+        if not all([property_id, date, report_type]):
+            return jsonify({'error': 'Missing required parameters'}), 400
+            
+        # Get the report data
+        report_data = get_daily_property_report(property_id)
+        
+        # Create HTML email template
+        html_template = """
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .header { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
+                .section { margin-bottom: 30px; }
+                .section-title { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+                .item { margin: 10px 0; padding: 10px; background-color: #fff; border: 1px solid #eee; border-radius: 4px; }
+                .critical { border-left: 4px solid #dc3545; }
+                .high { border-left: 4px solid #fd7e14; }
+                .medium { border-left: 4px solid #ffc107; }
+                .low { border-left: 4px solid #28a745; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>{report_type.title()} Report - {date}</h2>
+            </div>
+            
+            <div class="section">
+                <h3 class="section-title">{property_name}</h3>
+                
+                <h4>Open {report_type.title()} ({len(items)})</h4>
+                {items_html}
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Generate items HTML based on report type
+        items = []
+        items_html = ""
+        if report_type == 'tickets':
+            items = report_data['open_tickets']
+            items_html = ''.join(f'''
+            <div class="item {item['priority'].lower()}">
+                <strong>{item['title']}</strong><br>
+                Priority: {item['priority']}<br>
+                Category: {item['category']}<br>
+                Status: {item['status']}
+            </div>
+            ''' for item in items)
+        elif report_type == 'tasks':
+            items = report_data['open_tasks']
+            items_html = ''.join(f'''
+            <div class="item {item['priority'].lower()}">
+                <strong>{item['title']}</strong><br>
+                Priority: {item['priority']}<br>
+                Status: {item['status']}<br>
+                Due Date: {item['due_date']}
+            </div>
+            ''' for item in items)
+        elif report_type == 'requests':
+            items = report_data['open_service_requests']
+            items_html = ''.join(f'''
+            <div class="item {item['priority'].lower()}">
+                <strong>{item['request_type']}</strong><br>
+                Priority: {item['priority']}<br>
+                Status: {item['status']}<br>
+                Guest: {item['guest_name']}
+            </div>
+            ''' for item in items)
+            
+        # Format the email content
+        email_content = html_template.format(
+            report_type=report_type,
+            date=date,
+            property_name=report_data['property_name'],
+            items=items,
+            items_html=items_html
+        )
+        
+        # Send the email
+        email_service = EmailService()
+        subject = f"{report_type.title()} Report - {report_data['property_name']} - {date}"
+        
+        if email_service.send_email(current_user.email, subject, email_content):
+            return jsonify({'message': 'Report sent successfully'})
+        else:
+            return jsonify({'error': 'Failed to send report email'}), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Error sending report email: {str(e)}")
+        return jsonify({'error': 'Failed to send report email'}), 500

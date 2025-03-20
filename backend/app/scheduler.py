@@ -1,8 +1,9 @@
 from datetime import datetime, UTC
 from app.models import User, Property, Ticket, Task, ServiceRequest
 from app.services.email_service import EmailService
-from app import db
+from app.extensions import db
 import logging
+import pytz
 
 def has_activity(report_data):
     """Check if there is any activity to report"""
@@ -89,16 +90,16 @@ def send_daily_reports():
         
         for user in executive_users:
             try:
-                # Get all properties assigned to this user
-                user_properties = UserProperty.query.filter_by(user_id=user.user_id).all()
+                # Get all properties assigned to this user using the relationship
+                user_properties = user.assigned_properties.all()
                 
                 if not user_properties:
                     continue
                 
                 # Generate reports for each property
                 property_reports = []
-                for up in user_properties:
-                    report_data = get_daily_property_report(up.property_id)
+                for property in user_properties:
+                    report_data = get_daily_property_report(property.property_id)
                     if has_activity(report_data):
                         property_reports.append(report_data)
                 
