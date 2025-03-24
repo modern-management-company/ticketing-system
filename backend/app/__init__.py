@@ -144,17 +144,28 @@ with app.app_context():
     app.logger.info('Database tables created')
 
 def init_scheduler():
-    scheduler = BackgroundScheduler(timezone=pytz.timezone('America/New_York'))
-    
-    # Schedule daily reports to run at 6 PM Eastern Time
-    scheduler.add_job(
-        send_daily_reports,
-        trigger=CronTrigger(hour=18, minute=0),  # 6 PM Eastern Time
-        id='daily_reports',
-        name='Send daily property reports',
-        replace_existing=True
-    )
-    scheduler.start()
+    try:
+        scheduler = BackgroundScheduler(timezone=pytz.timezone('America/New_York'))
+        
+        # Schedule daily reports to run at 6 PM Eastern Time
+        scheduler.add_job(
+            send_daily_reports,
+            trigger=CronTrigger(hour=18, minute=0),  # 6 PM Eastern Time
+            id='daily_reports',
+            name='Send daily property reports',
+            replace_existing=True,
+            misfire_grace_time=3600  # Allow job to run up to 1 hour late if server was down
+        )
+        
+        scheduler.start()
+        app.logger.info("Scheduler started successfully. Daily reports will run at 6 PM Eastern Time.")
+        app.logger.info("Next run time: %s", 
+            scheduler.get_job('daily_reports').next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z"))
+            
+    except Exception as e:
+        app.logger.error(f"Failed to initialize scheduler: {str(e)}")
+        # Re-raise the exception to ensure the error is noticed
+        raise
 
 # Add this to your app initialization
 init_scheduler()

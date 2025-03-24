@@ -1,5 +1,6 @@
 from flask import request, jsonify
-from app.extensions import app, db
+from app import app
+from app.extensions import db
 from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest
 from app.services import EmailService, EmailTestService
 import os
@@ -3313,106 +3314,135 @@ def fix_manager_properties():
 @jwt_required()
 def send_report_email():
     try:
-        current_user_id = get_jwt_identity()
-        current_user = User.query.get(current_user_id)
-        
-        if not current_user:
-            return jsonify({'error': 'User not found'}), 404
-            
         data = request.get_json()
-        property_id = data.get('property_id')
-        date = data.get('date')
-        report_type = data.get('type')  # 'tickets', 'tasks', or 'requests'
-        
-        if not all([property_id, date, report_type]):
-            return jsonify({'error': 'Missing required parameters'}), 400
-            
-        # Get the report data
-        report_data = get_daily_property_report(property_id)
-        
-        # Create HTML email template
-        html_template = """
+        if not data:
+            return jsonify({"msg": "No input data provided"}), 400
+
+        # Validate required fields
+        required_fields = ['property_id', 'date', 'type']
+        if not all(field in data for field in required_fields):
+            return jsonify({"msg": "Missing required fields"}), 400
+
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+
+        # Get property
+        property = Property.query.get(data['property_id'])
+        if not property:
+            return jsonify({"msg": "Property not found"}), 404
+
+        # Get report data based on type
+        report_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        report_type = data['type']
+
+        # Get the data using the same endpoints as the frontend
+        if report_type == 'tickets':
+            tickets = Ticket.query.filter_by(property_id=data['property_id']).all()
+            items = []
+            for t in tickets:
+                creator = User.query.get(t.user_id)
+                items.append({
+                    'id': t.ticket_id,
+                    'title': t.title,
+                    'room': t.room_name if hasattr(t, 'room_name') else 'N/A',
+                    'status': t.status,
+                    'priority': t.priority,
+                    'created_by': creator.username if creator else 'Unknown',
+                    'created_at': t.created_at.strftime('%m/%d/%Y %H:%M')
+                })
+        elif report_type == 'tasks':
+            tasks = Task.query.filter_by(property_id=data['property_id']).all()
+            items = []
+            for t in tasks:
+                assigned_user = User.query.get(t.assigned_to_id) if t.assigned_to_id else None
+                items.append({
+                    'id': t.task_id,
+                    'title': t.title,
+                    'status': t.status,
+                    'priority': t.priority,
+                    'assigned_to': assigned_user.username if assigned_user else 'Unassigned',
+                    'due_date': t.due_date.strftime('%m/%d/%Y') if t.due_date else 'No due date'
+                })
+        elif report_type == 'requests':
+            requests = ServiceRequest.query.filter_by(property_id=data['property_id']).all()
+            items = [{
+                'id': r.request_id,
+                'type': r.request_type,
+                'room': r.room_number or 'N/A',
+                'group': r.request_group,
+                'status': r.status,
+                'priority': r.priority,
+                'guest': r.guest_name or 'N/A',
+                'created_at': r.created_at.strftime('%m/%d/%Y %H:%M')
+            } for r in requests]
+        else:
+            return jsonify({"msg": "Invalid report type"}), 400
+
+        # Generate HTML email content
+        html_content = f"""
         <html>
         <head>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .header { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
-                .section { margin-bottom: 30px; }
-                .section-title { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-                .item { margin: 10px 0; padding: 10px; background-color: #fff; border: 1px solid #eee; border-radius: 4px; }
-                .critical { border-left: 4px solid #dc3545; }
-                .high { border-left: 4px solid #fd7e14; }
-                .medium { border-left: 4px solid #ffc107; }
-                .low { border-left: 4px solid #28a745; }
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+                th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+                th {{ background-color: #f8f9fa; }}
+                .critical {{ color: #dc3545; }}
+                .high {{ color: #fd7e14; }}
+                .medium {{ color: #ffc107; }}
+                .low {{ color: #28a745; }}
             </style>
         </head>
         <body>
             <div class="header">
-                <h2>{report_type.title()} Report - {date}</h2>
+                <h2>{report_type.capitalize()} Report - {property.name}</h2>
+                <p>Date: {report_date.strftime('%B %d, %Y')}</p>
             </div>
             
-            <div class="section">
-                <h3 class="section-title">{property_name}</h3>
-                
-                <h4>Open {report_type.title()} ({len(items)})</h4>
-                {items_html}
-            </div>
+            <table>
+                <thead>
+                    <tr>
+                        {''.join(f'<th>{key.replace('_', ' ').title()}</th>' for key in items[0].keys() if key != 'id')}
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(f'''
+                    <tr>
+                        {''.join(f'<td class="{item["priority"].lower()}">{value}</td>' for key, value in item.items() if key != 'id')}
+                    </tr>
+                    ''' for item in items)}
+                </tbody>
+            </table>
         </body>
         </html>
         """
-        
-        # Generate items HTML based on report type
-        items = []
-        items_html = ""
-        if report_type == 'tickets':
-            items = report_data['open_tickets']
-            items_html = ''.join(f'''
-            <div class="item {item['priority'].lower()}">
-                <strong>{item['title']}</strong><br>
-                Priority: {item['priority']}<br>
-                Category: {item['category']}<br>
-                Status: {item['status']}
-            </div>
-            ''' for item in items)
-        elif report_type == 'tasks':
-            items = report_data['open_tasks']
-            items_html = ''.join(f'''
-            <div class="item {item['priority'].lower()}">
-                <strong>{item['title']}</strong><br>
-                Priority: {item['priority']}<br>
-                Status: {item['status']}<br>
-                Due Date: {item['due_date']}
-            </div>
-            ''' for item in items)
-        elif report_type == 'requests':
-            items = report_data['open_service_requests']
-            items_html = ''.join(f'''
-            <div class="item {item['priority'].lower()}">
-                <strong>{item['request_type']}</strong><br>
-                Priority: {item['priority']}<br>
-                Status: {item['status']}<br>
-                Guest: {item['guest_name']}
-            </div>
-            ''' for item in items)
-            
-        # Format the email content
-        email_content = html_template.format(
-            report_type=report_type,
-            date=date,
-            property_name=report_data['property_name'],
-            items=items,
-            items_html=items_html
-        )
-        
-        # Send the email
+
+        # Send email
         email_service = EmailService()
-        subject = f"{report_type.title()} Report - {report_data['property_name']} - {date}"
-        
-        if email_service.send_email(current_user.email, subject, email_content):
-            return jsonify({'message': 'Report sent successfully'})
+        success = email_service.send_report_email(
+            to_email=current_user.email,
+            subject=f"{report_type.capitalize()} Report - {property.name}",
+            content=html_content,
+            is_html=True
+        )
+
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "Report sent successfully"
+            }), 200
         else:
-            return jsonify({'error': 'Failed to send report email'}), 500
-            
+            return jsonify({
+                "success": False,
+                "message": "Failed to send report email"
+            }), 500
+
     except Exception as e:
-        current_app.logger.error(f"Error sending report email: {str(e)}")
-        return jsonify({'error': 'Failed to send report email'}), 500
+        app.logger.error(f"Error sending report email: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": "Internal server error"
+        }), 500

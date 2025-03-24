@@ -255,27 +255,24 @@ const Reports = () => {
 
   const handleSendEmail = async () => {
     try {
-      const response = await fetch('/api/reports/send-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          property_id: selectedProperty,
-          date: selectedDate,
-          type: reportType
-        })
+      setLoading(true);
+      const response = await apiClient.post('/api/reports/send-email', {
+        property_id: selectedProperty,
+        date: format(selectedDate, 'yyyy-MM-dd'),
+        type: reportType
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to send report email');
+      if (response.data && response.data.success) {
+        toast.success('Report sent to your email successfully');
+      } else {
+        throw new Error(response.data?.message || 'Failed to send report email');
       }
-
-      // Show success message
-      toast.success('Report sent to your email successfully');
     } catch (error) {
       console.error('Error sending report email:', error);
-      toast.error('Failed to send report email');
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to send report email';
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -412,7 +409,7 @@ const Reports = () => {
         ) : (
           <>
             <TabPanel value={tabValue} index={0}>
-              <Box sx={{ mb: 2 }}>
+              <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
                 <Button
                   variant="contained"
                   onClick={() => {
@@ -422,6 +419,14 @@ const Reports = () => {
                   disabled={!reportData.tickets.length}
                 >
                   Generate PDF
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleSendEmail}
+                  disabled={!reportData.tickets.length || loading}
+                >
+                  {loading ? 'Sending...' : 'Send to Email'}
                 </Button>
               </Box>
               <TableContainer>
@@ -457,7 +462,7 @@ const Reports = () => {
             </TabPanel>
 
             <TabPanel value={tabValue} index={1}>
-              <Box sx={{ mb: 2 }}>
+              <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
                 <Button
                   variant="contained"
                   onClick={() => {
@@ -467,6 +472,14 @@ const Reports = () => {
                   disabled={!reportData.tasks.length}
                 >
                   Generate PDF
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleSendEmail}
+                  disabled={!reportData.tasks.length || loading}
+                >
+                  {loading ? 'Sending...' : 'Send to Email'}
                 </Button>
               </Box>
               <TableContainer>
@@ -510,7 +523,7 @@ const Reports = () => {
             </TabPanel>
 
             <TabPanel value={tabValue} index={2}>
-              <Box sx={{ mb: 2 }}>
+              <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
                 <Button
                   variant="contained"
                   onClick={() => {
@@ -520,6 +533,14 @@ const Reports = () => {
                   disabled={!reportData.requests.length}
                 >
                   Generate PDF
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleSendEmail}
+                  disabled={!reportData.requests.length || loading}
+                >
+                  {loading ? 'Sending...' : 'Send to Email'}
                 </Button>
               </Box>
               <TableContainer>
@@ -558,16 +579,6 @@ const Reports = () => {
           </>
         )}
       </Paper>
-
-      <div className="report-actions">
-        <button 
-          onClick={handleSendEmail} 
-          className="btn btn-secondary ms-2"
-          disabled={!reportData}
-        >
-          Send to Email
-        </button>
-      </div>
     </Box>
   );
 };

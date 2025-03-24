@@ -57,7 +57,7 @@ def get_daily_property_report(property_id):
             # Get service requests that were completed today
             db.and_(
                 ServiceRequest.status == 'completed',
-                db.func.date(ServiceRequest.updated_at) == today
+                db.func.date(ServiceRequest.created_at) == today  # Using created_at instead of updated_at
             )
         )
     ).all()
@@ -69,8 +69,20 @@ def get_daily_property_report(property_id):
         'closed_tickets_today': [ticket.to_dict() for ticket in tickets if ticket.status == 'completed' and ticket.updated_at.date() == today],
         'open_tasks': [task.to_dict() for task in tasks if task.status != 'completed'],
         'closed_tasks_today': [task.to_dict() for task in tasks if task.status == 'completed' and task.updated_at.date() == today],
-        'open_service_requests': [sr.to_dict() for sr in service_requests if sr.status != 'completed'],
-        'completed_service_requests_today': [sr.to_dict() for sr in service_requests if sr.status == 'completed' and sr.updated_at.date() == today]
+        'open_service_requests': [{
+            'title': sr.request_type,  # Use request_type as title
+            'priority': sr.priority,
+            'status': sr.status,
+            'category': sr.request_group,  # Use request_group as category
+            'room_name': sr.room.name if sr.room else 'N/A'
+        } for sr in service_requests if sr.status != 'completed'],
+        'completed_service_requests_today': [{
+            'title': sr.request_type,  # Use request_type as title
+            'priority': sr.priority,
+            'status': sr.status,
+            'category': sr.request_group,  # Use request_group as category
+            'room_name': sr.room.name if sr.room else 'N/A'
+        } for sr in service_requests if sr.status == 'completed' and sr.created_at.date() == today]
     }
 
     return report_data
@@ -111,16 +123,16 @@ def send_daily_reports():
                 <html>
                 <head>
                     <style>
-                        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                        .header { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
-                        .section { margin-bottom: 30px; }
-                        .section-title { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-                        .item { margin: 10px 0; padding: 10px; background-color: #fff; border: 1px solid #eee; border-radius: 4px; }
-                        .critical { border-left: 4px solid #dc3545; }
-                        .high { border-left: 4px solid #fd7e14; }
-                        .medium { border-left: 4px solid #ffc107; }
-                        .low { border-left: 4px solid #28a745; }
-                        .summary { background-color: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+                        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                        .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
+                        .section {{ margin-bottom: 30px; }}
+                        .section-title {{ color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
+                        .item {{ margin: 10px 0; padding: 10px; background-color: #fff; border: 1px solid #eee; border-radius: 4px; }}
+                        .critical {{ border-left: 4px solid #dc3545; }}
+                        .high {{ border-left: 4px solid #fd7e14; }}
+                        .medium {{ border-left: 4px solid #ffc107; }}
+                        .low {{ border-left: 4px solid #28a745; }}
+                        .summary {{ background-color: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
                     </style>
                 </head>
                 <body>
@@ -177,7 +189,8 @@ def send_daily_reports():
                         <div class="item {sr['priority'].lower()}">
                             <strong>{sr['title']}</strong><br>
                             Priority: {sr['priority']}<br>
-                            Status: {sr['status']}
+                            Status: {sr['status']}<br>
+                            Room: {sr['room_name']}
                         </div>
                         ''' for sr in report['open_service_requests'])}
                     </div>
@@ -195,7 +208,7 @@ def send_daily_reports():
                 
                 # Send the email
                 email_service.send_email(
-                    to_email=user.email,
+                    recipient_email=user.email,
                     subject=f"Daily Property Report - {current_time.strftime('%B %d, %Y')}",
                     html_content=html_content
                 )
