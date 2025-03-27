@@ -385,19 +385,31 @@ const ServiceRequests = () => {
                   {...params}
                   label="Room"
                   required
-                  error={requestForm.room_id === '' && requestForm.touched}
+                  error={!requestForm.room_id}
                 />
               )}
-              freeSolo
+              isOptionEqualToValue={(option, value) => option.room_id === value.room_id}
+              freeSolo={false}
               autoSelect
               autoComplete
               clearOnBlur={false}
               filterOptions={(options, { inputValue }) => {
-                // Custom filter to match room numbers
-                const filtered = options.filter(option =>
-                  option.name.toLowerCase().includes(inputValue.toLowerCase())
-                );
-                return filtered;
+                // Extract numbers from input and room names
+                const inputNumber = parseInt(inputValue);
+                const isInputNumber = !isNaN(inputNumber);
+                
+                return options.filter(option => {
+                  const roomName = option.name.toLowerCase();
+                  const roomNumber = parseInt(roomName.replace(/[^0-9]/g, ''));
+                  
+                  // If input is a number, match exact number or full room number
+                  if (isInputNumber) {
+                    return roomNumber === inputNumber || roomName.includes(inputValue);
+                  }
+                  
+                  // For non-numeric input, do normal text matching
+                  return roomName.includes(inputValue.toLowerCase());
+                });
               }}
             />
 

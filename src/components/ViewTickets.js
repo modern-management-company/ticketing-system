@@ -885,10 +885,12 @@ const ViewTickets = () => {
                 <TextField
                   {...params}
                   label="Room"
-                  fullWidth
+                  required
+                  error={!ticketForm.room_id}
                 />
               )}
-              freeSolo
+              isOptionEqualToValue={(option, value) => option.room_id === value.room_id}
+              freeSolo={false}
               autoSelect
               autoComplete
               clearOnBlur={false}
