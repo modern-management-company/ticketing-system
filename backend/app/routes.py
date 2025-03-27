@@ -2204,6 +2204,15 @@ def get_dashboard_stats():
         
         # Get tasks with filters
         tasks = Task.query.filter(*task_filters).all()
+        
+        # Get service requests
+        service_request_filters = []
+        if property_id:
+            service_request_filters.append(ServiceRequest.property_id == property_id)
+        elif current_user['role'] == 'manager' and 'managed_property_ids' in locals():
+            service_request_filters.append(ServiceRequest.property_id.in_(managed_property_ids))
+            
+        service_requests = ServiceRequest.query.filter(*service_request_filters).all()
 
         # Calculate total properties based on role
         if current_user['role'] == 'super_admin':
@@ -2227,12 +2236,19 @@ def get_dashboard_stats():
         for ticket in tickets:
             status_counts[ticket.status] += 1
             priority_counts[ticket.priority] += 1
-            if ticket.status == 'Completed' and hasattr(ticket, 'completed_at') and ticket.completed_at:
-                delta = ticket.completed_at - ticket.created_at
+            if ticket.status == 'completed' and hasattr(ticket, 'updated_at') and ticket.updated_at:
+                delta = ticket.updated_at - ticket.created_at
                 resolution_times.append(delta.total_seconds() / 3600)
 
-        # Calculate task statistics
-        active_tasks = len([t for t in tasks if t.status != 'Completed'])
+        # Calculate open tickets: status is not "completed"
+        open_tickets = len([t for t in tickets if t.status.lower() != 'completed'])
+        
+        # Calculate active tasks: status is not "completed"
+        active_tasks = len([t for t in tasks if t.status.lower() != 'completed'])
+        
+        # Calculate open service requests: status is not "completed"
+        open_requests = len([r for r in service_requests if r.status.lower() != 'completed'])
+        
         total_tasks = len(tasks)
         completed_tasks = total_tasks - active_tasks
 
@@ -2249,8 +2265,9 @@ def get_dashboard_stats():
             total_rooms = Room.query.filter(Room.property_id.in_(property_ids)).count()
 
         return jsonify({
-            'openTickets': status_counts.get('Open', 0),
+            'openTickets': open_tickets,
             'activeTasks': active_tasks,
+            'openRequests': open_requests,
             'completedTasks': completed_tasks,
             'totalTasks': total_tasks,
             'resolutionRate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2),
