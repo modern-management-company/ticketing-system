@@ -126,7 +126,21 @@ const ViewTasks = () => {
       console.log('Managers response:', managersResponse.data);
 
       if (tasksResponse.data?.tasks) {
-        setTasks(tasksResponse.data.tasks);
+        // Enhance tasks with ticket room information
+        const enhancedTasks = tasksResponse.data.tasks.map(task => {
+          const associatedTicket = ticketsResponse.data?.tickets?.find(
+            ticket => ticket.ticket_id === task.ticket_id
+          );
+          return {
+            ...task,
+            room_info: associatedTicket ? {
+              room_id: associatedTicket.room_id,
+              room_name: associatedTicket.room_name,
+              ticket_id: associatedTicket.ticket_id
+            } : null
+          };
+        });
+        setTasks(enhancedTasks);
       } else {
         console.warn('No tasks data in response');
         setTasks([]);
@@ -365,8 +379,11 @@ const ViewTasks = () => {
       let aValue = a[orderBy];
       let bValue = b[orderBy];
 
-      // Special handling for nested values
-      if (orderBy === 'assigned_to') {
+      // Special handling for room sorting
+      if (orderBy === 'room_name') {
+        aValue = a.room_info?.room_name || '';
+        bValue = b.room_info?.room_name || '';
+      } else if (orderBy === 'assigned_to') {
         aValue = users.find(u => u.user_id === a.assigned_to_id)?.username || '';
         bValue = users.find(u => u.user_id === b.assigned_to_id)?.username || '';
       } else if (orderBy === 'group') {
@@ -443,6 +460,21 @@ const ViewTasks = () => {
         </Grid>
 
         <Grid container spacing={1}>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Room</Typography>
+            {task.room_info ? (
+              <Tooltip title={`From Ticket #${task.room_info.ticket_id}`}>
+                <Chip 
+                  label={task.room_info.room_name}
+                  size="small"
+                  color="info"
+                  variant="outlined"
+                />
+              </Tooltip>
+            ) : (
+              <Typography variant="body2">N/A</Typography>
+            )}
+          </Grid>
           <Grid item xs={6}>
             <Typography variant="subtitle2">Assigned To</Typography>
             <Typography variant="body2">
@@ -603,11 +635,11 @@ const ViewTasks = () => {
                     </TableCell>
                     <TableCell>
                       <TableSortLabel
-                        active={orderBy === 'description'}
-                        direction={orderBy === 'description' ? order : 'asc'}
-                        onClick={() => handleRequestSort('description')}
+                        active={orderBy === 'room_name'}
+                        direction={orderBy === 'room_name' ? order : 'asc'}
+                        onClick={() => handleRequestSort('room_name')}
                       >
-                        Description
+                        Room
                       </TableSortLabel>
                     </TableCell>
                     <TableCell>
@@ -663,7 +695,20 @@ const ViewTasks = () => {
                     <TableRow key={task.task_id}>
                       <TableCell>{task.task_id}</TableCell>
                       <TableCell>{task.title}</TableCell>
-                      <TableCell>{task.description}</TableCell>
+                      <TableCell>
+                        {task.room_info ? (
+                          <Tooltip title={`From Ticket #${task.room_info.ticket_id}`}>
+                            <Chip 
+                              label={task.room_info.room_name}
+                              size="small"
+                              color="info"
+                              variant="outlined"
+                            />
+                          </Tooltip>
+                        ) : (
+                          'N/A'
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Chip 
                           label={task.status}

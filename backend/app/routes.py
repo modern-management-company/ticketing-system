@@ -1090,44 +1090,52 @@ def manage_task(task_id):
 
 @app.route('/properties/<int:property_id>/tasks', methods=['GET'])
 @jwt_required()
+@handle_errors
 def get_property_tasks(property_id):
     try:
-        current_user = get_user_from_jwt()
-        if not current_user:
-            return jsonify({"msg": "User not found"}), 404
-
-        # Verify access to property
-        if current_user.role == 'user':
-            has_access = any(p.property_id == property_id for p in current_user.assigned_properties)
-            if not has_access:
-                return jsonify({'msg': 'Unauthorized access to property'}), 403
-        elif current_user.role == 'manager':
-            has_access = any(p.property_id == property_id for p in current_user.managed_properties)
-            if not has_access:
-                return jsonify({'msg': 'Unauthorized access to property'}), 403
-
-        # Get tasks based on user role and property
-        tasks = Task.query.filter_by(property_id=property_id)
+        # Get all tasks for the property
+        tasks = Task.query.filter_by(property_id=property_id).all()
         
-        if current_user.role == 'user':
-            # Users only see tasks assigned to them
-            tasks = tasks.filter_by(assigned_to_id=current_user.user_id)
-
-        tasks = tasks.all()
+        # Get all task assignments
+        task_assignments = TaskAssignment.query.filter(
+            TaskAssignment.task_id.in_([task.task_id for task in tasks])
+        ).all()
         
-        # Format tasks with user information
-        task_list = []
+        # Create a mapping of task_id to ticket_id
+        task_ticket_map = {ta.task_id: ta.ticket_id for ta in task_assignments}
+        
+        # Get all relevant tickets
+        ticket_ids = list(set(ta.ticket_id for ta in task_assignments if ta.ticket_id))
+        tickets = Ticket.query.filter(Ticket.ticket_id.in_(ticket_ids)).all()
+        
+        # Create a mapping of ticket_id to room info
+        ticket_room_map = {}
+        for ticket in tickets:
+            if ticket.room_id:
+                room = Room.query.get(ticket.room_id)
+                if room:
+                    ticket_room_map[ticket.ticket_id] = {
+                        'room_id': room.room_id,
+                        'room_name': room.name,
+                        'ticket_id': ticket.ticket_id
+                    }
+
+        # Convert tasks to dictionaries and add room info
+        tasks_data = []
         for task in tasks:
-            assigned_user = User.query.get(task.assigned_to_id) if task.assigned_to_id else None
-            task_data = task.to_dict()
-            task_data['assigned_to'] = assigned_user.username if assigned_user else None
-            task_list.append(task_data)
+            task_dict = task.to_dict()
+            ticket_id = task_ticket_map.get(task.task_id)
+            task_dict['room_info'] = ticket_room_map.get(ticket_id)
+            tasks_data.append(task_dict)
 
-        return jsonify({'tasks': task_list}), 200
+        return jsonify({
+            "tasks": tasks_data,
+            "total": len(tasks_data)
+        }), 200
 
     except Exception as e:
-        app.logger.error(f"Error in get_property_tasks: {str(e)}")
-        return jsonify({"msg": "Internal server error"}), 500
+        app.logger.error(f"Error getting property tasks: {str(e)}")
+        return jsonify({"message": "Failed to get property tasks"}), 500
 
 @app.route('/tasks', methods=['POST'])
 @jwt_required()
@@ -3308,3 +3316,37 @@ def fix_manager_properties():
         db.session.rollback()
         app.logger.error(f"Error fixing manager properties: {str(e)}")
         return jsonify({"msg": f"Error fixing manager properties: {str(e)}"}), 500
+
+# Add this new route to get task details with ticket room info
+@app.route('/tasks/<int:task_id>/details', methods=['GET'])
+@jwt_required()
+def get_task_details(task_id):
+    try:
+        # Get the task
+        task = Task.query.get_or_404(task_id)
+        
+        # Get the task assignment
+        task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
+        
+        # If there's a task assignment, get the ticket and room info
+        room_info = None
+        if task_assignment and task_assignment.ticket_id:
+            ticket = Ticket.query.get(task_assignment.ticket_id)
+            if ticket and ticket.room_id:
+                room = Room.query.get(ticket.room_id)
+                if room:
+                    room_info = {
+                        'room_id': room.room_id,
+                        'room_name': room.name,
+                        'ticket_id': ticket.ticket_id
+                    }
+
+        # Convert task to dictionary and add room info
+        task_data = task.to_dict()
+        task_data['room_info'] = room_info
+
+        return jsonify(task_data), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting task details: {str(e)}")
+        return jsonify({"message": "Failed to get task details"}), 500
