@@ -76,6 +76,8 @@ const ViewRooms = () => {
   const [hidePublicAreas, setHidePublicAreas] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedAmenities, setSelectedAmenities] = useState([]);
 
   const roomTypes = ['Single', 'Double', 'Suite', 'Conference', 'Other'];
   const roomStatuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];
@@ -267,7 +269,11 @@ const ViewRooms = () => {
 
   const filteredRooms = rooms.filter(room => 
     (selectedFloor === 'all' || room.floor === selectedFloor) && 
-    !(hidePublicAreas && room.type?.toLowerCase() === 'public area')
+    !(hidePublicAreas && room.type?.toLowerCase() === 'public area') &&
+    (selectedStatus === 'all' || room.status === selectedStatus) &&
+    (selectedAmenities.length === 0 || 
+      (Array.isArray(room.amenities) && 
+       selectedAmenities.every(amenity => room.amenities.includes(amenity))))
   );
 
   const downloadTemplate = () => {
@@ -403,6 +409,41 @@ const ViewRooms = () => {
             </Select>
           </FormControl>
           
+          <FormControl sx={{ minWidth: 150 }}>
+            <InputLabel>Status</InputLabel>
+            <Select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              label="Status"
+            >
+              <MenuItem value="all">All Statuses</MenuItem>
+              {roomStatuses.map(status => (
+                <MenuItem key={status} value={status}>{status}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          <FormControl sx={{ minWidth: 200 }}>
+            <Autocomplete
+              multiple
+              id="amenities-filter"
+              options={commonAmenities.sort()}
+              value={selectedAmenities}
+              onChange={(event, newValue) => {
+                setSelectedAmenities(newValue);
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Filter by Amenities"
+                  size="small"
+                />
+              )}
+              size="small"
+              sx={{ width: 250 }}
+            />
+          </FormControl>
+          
           <FormControlLabel
             control={
               <Switch
@@ -476,6 +517,16 @@ const ViewRooms = () => {
             <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="subtitle1">
                 Showing {filteredRooms.length} of {rooms.length} rooms
+                {selectedStatus !== 'all' && (
+                  <Typography component="span" color="text.secondary" sx={{ ml: 1 }}>
+                    (Status: {selectedStatus})
+                  </Typography>
+                )}
+                {selectedAmenities.length > 0 && (
+                  <Typography component="span" color="text.secondary" sx={{ ml: 1 }}>
+                    (With amenities: {selectedAmenities.join(', ')})
+                  </Typography>
+                )}
                 {hidePublicAreas && (
                   <Typography component="span" color="text.secondary" sx={{ ml: 1 }}>
                     (Public Areas hidden)
