@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from app.models import User, Property, Ticket, Task, ServiceRequest
 from app.services.email_service import EmailService
 from app.extensions import db
@@ -15,7 +15,7 @@ def has_activity(report_data):
             len(report_data['completed_service_requests_today']) > 0)
 
 def get_daily_property_report(property_id):
-    today = datetime.now(UTC).date()
+    today = datetime.now(timezone.utc).date()
     
     # Get property details
     property = Property.query.get_or_404(property_id)

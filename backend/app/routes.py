@@ -3405,7 +3405,7 @@ def send_report_email():
             <table>
                 <thead>
                     <tr>
-                        {''.join(f'<th>{key.replace('_', ' ').title()}</th>' for key in items[0].keys() if key != 'id')}
+                        {''.join(f'<th>{key.replace("_", " ").title()}</th>' for key in items[0].keys() if key != 'id')}
                     </tr>
                 </thead>
                 <tbody>
