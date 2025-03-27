@@ -1026,6 +1026,36 @@ def manage_task(task_id):
             if 'due_date' in data:
                 task.due_date = datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if data['due_date'] else None
 
+            # Handle ticket_id changes
+            if 'ticket_id' in data:
+                # Get existing task assignment if any
+                task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
+                
+                # If there's a new ticket_id
+                if data['ticket_id']:
+                    # Get the ticket
+                    ticket = Ticket.query.get(data['ticket_id'])
+                    if not ticket:
+                        return jsonify({'msg': 'Ticket not found'}), 404
+                        
+                    # If there's no existing assignment, create one
+                    if not task_assignment:
+                        task_assignment = TaskAssignment(
+                            task_id=task_id,
+                            ticket_id=data['ticket_id'],
+                            assigned_to_user_id=task.assigned_to_id or current_user.user_id,
+                            status=task.status
+                        )
+                        db.session.add(task_assignment)
+                    # If assignment exists but for a different ticket, update it
+                    elif task_assignment.ticket_id != data['ticket_id']:
+                        task_assignment.ticket_id = data['ticket_id']
+                        task_assignment.status = task.status
+                else:
+                    # If ticket_id is null/empty and there's an existing assignment, delete it
+                    if task_assignment:
+                        db.session.delete(task_assignment)
+
             task.updated_at = datetime.utcnow()
             
             try:

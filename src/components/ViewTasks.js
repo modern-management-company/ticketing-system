@@ -946,6 +946,31 @@ const ViewTasks = () => {
                 </DialogContent>
               </Dialog>
             </LocalizationProvider>
+            <FormControl fullWidth>
+              <InputLabel>Linked Ticket</InputLabel>
+              <Select
+                value={taskForm.ticket_id || ''}
+                onChange={(e) => setTaskForm({ ...taskForm, ticket_id: e.target.value ? Number(e.target.value) : null })}
+                label="Linked Ticket"
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {tickets.length > 0 ? (
+                  tickets
+                    .filter(ticket => ticket.status.toLowerCase() !== 'completed' || ticket.ticket_id === taskForm.ticket_id)
+                    .map((ticket) => (
+                      <MenuItem key={ticket.ticket_id} value={ticket.ticket_id}>
+                        #{ticket.ticket_id}: {ticket.title.substring(0, 50)}{ticket.title.length > 50 ? '...' : ''}
+                      </MenuItem>
+                    ))
+                ) : (
+                  <MenuItem disabled>
+                    <em>No tickets available</em>
+                  </MenuItem>
+                )}
+              </Select>
+            </FormControl>
           </Box>
         </DialogContent>
         <DialogActions>
@@ -970,6 +995,9 @@ const ViewTasks = () => {
       >
         <DialogTitle>Import Task from Ticket</DialogTitle>
         <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Only active tickets that haven't been linked to tasks are shown. Completed tickets and tickets that already have associated tasks are filtered out.
+          </Alert>
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
@@ -982,7 +1010,14 @@ const ViewTasks = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {tickets.map((ticket) => (
+                {tickets
+                  .filter(ticket => 
+                    // Filter out completed tickets
+                    ticket.status.toLowerCase() !== 'completed' && 
+                    // Filter out tickets that are already imported (have associated tasks)
+                    !tasks.some(task => task.ticket_id === ticket.ticket_id)
+                  )
+                  .map((ticket) => (
                   <TableRow key={ticket.ticket_id}>
                     <TableCell>{ticket.ticket_id}</TableCell>
                     <TableCell>{ticket.title}</TableCell>
@@ -1014,6 +1049,18 @@ const ViewTasks = () => {
                     </TableCell>
                   </TableRow>
                 ))}
+                {tickets.filter(ticket => 
+                  ticket.status.toLowerCase() !== 'completed' && 
+                  !tasks.some(task => task.ticket_id === ticket.ticket_id)
+                ).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      <Typography variant="body2" color="textSecondary" sx={{ py: 2 }}>
+                        No tickets available for import. All tickets are either completed or already imported.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
