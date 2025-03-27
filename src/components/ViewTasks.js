@@ -75,7 +75,8 @@ const ViewTasks = () => {
     priority: 'Low',
     status: 'pending',
     assigned_to_id: '',
-    due_date: null
+    due_date: null,
+    ticket_id: null
   });
   const [openDueDatePicker, setOpenDueDatePicker] = useState(false);
   const [managers, setManagers] = useState([]);
@@ -121,26 +122,17 @@ const ViewTasks = () => {
       ]);
 
       console.log('Tasks response:', tasksResponse.data);
-      console.log('Users response:', usersResponse.data);
-      console.log('Tickets response:', ticketsResponse.data);
-      console.log('Managers response:', managersResponse.data);
 
       if (tasksResponse.data?.tasks) {
-        // Enhance tasks with ticket room information
-        const enhancedTasks = tasksResponse.data.tasks.map(task => {
-          const associatedTicket = ticketsResponse.data?.tickets?.find(
-            ticket => ticket.ticket_id === task.ticket_id
-          );
-          return {
-            ...task,
-            room_info: associatedTicket ? {
-              room_id: associatedTicket.room_id,
-              room_name: associatedTicket.room_name,
-              ticket_id: associatedTicket.ticket_id
-            } : null
-          };
-        });
-        setTasks(enhancedTasks);
+        // Log task details with ticket and room information
+        console.log('Tasks with ticket info:', tasksResponse.data.tasks.map(task => ({
+          task_id: task.task_id,
+          ticket_id: task.ticket_id,
+          room_info: task.room_info,
+          title: task.title
+        })));
+        
+        setTasks(tasksResponse.data.tasks);
       } else {
         console.warn('No tasks data in response');
         setTasks([]);
@@ -185,7 +177,8 @@ const ViewTasks = () => {
       priority: ticket.priority,
       status: 'pending',
       assigned_to_id: '',
-      ticket_id: ticket.ticket_id
+      ticket_id: ticket.ticket_id,
+      due_date: null
     });
     setOpenImportDialog(false);
     setOpenDialog(true);
@@ -256,7 +249,8 @@ const ViewTasks = () => {
         priority: task.priority,
         status: task.status,
         assigned_to_id: task.assigned_to_id || '',
-        due_date: task.due_date ? new Date(task.due_date) : null
+        due_date: task.due_date ? new Date(task.due_date) : null,
+        ticket_id: task.ticket_id || null
       });
     } else {
       setEditingTask(null);
@@ -266,7 +260,8 @@ const ViewTasks = () => {
         priority: 'Low',
         status: 'pending',
         assigned_to_id: '',
-        due_date: null
+        due_date: null,
+        ticket_id: null
       });
     }
     setOpenDialog(true);
@@ -281,7 +276,8 @@ const ViewTasks = () => {
       priority: 'Low',
       status: 'pending',
       assigned_to_id: '',
-      due_date: null
+      due_date: null,
+      ticket_id: null
     });
   };
 
@@ -392,6 +388,9 @@ const ViewTasks = () => {
       } else if (orderBy === 'due_date') {
         aValue = a.due_date ? new Date(a.due_date).getTime() : 0;
         bValue = b.due_date ? new Date(b.due_date).getTime() : 0;
+      } else if (orderBy === 'ticket_id') {
+        aValue = a.ticket_id || 0;
+        bValue = b.ticket_id || 0;
       }
 
       // Handle string comparison
@@ -469,8 +468,23 @@ const ViewTasks = () => {
                   size="small"
                   color="info"
                   variant="outlined"
+                  onClick={() => task.ticket_id && window.confirm(`View ticket #${task.ticket_id}?`) && navigate(`/tickets/${task.ticket_id}`)}
                 />
               </Tooltip>
+            ) : (
+              <Typography variant="body2">N/A</Typography>
+            )}
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Linked Ticket</Typography>
+            {task.ticket_id ? (
+              <Chip
+                label={`Ticket #${task.ticket_id}`}
+                size="small"
+                color="secondary"
+                variant="outlined"
+                onClick={() => window.confirm(`View ticket #${task.ticket_id}?`) && navigate(`/tickets/${task.ticket_id}`)}
+              />
             ) : (
               <Typography variant="body2">N/A</Typography>
             )}
@@ -644,6 +658,15 @@ const ViewTasks = () => {
                     </TableCell>
                     <TableCell>
                       <TableSortLabel
+                        active={orderBy === 'ticket_id'}
+                        direction={orderBy === 'ticket_id' ? order : 'asc'}
+                        onClick={() => handleRequestSort('ticket_id')}
+                      >
+                        Linked Ticket
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
                         active={orderBy === 'status'}
                         direction={orderBy === 'status' ? order : 'asc'}
                         onClick={() => handleRequestSort('status')}
@@ -705,6 +728,19 @@ const ViewTasks = () => {
                               variant="outlined"
                             />
                           </Tooltip>
+                        ) : (
+                          'N/A'
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {task.ticket_id ? (
+                          <Chip 
+                            label={`Ticket #${task.ticket_id}`}
+                            size="small"
+                            color="secondary"
+                            variant="outlined"
+                            onClick={() => window.confirm(`View ticket #${task.ticket_id}?`) && navigate(`/tickets/${task.ticket_id}`)}
+                          />
                         ) : (
                           'N/A'
                         )}

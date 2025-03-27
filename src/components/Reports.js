@@ -26,7 +26,8 @@ import {
   DialogContent,
   Autocomplete,
   FormControlLabel,
-  Switch
+  Switch,
+  Chip
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -35,7 +36,6 @@ import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import PropertySwitcher from './PropertySwitcher';
-import { Chip } from '@mui/material';
 import { toast } from 'react-hot-toast';
 
 const TabPanel = (props) => {
@@ -125,6 +125,7 @@ const Reports = () => {
 
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
       
+      // Fetch all data without room filtering
       const [ticketsRes, requestsRes, tasksRes] = await Promise.all([
         apiClient.get(`/properties/${selectedProperty}/tickets?date=${formattedDate}`),
         apiClient.get(`/service-requests?property_id=${selectedProperty}`),
@@ -148,27 +149,46 @@ const Reports = () => {
         );
       }
       
-      // Apply room filtering if a specific room is selected
+      console.log('Raw data fetched:', {
+        tickets: allTickets.length,
+        requests: allRequests.length,
+        tasks: allTasks.length
+      });
+      
+      // Apply client-side filtering if a room is selected
       if (selectedRoom !== 'all') {
-        allTickets = allTickets.filter(ticket => 
-          ticket.room_id === selectedRoom || 
-          ticket.room?.room_id === selectedRoom ||
-          ticket.room_number === selectedRoom
-        );
+        console.log('Filtering by room:', selectedRoom);
         
-        allRequests = allRequests.filter(request => 
-          request.room_id === selectedRoom || 
-          request.room?.room_id === selectedRoom ||
-          request.room_number === selectedRoom
-        );
+        // Filter tickets by room
+        allTickets = allTickets.filter(ticket => {
+          return ticket.room_id === selectedRoom || 
+                 ticket.room?.room_id === selectedRoom ||
+                 ticket.room_number === selectedRoom;
+        });
         
+        // Filter service requests by room
+        allRequests = allRequests.filter(request => {
+          return request.room_id === selectedRoom || 
+                 request.room?.room_id === selectedRoom ||
+                 request.room_number === selectedRoom;
+        });
+        
+        console.log('Filtered tickets and requests:', {
+          filteredTickets: allTickets.length,
+          filteredRequests: allRequests.length
+        });
+        
+        // Filter tasks based on their relation to filtered tickets and requests
         const ticketIds = new Set(allTickets.map(t => t.ticket_id));
         const requestIds = new Set(allRequests.map(r => r.request_id));
         
-        allTasks = allTasks.filter(task => 
-          (task.ticket_id && ticketIds.has(task.ticket_id)) ||
-          (task.request_id && requestIds.has(task.request_id))
-        );
+        // Keep only tasks related to the filtered tickets/requests
+        allTasks = allTasks.filter(task => {
+          return (task.ticket_id && ticketIds.has(task.ticket_id)) ||
+                 (task.request_id && requestIds.has(task.request_id));
+        });
+        
+        console.log('Filtered tasks:', allTasks.length);
       }
 
       setReportData({
@@ -216,9 +236,11 @@ const Reports = () => {
         return [
           item.task_id,
           item.title,
+          item.room_info?.room_name || 'N/A',
           item.status,
           item.priority,
           item.assigned_to || 'Unassigned',
+          item.ticket_id ? `Ticket #${item.ticket_id}` : 'None',
           item.due_date ? format(new Date(item.due_date), 'MM/dd/yyyy') : 'No due date'
         ];
       } else if (type === 'requests') {
@@ -238,7 +260,7 @@ const Reports = () => {
     const columns = type === 'tickets' 
       ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Created At']
       : type === 'tasks'
-      ? ['ID', 'Title', 'Status', 'Priority', 'Assigned To', 'Due Date']
+      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Assigned To', 'Linked To', 'Due Date']
       : ['ID', 'Type', 'Room', 'Group', 'Status', 'Priority', 'Guest', 'Created At'];
 
     doc.autoTable({
@@ -488,6 +510,7 @@ const Reports = () => {
                     <TableRow>
                       <TableCell>ID</TableCell>
                       <TableCell>Title</TableCell>
+                      <TableCell>Room</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
                       <TableCell>Assigned To</TableCell>
@@ -500,14 +523,13 @@ const Reports = () => {
                       <TableRow key={task.task_id}>
                         <TableCell>{task.task_id}</TableCell>
                         <TableCell>{task.title}</TableCell>
+                        <TableCell>{task.room_info?.room_name || 'N/A'}</TableCell>
                         <TableCell>{task.status}</TableCell>
                         <TableCell>{task.priority}</TableCell>
                         <TableCell>{task.assigned_to || 'Unassigned'}</TableCell>
                         <TableCell>
-                          {task.related_type === 'ticket' ? (
-                            `Ticket #${task.related_id}`
-                          ) : task.related_type === 'service_request' ? (
-                            `Service Request #${task.related_id}`
+                          {task.ticket_id ? (
+                            `Ticket #${task.ticket_id}`
                           ) : (
                             'None'
                           )}
