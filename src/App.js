@@ -29,6 +29,7 @@ import Reports from './components/Reports';
 import HomeOverview from './components/HomeOverview';
 import EmailSettings from './components/EmailSettings';
 import ServiceRequests from './components/ServiceRequests';
+import Welcome from './components/Welcome';
 
 const App = () => {
   return (
@@ -37,13 +38,40 @@ const App = () => {
       <AuthProvider>
         <Router>
           <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<RegisterUser />} />
+            {/* Welcome page - redirect to /home if authenticated */}
+            <Route path="/" element={
+              <ProtectedRoute requiresAuth={false} redirectTo="/home">
+                <Welcome />
+              </ProtectedRoute>
+            } />
+
+            {/* Public routes - redirect to /home if authenticated */}
+            <Route path="/login" element={
+              <ProtectedRoute requiresAuth={false} redirectTo="/home">
+                <Login />
+              </ProtectedRoute>
+            } />
+            <Route path="/register" element={
+              <ProtectedRoute requiresAuth={false} redirectTo="/home">
+                <RegisterUser />
+              </ProtectedRoute>
+            } />
+            <Route path="/register-admin" element={
+              <ProtectedRoute requiresAuth={false} redirectTo="/home">
+                <RegisterUser isAdminRegistration={true} />
+              </ProtectedRoute>
+            } />
+            
             <Route path="/unauthorized" element={<Unauthorized />} />
             
             {/* Protected routes */}
             <Route element={<Layout />}>
+              <Route path="/home" element={
+                <ProtectedRoute>
+                  <HomeOverview />
+                </ProtectedRoute>
+              } />
+              
               <Route path="/dashboard" element={
                 <ProtectedRoute>
                   <Dashboard />
@@ -97,16 +125,10 @@ const App = () => {
                   </ProtectedRoute>
                 } />
               </Route>
-              
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <HomeOverview />
-                </ProtectedRoute>
-              } />
             </Route>
             
-            {/* Default route */}
-            <Route path="*" element={<Navigate to="/unauthorized" replace />} />
+            {/* Redirect any unknown routes to /home if authenticated, / if not */}
+            <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </Router>
       </AuthProvider>

@@ -26,13 +26,14 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isFirstUser, setIsFirstUser] = useState(false);
+  const [systemStatus, setSystemStatus] = useState('offline');
 
   useEffect(() => {
     const checkAuth = async () => {
       if (auth?.isAuthenticated && auth?.token) {
         try {
           await apiClient.get('/verify-token');
-          const from = location.state?.from?.pathname || '/';
+          const from = location.state?.from?.pathname || '/home';
           navigate(from, { replace: true });
         } catch (error) {
           console.warn('Token verification failed:', error);
@@ -48,11 +49,33 @@ const Login = () => {
         const response = await apiClient.get('/check-first-user');
         setIsFirstUser(response.data.isFirstUser);
       } catch (error) {
-        console.error('Failed to check first user status:', error);
-        setError('Failed to check system status');
+        // Silently handle the error and assume it's not first user
+        setIsFirstUser(false);
+        // Don't set error state here
+        console.debug('First user check failed, assuming not first user');
       }
     };
     checkFirst();
+  }, []);
+
+  useEffect(() => {
+    const checkSystemStatus = async () => {
+      try {
+        await apiClient.get('/ping');
+        setSystemStatus('online');
+      } catch (error) {
+        if (!error.response) {
+          setSystemStatus('offline');
+        } else {
+          setSystemStatus('online');
+        }
+      }
+    };
+    
+    checkSystemStatus();
+    const interval = setInterval(checkSystemStatus, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const handleSubmit = async (e) => {
@@ -72,7 +95,7 @@ const Login = () => {
 
       if (response.data && response.data.token) {
         await login(response.data);
-        const from = location.state?.from?.pathname || '/';
+        const from = location.state?.from?.pathname || '/home';
         navigate(from, { replace: true });
       } else {
         throw new Error('Invalid login response');
@@ -96,9 +119,11 @@ const Login = () => {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
+        minHeight: '100vh',
+        position: 'relative',
       }}>
         <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
-          Sign in to Ticketing System
+          Sign in to your account
         </Typography>
         
         {error && (
@@ -156,6 +181,34 @@ const Login = () => {
               </Grid>
             )}
           </Grid>
+        </Box>
+
+        <Box sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: 2,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: 1,
+          backgroundColor: 'background.paper',
+          borderTop: 1,
+          borderColor: 'divider'
+        }}>
+          <Typography variant="body2">
+            System Status:
+          </Typography>
+          <Box sx={{
+            width: 10,
+            height: 10,
+            borderRadius: '50%',
+            backgroundColor: systemStatus === 'online' ? 'success.main' : 'error.main'
+          }} />
+          <Typography variant="body2" color={systemStatus === 'online' ? 'success.main' : 'error.main'}>
+            {systemStatus === 'online' ? 'Online' : 'Offline'}
+          </Typography>
         </Box>
       </Box>
     </Container>

@@ -604,4 +604,16 @@ class EmailService:
             else:
                 self.logger.error(f"❌ Failed to send user management notification to user {user.email}")
 
-        return successful_sends 
+        return successful_sends
+
+    def send_report_email(self, to_email, subject, content, is_html=False):
+        """Send a report email to a user"""
+        try:
+            self.logger.info(f"Preparing to send report email to {to_email}")
+            self.logger.info(f"Subject: {subject}")
+            
+            return self.send_email(to_email, subject, content)
+            
+        except Exception as e:
+            self.logger.error(f"Error sending report email: {str(e)}")
+            return False 

@@ -33,7 +33,8 @@ import {
   TableSortLabel,
   Tooltip,
   ToggleButtonGroup,
-  ToggleButton
+  ToggleButton,
+  Autocomplete
 } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -445,6 +446,21 @@ const ViewTickets = () => {
     });
   }, [tickets, showCompleted]);
 
+  const sortRooms = (rooms) => {
+    return [...rooms].sort((a, b) => {
+      const roomA = a.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const roomB = b.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      
+      const numA = parseInt(roomA);
+      const numB = parseInt(roomB);
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+      
+      return roomA.localeCompare(roomB);
+    });
+  };
+
   const TicketCard = ({ ticket }) => (
     <Card sx={{ mb: 2 }}>
       <CardContent>
@@ -854,23 +870,38 @@ const ViewTickets = () => {
               fullWidth
               required
             />
-            <FormControl fullWidth>
-              <InputLabel>Room</InputLabel>
-              <Select
-                value={ticketForm.room_id}
-                onChange={(e) => setTicketForm({ ...ticketForm, room_id: e.target.value })}
-                label="Room"
-              >
-                <MenuItem value="">
-                  <em>None</em>
-                </MenuItem>
-                {rooms.map((room) => (
-                  <MenuItem key={room.room_id} value={room.room_id}>
-                    {room.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              options={sortRooms(rooms)}
+              getOptionLabel={(option) => option.name || ''}
+              value={rooms.find(room => room.room_id === ticketForm.room_id) || null}
+              onChange={(event, newValue) => {
+                setTicketForm({
+                  ...ticketForm,
+                  room_id: newValue?.room_id || '',
+                  property_id: selectedProperty
+                });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Room"
+                  required
+                  error={!ticketForm.room_id}
+                />
+              )}
+              isOptionEqualToValue={(option, value) => option.room_id === value.room_id}
+              freeSolo={false}
+              autoSelect
+              autoComplete
+              clearOnBlur={false}
+              filterOptions={(options, { inputValue }) => {
+                // Custom filter to match room numbers
+                const filtered = options.filter(option =>
+                  option.name.toLowerCase().includes(inputValue.toLowerCase())
+                );
+                return filtered;
+              }}
+            />
             <FormControl fullWidth>
               <InputLabel>Priority</InputLabel>
               <Select

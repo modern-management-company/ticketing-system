@@ -1,6 +1,4 @@
 from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager, get_jwt_identity, jwt_required
 from flask_cors import CORS
 from config import Config
@@ -9,6 +7,11 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 import json
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+import pytz
+from app.extensions import db, migrate
+from app.scheduler import send_daily_reports
 
 # Configure logging
 def setup_logging(app):
@@ -60,8 +63,8 @@ CORS(app, resources={
 })
 
 # Initialize extensions
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
+db.init_app(app)
+migrate.init_app(app, db)
 
 # Configure JWT settings
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-this')
@@ -139,3 +142,30 @@ from app import routes, models
 with app.app_context():
     db.create_all()
     app.logger.info('Database tables created')
+
+def init_scheduler():
+    try:
+        scheduler = BackgroundScheduler(timezone=pytz.timezone('America/New_York'))
+        
+        # Schedule daily reports to run at 6 PM Eastern Time
+        scheduler.add_job(
+            send_daily_reports,
+            trigger=CronTrigger(hour=18, minute=0),  # 6 PM Eastern Time
+            id='daily_reports',
+            name='Send daily property reports',
+            replace_existing=True,
+            misfire_grace_time=3600  # Allow job to run up to 1 hour late if server was down
+        )
+        
+        scheduler.start()
+        app.logger.info("Scheduler started successfully. Daily reports will run at 6 PM Eastern Time.")
+        app.logger.info("Next run time: %s", 
+            scheduler.get_job('daily_reports').next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z"))
+            
+    except Exception as e:
+        app.logger.error(f"Failed to initialize scheduler: {str(e)}")
+        # Re-raise the exception to ensure the error is noticed
+        raise
+
+# Add this to your app initialization
+init_scheduler()
