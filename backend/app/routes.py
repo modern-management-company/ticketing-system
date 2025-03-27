@@ -1,5 +1,6 @@
-from flask import request, jsonify, current_app
-from app import app, db
+from flask import request, jsonify
+from app import app
+from app.extensions import db
 from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest
 from app.services import EmailService, EmailTestService
 import os
@@ -3350,3 +3351,139 @@ def get_task_details(task_id):
     except Exception as e:
         app.logger.error(f"Error getting task details: {str(e)}")
         return jsonify({"message": "Failed to get task details"}), 500
+@app.route('/api/reports/send-email', methods=['POST'])
+@jwt_required()
+def send_report_email():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"msg": "No input data provided"}), 400
+
+        # Validate required fields
+        required_fields = ['property_id', 'date', 'type']
+        if not all(field in data for field in required_fields):
+            return jsonify({"msg": "Missing required fields"}), 400
+
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+
+        # Get property
+        property = Property.query.get(data['property_id'])
+        if not property:
+            return jsonify({"msg": "Property not found"}), 404
+
+        # Get report data based on type
+        report_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        report_type = data['type']
+
+        # Get the data using the same endpoints as the frontend
+        if report_type == 'tickets':
+            tickets = Ticket.query.filter_by(property_id=data['property_id']).all()
+            items = []
+            for t in tickets:
+                creator = User.query.get(t.user_id)
+                items.append({
+                    'id': t.ticket_id,
+                    'title': t.title,
+                    'room': t.room_name if hasattr(t, 'room_name') else 'N/A',
+                    'status': t.status,
+                    'priority': t.priority,
+                    'created_by': creator.username if creator else 'Unknown',
+                    'created_at': t.created_at.strftime('%m/%d/%Y %H:%M')
+                })
+        elif report_type == 'tasks':
+            tasks = Task.query.filter_by(property_id=data['property_id']).all()
+            items = []
+            for t in tasks:
+                assigned_user = User.query.get(t.assigned_to_id) if t.assigned_to_id else None
+                items.append({
+                    'id': t.task_id,
+                    'title': t.title,
+                    'status': t.status,
+                    'priority': t.priority,
+                    'assigned_to': assigned_user.username if assigned_user else 'Unassigned',
+                    'due_date': t.due_date.strftime('%m/%d/%Y') if t.due_date else 'No due date'
+                })
+        elif report_type == 'requests':
+            requests = ServiceRequest.query.filter_by(property_id=data['property_id']).all()
+            items = [{
+                'id': r.request_id,
+                'type': r.request_type,
+                'room': r.room_number or 'N/A',
+                'group': r.request_group,
+                'status': r.status,
+                'priority': r.priority,
+                'guest': r.guest_name or 'N/A',
+                'created_at': r.created_at.strftime('%m/%d/%Y %H:%M')
+            } for r in requests]
+        else:
+            return jsonify({"msg": "Invalid report type"}), 400
+
+        # Generate HTML email content
+        html_content = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+                th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+                th {{ background-color: #f8f9fa; }}
+                .critical {{ color: #dc3545; }}
+                .high {{ color: #fd7e14; }}
+                .medium {{ color: #ffc107; }}
+                .low {{ color: #28a745; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>{report_type.capitalize()} Report - {property.name}</h2>
+                <p>Date: {report_date.strftime('%B %d, %Y')}</p>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        {''.join(f'<th>{key.replace("_", " ").title()}</th>' for key in items[0].keys() if key != 'id')}
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(f'''
+                    <tr>
+                        {''.join(f'<td class="{item["priority"].lower()}">{value}</td>' for key, value in item.items() if key != 'id')}
+                    </tr>
+                    ''' for item in items)}
+                </tbody>
+            </table>
+        </body>
+        </html>
+        """
+
+        # Send email
+        email_service = EmailService()
+        success = email_service.send_report_email(
+            to_email=current_user.email,
+            subject=f"{report_type.capitalize()} Report - {property.name}",
+            content=html_content,
+            is_html=True
+        )
+
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "Report sent successfully"
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Failed to send report email"
+            }), 500
+
+    except Exception as e:
+        app.logger.error(f"Error sending report email: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": "Internal server error"
+        }), 500

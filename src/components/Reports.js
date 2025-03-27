@@ -36,6 +36,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import PropertySwitcher from './PropertySwitcher';
 import { Chip } from '@mui/material';
+import { toast } from 'react-hot-toast';
 
 const TabPanel = (props) => {
   const { children, value, index, ...other } = props;
@@ -69,6 +70,7 @@ const Reports = () => {
   });
   const [properties, setProperties] = useState([]);
   const [hideCompleted, setHideCompleted] = useState(true);
+  const [reportType, setReportType] = useState('tickets');
 
   useEffect(() => {
     fetchProperties();
@@ -251,6 +253,29 @@ const Reports = () => {
     doc.save(`${type}_report_${format(selectedDate, 'yyyy-MM-dd')}.pdf`);
   };
 
+  const handleSendEmail = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.post('/api/reports/send-email', {
+        property_id: selectedProperty,
+        date: format(selectedDate, 'yyyy-MM-dd'),
+        type: reportType
+      });
+
+      if (response.data && response.data.success) {
+        toast.success('Report sent to your email successfully');
+      } else {
+        throw new Error(response.data?.message || 'Failed to send report email');
+      }
+    } catch (error) {
+      console.error('Error sending report email:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to send report email';
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box sx={{ width: '100%' }}>
       <Typography variant="h4" gutterBottom>
@@ -384,13 +409,24 @@ const Reports = () => {
         ) : (
           <>
             <TabPanel value={tabValue} index={0}>
-              <Box sx={{ mb: 2 }}>
+              <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
                 <Button
                   variant="contained"
-                  onClick={() => generatePDF('tickets')}
+                  onClick={() => {
+                    generatePDF('tickets');
+                    setReportType('tickets');
+                  }}
                   disabled={!reportData.tickets.length}
                 >
                   Generate PDF
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleSendEmail}
+                  disabled={!reportData.tickets.length || loading}
+                >
+                  {loading ? 'Sending...' : 'Send to Email'}
                 </Button>
               </Box>
               <TableContainer>
@@ -426,13 +462,24 @@ const Reports = () => {
             </TabPanel>
 
             <TabPanel value={tabValue} index={1}>
-              <Box sx={{ mb: 2 }}>
+              <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
                 <Button
                   variant="contained"
-                  onClick={() => generatePDF('tasks')}
+                  onClick={() => {
+                    generatePDF('tasks');
+                    setReportType('tasks');
+                  }}
                   disabled={!reportData.tasks.length}
                 >
                   Generate PDF
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleSendEmail}
+                  disabled={!reportData.tasks.length || loading}
+                >
+                  {loading ? 'Sending...' : 'Send to Email'}
                 </Button>
               </Box>
               <TableContainer>
@@ -476,13 +523,24 @@ const Reports = () => {
             </TabPanel>
 
             <TabPanel value={tabValue} index={2}>
-              <Box sx={{ mb: 2 }}>
+              <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
                 <Button
                   variant="contained"
-                  onClick={() => generatePDF('requests')}
+                  onClick={() => {
+                    generatePDF('requests');
+                    setReportType('requests');
+                  }}
                   disabled={!reportData.requests.length}
                 >
                   Generate PDF
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleSendEmail}
+                  disabled={!reportData.requests.length || loading}
+                >
+                  {loading ? 'Sending...' : 'Send to Email'}
                 </Button>
               </Box>
               <TableContainer>
