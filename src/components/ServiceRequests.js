@@ -22,7 +22,9 @@ import {
   Alert,
   CircularProgress,
   Chip,
-  Autocomplete
+  Autocomplete,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -40,6 +42,7 @@ const ServiceRequests = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hideCompleted, setHideCompleted] = useState(true);
 
   const [requestForm, setRequestForm] = useState({
     room_id: '',
@@ -253,12 +256,26 @@ const ServiceRequests = () => {
     }
   };
 
+  const filteredRequests = hideCompleted 
+    ? requests.filter(request => request.status.toLowerCase() !== 'completed')
+    : requests;
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Service Requests</Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={hideCompleted}
+                onChange={(e) => setHideCompleted(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Hide Completed"
+          />
           <Button
             variant="contained"
             color="primary"
@@ -290,74 +307,96 @@ const ServiceRequests = () => {
           <CircularProgress />
         </Box>
       ) : (
-        <Grid container spacing={2}>
-          {requests.map((request) => (
-            <Grid item xs={12} sm={6} md={4} key={request.request_id}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6">{request.request_type}</Typography>
-                    <Box>
-                      <Chip
-                        label={request.status}
-                        color={getStatusColor(request.status)}
-                        size="small"
-                        sx={{ mr: 1 }}
-                      />
-                      <Chip
-                        label={request.priority}
-                        color={getPriorityColor(request.priority)}
-                        size="small"
-                      />
-                    </Box>
-                  </Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Room: {request.room_number}
-                  </Typography>
-                  <Typography variant="body2" gutterBottom>
-                    Group: {request.request_group}
-                  </Typography>
-                  {request.quantity > 1 && (
-                    <Typography variant="body2" paragraph>
-                      Quantity: {request.quantity}
-                    </Typography>
-                  )}
-                  {request.guest_name && (
-                    <Typography variant="body2" gutterBottom>
-                      Guest: {request.guest_name}
-                    </Typography>
-                  )}
-                  {request.notes && (
-                    <Typography variant="body2" color="textSecondary">
-                      Notes: {request.notes}
-                    </Typography>
-                  )}
-                  <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                    Created: {new Date(request.created_at).toLocaleString()}
-                  </Typography>
-                </CardContent>
-                {request.status !== 'completed' && (
-                  auth?.user?.role === 'super_admin' || 
-                  (auth?.user?.role === 'manager' && auth?.user?.group === request.request_group) ||
-                  (auth?.user?.group === request.request_group)
-                ) && (
-                  <CardActions>
-                    <Button
-                      startIcon={<CheckCircleIcon />}
-                      onClick={() => handleCompleteRequest(request.request_id)}
-                      color="success"
-                      variant="contained"
-                      size="small"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? 'Processing...' : 'Mark Complete'}
-                    </Button>
-                  </CardActions>
-                )}
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+        <>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="subtitle1">
+              Showing {filteredRequests.length} of {requests.length} requests
+              {hideCompleted && requests.length > filteredRequests.length && (
+                <Typography component="span" color="text.secondary" sx={{ ml: 1 }}>
+                  ({requests.length - filteredRequests.length} completed requests hidden)
+                </Typography>
+              )}
+            </Typography>
+          </Box>
+          <Grid container spacing={2}>
+            {filteredRequests.length > 0 ? (
+              filteredRequests.map((request) => (
+                <Grid item xs={12} sm={6} md={4} key={request.request_id}>
+                  <Card>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="h6">{request.request_type}</Typography>
+                        <Box>
+                          <Chip
+                            label={request.status}
+                            color={getStatusColor(request.status)}
+                            size="small"
+                            sx={{ mr: 1 }}
+                          />
+                          <Chip
+                            label={request.priority}
+                            color={getPriorityColor(request.priority)}
+                            size="small"
+                          />
+                        </Box>
+                      </Box>
+                      <Typography color="textSecondary" gutterBottom>
+                        Room: {request.room_number}
+                      </Typography>
+                      <Typography variant="body2" gutterBottom>
+                        Group: {request.request_group}
+                      </Typography>
+                      {request.quantity > 1 && (
+                        <Typography variant="body2" paragraph>
+                          Quantity: {request.quantity}
+                        </Typography>
+                      )}
+                      {request.guest_name && (
+                        <Typography variant="body2" gutterBottom>
+                          Guest: {request.guest_name}
+                        </Typography>
+                      )}
+                      {request.notes && (
+                        <Typography variant="body2" color="textSecondary">
+                          Notes: {request.notes}
+                        </Typography>
+                      )}
+                      <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                        Created: {new Date(request.created_at).toLocaleString()}
+                      </Typography>
+                    </CardContent>
+                    {request.status !== 'completed' && (
+                      auth?.user?.role === 'super_admin' || 
+                      (auth?.user?.role === 'manager' && auth?.user?.group === request.request_group) ||
+                      (auth?.user?.group === request.request_group)
+                    ) && (
+                      <CardActions>
+                        <Button
+                          startIcon={<CheckCircleIcon />}
+                          onClick={() => handleCompleteRequest(request.request_id)}
+                          color="success"
+                          variant="contained"
+                          size="small"
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? 'Processing...' : 'Mark Complete'}
+                        </Button>
+                      </CardActions>
+                    )}
+                  </Card>
+                </Grid>
+              ))
+            ) : (
+              <Grid item xs={12}>
+                <Alert severity="info">
+                  {requests.length > 0 
+                    ? 'All service requests are completed. Uncheck "Hide Completed" to view them.'
+                    : 'No service requests found for this property.'}
+                </Alert>
+              </Grid>
+            )}
+          </Grid>
+        </>
       )}
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
