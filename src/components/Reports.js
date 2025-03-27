@@ -119,7 +119,7 @@ const Reports = () => {
 
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
       
-      // First fetch all data without room filtering
+      // Fetch all data without room filtering
       const [ticketsRes, requestsRes, tasksRes] = await Promise.all([
         apiClient.get(`/properties/${selectedProperty}/tickets?date=${formattedDate}`),
         apiClient.get(`/service-requests?property_id=${selectedProperty}`),
@@ -131,9 +131,9 @@ const Reports = () => {
       let allTasks = tasksRes.data?.tasks || [];
       
       console.log('Raw data fetched:', {
-        tickets: allTickets,
-        requests: allRequests,
-        tasks: allTasks
+        tickets: allTickets.length,
+        requests: allRequests.length,
+        tasks: allTasks.length
       });
       
       // Apply client-side filtering if a room is selected
@@ -142,7 +142,6 @@ const Reports = () => {
         
         // Filter tickets by room
         allTickets = allTickets.filter(ticket => {
-          // Check common room ID fields - adjust based on your actual data structure
           return ticket.room_id === selectedRoom || 
                  ticket.room?.room_id === selectedRoom ||
                  ticket.room_number === selectedRoom;
@@ -150,15 +149,14 @@ const Reports = () => {
         
         // Filter service requests by room
         allRequests = allRequests.filter(request => {
-          // Check common room ID fields - adjust based on your actual data structure
           return request.room_id === selectedRoom || 
                  request.room?.room_id === selectedRoom ||
                  request.room_number === selectedRoom;
         });
         
         console.log('Filtered tickets and requests:', {
-          filteredTickets: allTickets,
-          filteredRequests: allRequests
+          filteredTickets: allTickets.length,
+          filteredRequests: allRequests.length
         });
         
         // Filter tasks based on their relation to filtered tickets and requests
@@ -171,7 +169,7 @@ const Reports = () => {
                  (task.request_id && requestIds.has(task.request_id));
         });
         
-        console.log('Filtered tasks:', allTasks);
+        console.log('Filtered tasks:', allTasks.length);
       }
 
       setReportData({
@@ -219,9 +217,11 @@ const Reports = () => {
         return [
           item.task_id,
           item.title,
+          item.room_info?.room_name || 'N/A',
           item.status,
           item.priority,
           item.assigned_to || 'Unassigned',
+          item.ticket_id ? `Ticket #${item.ticket_id}` : 'None',
           item.due_date ? format(new Date(item.due_date), 'MM/dd/yyyy') : 'No due date'
         ];
       } else if (type === 'requests') {
@@ -241,7 +241,7 @@ const Reports = () => {
     const columns = type === 'tickets' 
       ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Created At']
       : type === 'tasks'
-      ? ['ID', 'Title', 'Status', 'Priority', 'Assigned To', 'Due Date']
+      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Assigned To', 'Linked To', 'Due Date']
       : ['ID', 'Type', 'Room', 'Group', 'Status', 'Priority', 'Guest', 'Created At'];
 
     doc.autoTable({
@@ -409,6 +409,7 @@ const Reports = () => {
                     <TableRow>
                       <TableCell>ID</TableCell>
                       <TableCell>Title</TableCell>
+                      <TableCell>Room</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
                       <TableCell>Assigned To</TableCell>
@@ -421,14 +422,13 @@ const Reports = () => {
                       <TableRow key={task.task_id}>
                         <TableCell>{task.task_id}</TableCell>
                         <TableCell>{task.title}</TableCell>
+                        <TableCell>{task.room_info?.room_name || 'N/A'}</TableCell>
                         <TableCell>{task.status}</TableCell>
                         <TableCell>{task.priority}</TableCell>
                         <TableCell>{task.assigned_to || 'Unassigned'}</TableCell>
                         <TableCell>
-                          {task.related_type === 'ticket' ? (
-                            `Ticket #${task.related_id}`
-                          ) : task.related_type === 'service_request' ? (
-                            `Service Request #${task.related_id}`
+                          {task.ticket_id ? (
+                            `Ticket #${task.ticket_id}`
                           ) : (
                             'None'
                           )}
