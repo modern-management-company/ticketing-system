@@ -483,7 +483,8 @@ const ViewTasks = () => {
                 size="small"
                 color="secondary"
                 variant="outlined"
-                onClick={() => window.confirm(`View ticket #${task.ticket_id}?`) && navigate(`/tickets/${task.ticket_id}`)}
+                onClick={() => navigate(`/tickets/${task.ticket_id}`)}
+                sx={{ cursor: 'pointer' }}
               />
             ) : (
               <Typography variant="body2">N/A</Typography>
@@ -739,7 +740,8 @@ const ViewTasks = () => {
                             size="small"
                             color="secondary"
                             variant="outlined"
-                            onClick={() => window.confirm(`View ticket #${task.ticket_id}?`) && navigate(`/tickets/${task.ticket_id}`)}
+                            onClick={() => navigate(`/tickets/${task.ticket_id}`)}
+                            sx={{ cursor: 'pointer' }}
                           />
                         ) : (
                           'N/A'

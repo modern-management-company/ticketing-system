@@ -22,6 +22,7 @@ import Dashboard from "./components/Dashboard";
 import ManageUsers from './components/ManageUsers';
 import ViewTasks from './components/ViewTasks';
 import ViewTickets from './components/ViewTickets';
+import ViewTicket from './components/ViewTicket';
 import ViewRooms from './components/ViewRooms';
 import PropertyManagement from './components/PropertyManagement';
 import Unauthorized from './components/Unauthorized';
@@ -81,6 +82,12 @@ const App = () => {
               <Route path="/tickets" element={
                 <ProtectedRoute>
                   <ViewTickets />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/tickets/:ticketId" element={
+                <ProtectedRoute>
+                  <ViewTicket />
                 </ProtectedRoute>
               } />
               
