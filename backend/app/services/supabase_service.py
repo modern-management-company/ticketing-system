@@ -3,6 +3,7 @@ from flask import current_app
 import os
 from datetime import datetime
 import uuid
+import logging
 
 class SupabaseService:
     def __init__(self):
@@ -13,10 +14,21 @@ class SupabaseService:
             raise ValueError("Supabase configuration is missing")
         
         try:
-            # Initialize Supabase client without options
-            self.client: Client = create_client(supabase_url, supabase_key)
+            # Log the configuration (without the key)
+            current_app.logger.debug(f"Initializing Supabase client with URL: {supabase_url}")
+            
+            # Create client with minimal configuration
+            self.client = create_client(
+                supabase_url=supabase_url,
+                supabase_key=supabase_key
+            )
+            
             self.bucket_name = current_app.config.get('SUPABASE_BUCKET_NAME', 'ticket-attachments')
+            current_app.logger.debug(f"Supabase client initialized successfully with bucket: {self.bucket_name}")
+            
         except Exception as e:
+            current_app.logger.error(f"Failed to initialize Supabase client: {str(e)}")
+            current_app.logger.error(f"Supabase URL: {supabase_url}")
             raise ValueError(f"Failed to initialize Supabase client: {str(e)}")
 
     def upload_file(self, file, ticket_id: int) -> dict:
@@ -43,6 +55,7 @@ class SupabaseService:
             file_content = file.read()
             
             # Upload the file
+            current_app.logger.debug(f"Uploading file to path: {file_path}")
             result = self.client.storage.from_(self.bucket_name).upload(
                 file_path,
                 file_content,

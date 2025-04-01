@@ -3654,6 +3654,10 @@ def upload_ticket_attachment(ticket_id):
         if file.filename == '':
             return jsonify({'msg': 'No file selected'}), 400
 
+        # Log environment variables (without sensitive data)
+        app.logger.debug(f"Supabase URL: {app.config.get('SUPABASE_URL')}")
+        app.logger.debug(f"Supabase bucket: {app.config.get('SUPABASE_BUCKET_NAME')}")
+
         # Initialize Supabase service
         try:
             supabase_service = SupabaseService()
