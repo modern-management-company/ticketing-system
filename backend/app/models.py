@@ -279,6 +279,11 @@ class EmailSettings(db.Model):
     smtp_password = db.Column(db.String(255), nullable=False)
     sender_email = db.Column(db.String(255), nullable=False)
     enable_email_notifications = db.Column(db.Boolean, default=True)
+    # Scheduler settings
+    daily_report_hour = db.Column(db.Integer, default=18)  # Default to 6 PM
+    daily_report_minute = db.Column(db.Integer, default=0)
+    daily_report_timezone = db.Column(db.String(50), default='America/New_York')
+    enable_daily_reports = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -292,6 +297,10 @@ class EmailSettings(db.Model):
             'smtp_password': self.smtp_password,
             'sender_email': self.sender_email,
             'enable_email_notifications': self.enable_email_notifications,
+            'daily_report_hour': self.daily_report_hour,
+            'daily_report_minute': self.daily_report_minute,
+            'daily_report_timezone': self.daily_report_timezone,
+            'enable_daily_reports': self.enable_daily_reports,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
