@@ -56,6 +56,7 @@ const EmailSettings = () => {
   const [showTestResults, setShowTestResults] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [notificationTestResults, setNotificationTestResults] = useState([]);
+  const [resendingReport, setResendingReport] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -173,6 +174,22 @@ const EmailSettings = () => {
       setError(error.response?.data?.message || 'Failed to run notification tests');
     } finally {
       setTestingEmail(false);
+    }
+  };
+
+  const handleResendReportToExecutives = async () => {
+    try {
+      setError(null);
+      setSuccess(null);
+      setResendingReport(true);
+
+      await apiClient.post('/api/settings/resend-executive-report');
+      setSuccess('Executive reports have been resent successfully');
+    } catch (error) {
+      console.error('Failed to resend executive reports:', error);
+      setError(error.response?.data?.message || 'Failed to resend executive reports');
+    } finally {
+      setResendingReport(false);
     }
   };
 
@@ -367,13 +384,22 @@ const EmailSettings = () => {
               />
             </Grid>
             <Grid item xs={12}>
-              <Box sx={{ mt: 2 }}>
+              <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
                 <Button
                   variant="contained"
                   onClick={handleSave}
                   disabled={loading}
                 >
                   Save Schedule Settings
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={handleResendReportToExecutives}
+                  disabled={resendingReport}
+                  startIcon={<SendIcon />}
+                >
+                  {resendingReport ? 'Resending...' : 'Resend Report to Executives'}
                 </Button>
               </Box>
             </Grid>

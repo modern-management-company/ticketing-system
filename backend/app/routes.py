@@ -3606,3 +3606,25 @@ def send_report_email():
             "success": False,
             "message": "Internal server error"
         }), 500
+
+@app.route('/api/settings/resend-executive-report', methods=['POST'])
+@jwt_required()
+def resend_executive_report():
+    """Resend daily reports to all executive users"""
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can resend reports'}), 403
+
+        # Import the send_daily_reports function
+        from app.scheduler import send_daily_reports
+        
+        # Call the function to send reports
+        send_daily_reports()
+        
+        return jsonify({'message': 'Executive reports have been resent successfully'}), 200
+
+    except Exception as e:
+        app.logger.error(f"Error in resend_executive_report: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
