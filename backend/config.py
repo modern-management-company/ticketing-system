@@ -30,6 +30,11 @@ class Config:
     UPLOAD_FOLDER = 'uploads'
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     
+    # Supabase configuration
+    SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+    SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '')
+    SUPABASE_BUCKET_NAME = os.environ.get('SUPABASE_BUCKET_NAME', 'ticket-attachments')
+    
     # Logging configuration
     LOG_TO_STDOUT = os.environ.get('LOG_TO_STDOUT')
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
