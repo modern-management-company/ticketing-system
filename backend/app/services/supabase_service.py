@@ -17,11 +17,8 @@ class SupabaseService:
             # Log the configuration (without the key)
             current_app.logger.debug(f"Initializing Supabase client with URL: {supabase_url}")
             
-            # Create client with minimal configuration
-            self.client = create_client(
-                supabase_url=supabase_url,
-                supabase_key=supabase_key
-            )
+            # Create client following official documentation
+            self.client: Client = create_client(supabase_url, supabase_key)
             
             self.bucket_name = current_app.config.get('SUPABASE_BUCKET_NAME', 'ticket-attachments')
             current_app.logger.debug(f"Supabase client initialized successfully with bucket: {self.bucket_name}")
@@ -54,7 +51,7 @@ class SupabaseService:
             # Read file content
             file_content = file.read()
             
-            # Upload the file
+            # Upload the file following official documentation
             current_app.logger.debug(f"Uploading file to path: {file_path}")
             result = self.client.storage.from_(self.bucket_name).upload(
                 file_path,
@@ -88,6 +85,7 @@ class SupabaseService:
             bool: True if deletion was successful, False otherwise
         """
         try:
+            # Delete file following official documentation
             self.client.storage.from_(self.bucket_name).remove([file_path])
             return True
         except Exception as e:
