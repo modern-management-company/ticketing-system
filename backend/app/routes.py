@@ -3655,10 +3655,18 @@ def upload_ticket_attachment(ticket_id):
             return jsonify({'msg': 'No file selected'}), 400
 
         # Initialize Supabase service
-        supabase_service = SupabaseService()
+        try:
+            supabase_service = SupabaseService()
+        except ValueError as e:
+            app.logger.error(f"Supabase configuration error: {str(e)}")
+            return jsonify({'msg': 'Storage service configuration error'}), 500
 
         # Upload file to Supabase
-        file_info = supabase_service.upload_file(file, ticket_id)
+        try:
+            file_info = supabase_service.upload_file(file, ticket_id)
+        except Exception as e:
+            app.logger.error(f"Error uploading file to Supabase: {str(e)}")
+            return jsonify({'msg': 'Failed to upload file to storage'}), 500
 
         # Create attachment record in database
         attachment = TicketAttachment(

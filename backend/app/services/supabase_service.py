@@ -6,11 +6,26 @@ import uuid
 
 class SupabaseService:
     def __init__(self):
-        self.supabase: Client = create_client(
-            current_app.config['SUPABASE_URL'],
-            current_app.config['SUPABASE_KEY']
-        )
-        self.bucket_name = current_app.config['SUPABASE_BUCKET_NAME']
+        supabase_url = current_app.config.get('SUPABASE_URL')
+        supabase_key = current_app.config.get('SUPABASE_KEY')
+        
+        if not supabase_url or not supabase_key:
+            raise ValueError("Supabase configuration is missing")
+        
+        try:
+            self.client: Client = create_client(
+                supabase_url,
+                supabase_key,
+                options={
+                    'auth': {
+                        'autoRefreshToken': True,
+                        'persistSession': True
+                    }
+                }
+            )
+            self.bucket_name = current_app.config.get('SUPABASE_BUCKET_NAME', 'ticket-attachments')
+        except Exception as e:
+            raise ValueError(f"Failed to initialize Supabase client: {str(e)}")
 
     def upload_file(self, file, ticket_id: int) -> dict:
         """
@@ -28,19 +43,19 @@ class SupabaseService:
             file_extension = os.path.splitext(file.filename)[1]
             unique_filename = f"{uuid.uuid4()}{file_extension}"
             
-            # Create a path that includes the ticket ID and timestamp
-            timestamp = datetime.utcnow().strftime('%Y/%m/%d')
-            file_path = f"{ticket_id}/{timestamp}/{unique_filename}"
+            # Create a path structure: ticket_id/year/month/day/filename
+            now = datetime.utcnow()
+            file_path = f"{ticket_id}/{now.year}/{now.month:02d}/{now.day:02d}/{unique_filename}"
             
-            # Upload the file to Supabase
-            self.supabase.storage.from_(self.bucket_name).upload(
+            # Upload the file
+            result = self.client.storage.from_(self.bucket_name).upload(
                 file_path,
                 file.read(),
                 file.content_type
             )
             
-            # Get the public URL for the file
-            file_url = self.supabase.storage.from_(self.bucket_name).get_public_url(file_path)
+            # Get the public URL
+            file_url = self.client.storage.from_(self.bucket_name).get_public_url(file_path)
             
             return {
                 'file_name': file.filename,
@@ -65,7 +80,7 @@ class SupabaseService:
             bool: True if deletion was successful, False otherwise
         """
         try:
-            self.supabase.storage.from_(self.bucket_name).remove([file_path])
+            self.client.storage.from_(self.bucket_name).remove([file_path])
             return True
         except Exception as e:
             current_app.logger.error(f"Error deleting file from Supabase: {str(e)}")
@@ -82,7 +97,7 @@ class SupabaseService:
             str: Public URL for the file
         """
         try:
-            return self.supabase.storage.from_(self.bucket_name).get_public_url(file_path)
+            return self.client.storage.from_(self.bucket_name).get_public_url(file_path)
         except Exception as e:
             current_app.logger.error(f"Error getting file URL from Supabase: {str(e)}")
             raise 
