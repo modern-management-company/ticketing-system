@@ -3629,6 +3629,7 @@ def resend_executive_report():
     except Exception as e:
         app.logger.error(f"Error in resend_executive_report: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
 @app.route('/tickets/<int:ticket_id>/attachments', methods=['POST'])
 @jwt_required()
 def upload_ticket_attachment(ticket_id):
