@@ -1025,6 +1025,10 @@ def manage_task(task_id):
                     task_assignment.assigned_to_user_id = data['assigned_to_id']
             if 'due_date' in data:
                 task.due_date = datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if data['due_date'] else None
+            if 'time_spent' in data:
+                task.time_spent = float(data['time_spent']) if data.get('time_spent') else None
+            if 'cost' in data:
+                task.cost = float(data['cost']) if data.get('cost') else None
 
             # Handle ticket_id changes
             if 'ticket_id' in data:
@@ -1235,7 +1239,9 @@ def create_task():
             property_id=data['property_id'],
             status=data.get('status', 'pending'),
             assigned_to_id=data.get('assigned_to_id'),
-            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None
+            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None,
+            time_spent=float(data.get('time_spent')) if data.get('time_spent') else None,
+            cost=float(data.get('cost')) if data.get('cost') else None
         )
         db.session.add(task)
         db.session.flush()  # Flush to get the task_id
@@ -2319,7 +2325,11 @@ def get_system_settings():
                 'smtp_username': os.getenv('SMTP_USERNAME', 'modernmanagementhotels@gmail.com'),
                 'smtp_password': '',
                 'sender_email': os.getenv('SENDER_EMAIL', 'modernmanagementhotels@gmail.com'),
-                'enable_email_notifications': True
+                'enable_email_notifications': True,
+                'daily_report_hour': 18,
+                'daily_report_minute': 0,
+                'daily_report_timezone': 'America/New_York',
+                'enable_daily_reports': True
             })
 
         return jsonify(settings.to_dict())
@@ -2355,8 +2365,24 @@ def update_system_settings():
             settings.smtp_password = data.get('smtp_password')
         settings.sender_email = data.get('sender_email', settings.sender_email)
         settings.enable_email_notifications = data.get('enable_email_notifications', settings.enable_email_notifications)
+        
+        # Update scheduler settings
+        settings.daily_report_hour = data.get('daily_report_hour', settings.daily_report_hour)
+        settings.daily_report_minute = data.get('daily_report_minute', settings.daily_report_minute)
+        settings.daily_report_timezone = data.get('daily_report_timezone', settings.daily_report_timezone)
+        settings.enable_daily_reports = data.get('enable_daily_reports', settings.enable_daily_reports)
 
         db.session.commit()
+
+        # Update the scheduler job if it exists
+        from app import scheduler
+        if hasattr(scheduler, 'update_daily_report_schedule'):
+            scheduler.update_daily_report_schedule(
+                hour=settings.daily_report_hour,
+                minute=settings.daily_report_minute,
+                timezone=settings.daily_report_timezone,
+                enabled=settings.enable_daily_reports
+            )
 
         # Return updated settings
         return jsonify(settings.to_dict())

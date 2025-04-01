@@ -189,6 +189,7 @@ class Ticket(db.Model):
     room_id = db.Column(db.Integer, db.ForeignKey('rooms.room_id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)  # When the ticket was completed
 
     def to_dict(self):
         """Convert ticket object to dictionary"""
@@ -210,6 +211,7 @@ class Ticket(db.Model):
             'created_by_group': creator.group if creator else 'Unknown',
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'property_id': self.property_id
         }
 
@@ -248,6 +250,51 @@ class Task(db.Model):
     assigned_to_id = db.Column(db.Integer, db.ForeignKey('users.user_id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)  # When the task was completed
+    time_spent = db.Column(db.Float)  # Time spent in hours
+    cost = db.Column(db.Float)  # Cost in dollars
+
+    @property
+    def completion_score(self):
+        """Calculate a score based on completion time and due date"""
+        if not self.completed_at or not self.created_at:
+            return None
+
+        # Calculate time taken to complete in hours
+        time_taken = (self.completed_at - self.created_at).total_seconds() / 3600
+
+        # Base score starts at 100
+        score = 100
+
+        # If there's a due date, adjust score based on completion time
+        if self.due_date:
+            # Calculate time difference from due date
+            due_date_diff = (self.completed_at - self.due_date).total_seconds() / 3600
+            
+            # If completed before due date, add bonus points
+            if due_date_diff < 0:
+                # Add up to 20 bonus points for early completion
+                bonus = min(20, abs(due_date_diff))
+                score += bonus
+            else:
+                # Deduct points for late completion
+                # Deduct up to 50 points for being late
+                penalty = min(50, due_date_diff)
+                score -= penalty
+
+        # Adjust score based on priority
+        priority_multiplier = {
+            'Critical': 1.5,
+            'High': 1.3,
+            'Medium': 1.1,
+            'Low': 1.0
+        }.get(self.priority, 1.0)
+
+        # Final score calculation
+        final_score = score * priority_multiplier
+
+        # Ensure score stays within 0-100 range
+        return max(0, min(100, final_score))
 
     def to_dict(self):
         """Convert task object to dictionary"""
@@ -261,7 +308,11 @@ class Task(db.Model):
             'property_id': self.property_id,
             'assigned_to_id': self.assigned_to_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'time_spent': self.time_spent,
+            'cost': self.cost,
+            'completion_score': self.completion_score
         }
 
 class PropertyManager(db.Model):
@@ -279,6 +330,11 @@ class EmailSettings(db.Model):
     smtp_password = db.Column(db.String(255), nullable=False)
     sender_email = db.Column(db.String(255), nullable=False)
     enable_email_notifications = db.Column(db.Boolean, default=True)
+    # Scheduler settings
+    daily_report_hour = db.Column(db.Integer, default=18)  # Default to 6 PM
+    daily_report_minute = db.Column(db.Integer, default=0)
+    daily_report_timezone = db.Column(db.String(50), default='America/New_York')
+    enable_daily_reports = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -292,6 +348,10 @@ class EmailSettings(db.Model):
             'smtp_password': self.smtp_password,
             'sender_email': self.sender_email,
             'enable_email_notifications': self.enable_email_notifications,
+            'daily_report_hour': self.daily_report_hour,
+            'daily_report_minute': self.daily_report_minute,
+            'daily_report_timezone': self.daily_report_timezone,
+            'enable_daily_reports': self.enable_daily_reports,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

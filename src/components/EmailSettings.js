@@ -31,6 +31,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import InfoIcon from '@mui/icons-material/Info';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import SettingsIcon from '@mui/icons-material/Settings';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 import apiClient from './apiClient';
 
 const EmailSettings = () => {
@@ -40,7 +41,11 @@ const EmailSettings = () => {
     smtp_username: '',
     smtp_password: '',
     sender_email: '',
-    enable_email_notifications: true
+    enable_email_notifications: true,
+    daily_report_hour: 18,
+    daily_report_minute: 0,
+    daily_report_timezone: 'America/New_York',
+    enable_daily_reports: true
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -234,6 +239,7 @@ const EmailSettings = () => {
         <Tab icon={<SettingsIcon />} label="Settings" />
         <Tab icon={<SendIcon />} label="Email Tests" />
         <Tab icon={<NotificationsIcon />} label="Notification Tests" />
+        <Tab icon={<ScheduleIcon />} label="Scheduler" />
       </Tabs>
 
       <Box sx={{ display: activeTab === 0 ? 'block' : 'none' }}>
@@ -308,6 +314,70 @@ const EmailSettings = () => {
               Save Settings
             </Button>
           </Box>
+        </Paper>
+      </Box>
+
+      <Box sx={{ display: activeTab === 3 ? 'block' : 'none' }}>
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Daily Report Schedule
+          </Typography>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.enable_daily_reports}
+                    onChange={(e) => setSettings({ ...settings, enable_daily_reports: e.target.checked })}
+                  />
+                }
+                label="Enable Daily Reports"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Report Hour (24-hour format)"
+                type="number"
+                value={settings.daily_report_hour}
+                onChange={(e) => setSettings({ ...settings, daily_report_hour: parseInt(e.target.value) })}
+                inputProps={{ min: 0, max: 23 }}
+                margin="normal"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Report Minute"
+                type="number"
+                value={settings.daily_report_minute}
+                onChange={(e) => setSettings({ ...settings, daily_report_minute: parseInt(e.target.value) })}
+                inputProps={{ min: 0, max: 59 }}
+                margin="normal"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Timezone"
+                value={settings.daily_report_timezone}
+                onChange={(e) => setSettings({ ...settings, daily_report_timezone: e.target.value })}
+                margin="normal"
+                helperText="Example: America/New_York, Europe/London, Asia/Tokyo"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Box sx={{ mt: 2 }}>
+                <Button
+                  variant="contained"
+                  onClick={handleSave}
+                  disabled={loading}
+                >
+                  Save Schedule Settings
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
         </Paper>
       </Box>
 
