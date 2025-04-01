@@ -13,16 +13,8 @@ class SupabaseService:
             raise ValueError("Supabase configuration is missing")
         
         try:
-            self.client: Client = create_client(
-                supabase_url,
-                supabase_key,
-                options={
-                    'auth': {
-                        'autoRefreshToken': True,
-                        'persistSession': True
-                    }
-                }
-            )
+            # Initialize Supabase client without options
+            self.client: Client = create_client(supabase_url, supabase_key)
             self.bucket_name = current_app.config.get('SUPABASE_BUCKET_NAME', 'ticket-attachments')
         except Exception as e:
             raise ValueError(f"Failed to initialize Supabase client: {str(e)}")
@@ -47,10 +39,13 @@ class SupabaseService:
             now = datetime.utcnow()
             file_path = f"{ticket_id}/{now.year}/{now.month:02d}/{now.day:02d}/{unique_filename}"
             
+            # Read file content
+            file_content = file.read()
+            
             # Upload the file
             result = self.client.storage.from_(self.bucket_name).upload(
                 file_path,
-                file.read(),
+                file_content,
                 file.content_type
             )
             
