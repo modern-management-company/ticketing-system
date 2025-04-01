@@ -1,7 +1,7 @@
 from flask import request, jsonify
 from app import app
 from app.extensions import db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment
 from app.services import EmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
@@ -14,6 +14,8 @@ import logging
 import secrets
 from sqlalchemy import or_
 from app.services.sms_service import SMSService
+from app.services.supabase_service import SupabaseService
+from werkzeug.utils import secure_filename
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -3606,7 +3608,6 @@ def send_report_email():
             "success": False,
             "message": "Internal server error"
         }), 500
-
 @app.route('/api/settings/resend-executive-report', methods=['POST'])
 @jwt_required()
 def resend_executive_report():
@@ -3628,3 +3629,131 @@ def resend_executive_report():
     except Exception as e:
         app.logger.error(f"Error in resend_executive_report: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/tickets/<int:ticket_id>/attachments', methods=['POST'])
+@jwt_required()
+def upload_ticket_attachment(ticket_id):
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Get the ticket
+        ticket = Ticket.query.get_or_404(ticket_id)
+
+        # Check if user has permission to upload attachments
+        if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+            return jsonify({'msg': 'Unauthorized - You can only upload attachments to your own tickets'}), 403
+
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            return jsonify({'msg': 'No file uploaded'}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'msg': 'No file selected'}), 400
+
+        # Initialize Supabase service
+        supabase_service = SupabaseService()
+
+        # Upload file to Supabase
+        file_info = supabase_service.upload_file(file, ticket_id)
+
+        # Create attachment record in database
+        attachment = TicketAttachment(
+            ticket_id=ticket_id,
+            file_name=secure_filename(file.filename),
+            file_path=file_info['file_path'],
+            file_type=file_info['file_type'],
+            file_size=file_info['file_size'],
+            uploaded_by_id=current_user.user_id
+        )
+
+        db.session.add(attachment)
+        db.session.commit()
+
+        return jsonify({
+            'msg': 'File uploaded successfully',
+            'attachment': attachment.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error uploading ticket attachment: {str(e)}")
+        return jsonify({'msg': 'Failed to upload file'}), 500
+
+@app.route('/tickets/<int:ticket_id>/attachments/<int:attachment_id>', methods=['DELETE'])
+@jwt_required()
+def delete_ticket_attachment(ticket_id, attachment_id):
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Get the ticket and attachment
+        ticket = Ticket.query.get_or_404(ticket_id)
+        attachment = TicketAttachment.query.get_or_404(attachment_id)
+
+        # Verify attachment belongs to ticket
+        if attachment.ticket_id != ticket_id:
+            return jsonify({'msg': 'Attachment does not belong to this ticket'}), 400
+
+        # Check if user has permission to delete attachment
+        if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+            return jsonify({'msg': 'Unauthorized - You can only delete attachments from your own tickets'}), 403
+
+        # Initialize Supabase service
+        supabase_service = SupabaseService()
+
+        # Delete file from Supabase
+        if not supabase_service.delete_file(attachment.file_path):
+            return jsonify({'msg': 'Failed to delete file from storage'}), 500
+
+        # Delete attachment record from database
+        db.session.delete(attachment)
+        db.session.commit()
+
+        return jsonify({'msg': 'Attachment deleted successfully'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting ticket attachment: {str(e)}")
+        return jsonify({'msg': 'Failed to delete attachment'}), 500
+
+@app.route('/tickets/<int:ticket_id>/attachments/<int:attachment_id>/download', methods=['GET'])
+@jwt_required()
+def download_ticket_attachment(ticket_id, attachment_id):
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Get the ticket and attachment
+        ticket = Ticket.query.get_or_404(ticket_id)
+        attachment = TicketAttachment.query.get_or_404(attachment_id)
+
+        # Verify attachment belongs to ticket
+        if attachment.ticket_id != ticket_id:
+            return jsonify({'msg': 'Attachment does not belong to this ticket'}), 400
+
+        # Check if user has permission to download attachment
+        if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+            return jsonify({'msg': 'Unauthorized - You can only download attachments from your own tickets'}), 403
+
+        # Initialize Supabase service
+        supabase_service = SupabaseService()
+
+        # Get the file URL
+        file_url = supabase_service.get_file_url(attachment.file_path)
+
+        return jsonify({
+            'file_url': file_url,
+            'file_name': attachment.file_name
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting ticket attachment URL: {str(e)}")
+        return jsonify({'msg': 'Failed to get file URL'}), 500

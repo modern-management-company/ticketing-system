@@ -23,7 +23,11 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Autocomplete
+  Autocomplete,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction
 } from "@mui/material";
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -33,6 +37,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import AddIcon from '@mui/icons-material/Add';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import DownloadIcon from '@mui/icons-material/Download';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
@@ -73,6 +79,9 @@ const ViewTicket = () => {
     ticket_id: null
   });
   const [openDueDatePicker, setOpenDueDatePicker] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [fileInputRef, setFileInputRef] = useState(null);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
@@ -104,6 +113,7 @@ const ViewTicket = () => {
       setLoading(true);
       const response = await apiClient.get(`/tickets/${ticketId}`);
       setTicket(response.data);
+      setAttachments(response.data.attachments || []);
       setError(null);
     } catch (error) {
       console.error('Failed to fetch ticket:', error);
@@ -297,6 +307,53 @@ const ViewTicket = () => {
       
       return roomA.localeCompare(roomB);
     });
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      setUploadingFile(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await apiClient.post(`/tickets/${ticketId}/attachments`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      setAttachments([...attachments, response.data.attachment]);
+      setMessage('File uploaded successfully');
+      event.target.value = null; // Reset file input
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      setError('Failed to upload file');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId) => {
+    try {
+      await apiClient.delete(`/tickets/${ticketId}/attachments/${attachmentId}`);
+      setAttachments(attachments.filter(att => att.attachment_id !== attachmentId));
+      setMessage('Attachment deleted successfully');
+    } catch (error) {
+      console.error('Error deleting attachment:', error);
+      setError('Failed to delete attachment');
+    }
+  };
+
+  const handleDownloadAttachment = async (attachment) => {
+    try {
+      const response = await apiClient.get(`/tickets/${ticketId}/attachments/${attachment.attachment_id}/download`);
+      window.open(response.data.file_url, '_blank');
+    } catch (error) {
+      console.error('Error downloading attachment:', error);
+      setError('Failed to download attachment');
+    }
   };
 
   if (loading) {
@@ -559,6 +616,61 @@ const ViewTicket = () => {
             )}
           </Grid>
         </Grid>
+      </Paper>
+
+      <Paper sx={{ p: 2, mt: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">Attachments</Typography>
+          <Button
+            variant="outlined"
+            startIcon={<AttachFileIcon />}
+            onClick={() => fileInputRef?.click()}
+            disabled={uploadingFile}
+          >
+            {uploadingFile ? 'Uploading...' : 'Add Attachment'}
+          </Button>
+          <input
+            type="file"
+            ref={setFileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleFileUpload}
+          />
+        </Box>
+
+        <List>
+          {attachments.map((attachment) => (
+            <ListItem key={attachment.attachment_id}>
+              <ListItemText
+                primary={attachment.file_name}
+                secondary={`Uploaded by ${attachment.uploaded_by_username} on ${format(new Date(attachment.uploaded_at), 'PPpp')}`}
+              />
+              <ListItemSecondaryAction>
+                <Tooltip title="Download">
+                  <IconButton
+                    edge="end"
+                    onClick={() => handleDownloadAttachment(attachment)}
+                    sx={{ mr: 1 }}
+                  >
+                    <DownloadIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete">
+                  <IconButton
+                    edge="end"
+                    onClick={() => handleDeleteAttachment(attachment.attachment_id)}
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </Tooltip>
+              </ListItemSecondaryAction>
+            </ListItem>
+          ))}
+          {attachments.length === 0 && (
+            <ListItem>
+              <ListItemText primary="No attachments" />
+            </ListItem>
+          )}
+        </List>
       </Paper>
 
       {/* Edit Dialog */}

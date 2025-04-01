@@ -191,6 +191,9 @@ class Ticket(db.Model):
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
     completed_at = db.Column(db.DateTime)  # When the ticket was completed
 
+    # Add relationship to attachments
+    attachments = db.relationship('TicketAttachment', backref='ticket', lazy=True)
+
     def to_dict(self):
         """Convert ticket object to dictionary"""
         creator = User.query.get(self.user_id)
@@ -212,7 +215,34 @@ class Ticket(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
-            'property_id': self.property_id
+            'property_id': self.property_id,
+            'attachments': [attachment.to_dict() for attachment in self.attachments]
+        }
+
+class TicketAttachment(db.Model):
+    __tablename__ = 'ticket_attachments'
+    attachment_id = db.Column(db.Integer, primary_key=True)
+    ticket_id = db.Column(db.Integer, db.ForeignKey('tickets.ticket_id'), nullable=False)
+    file_name = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(255), nullable=False)
+    file_type = db.Column(db.String(50))
+    file_size = db.Column(db.Integer)  # Size in bytes
+    uploaded_by_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        """Convert attachment object to dictionary"""
+        uploaded_by = User.query.get(self.uploaded_by_id)
+        return {
+            'attachment_id': self.attachment_id,
+            'ticket_id': self.ticket_id,
+            'file_name': self.file_name,
+            'file_path': self.file_path,
+            'file_type': self.file_type,
+            'file_size': self.file_size,
+            'uploaded_by_id': self.uploaded_by_id,
+            'uploaded_by_username': uploaded_by.username if uploaded_by else 'Unknown',
+            'uploaded_at': self.uploaded_at.isoformat() if self.uploaded_at else None
         }
 
 class TaskAssignment(db.Model):
