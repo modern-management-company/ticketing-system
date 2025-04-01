@@ -31,6 +31,7 @@ import HomeOverview from './components/HomeOverview';
 import EmailSettings from './components/EmailSettings';
 import ServiceRequests from './components/ServiceRequests';
 import Welcome from './components/Welcome';
+import ViewTask from './components/ViewTask';
 
 const App = () => {
   return (
@@ -112,6 +113,12 @@ const App = () => {
               <Route path="/reports" element={
                 <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
                   <Reports />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/tasks/:taskId" element={
+                <ProtectedRoute>
+                  <ViewTask />
                 </ProtectedRoute>
               } />
               

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useAuth } from '../context/AuthContext';
 import apiClient from "./apiClient";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -54,6 +54,7 @@ import RestoreIcon from '@mui/icons-material/Restore';
 const ViewTickets = () => {
   const { auth } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -64,6 +65,7 @@ const ViewTickets = () => {
   const [rooms, setRooms] = useState([]);
   const [properties, setProperties] = useState([]);
   const [managers, setManagers] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [ticketForm, setTicketForm] = useState({
     title: '',
     description: '',
@@ -112,6 +114,7 @@ const ViewTickets = () => {
       fetchTickets();
       fetchRooms();
       fetchManagers();
+      fetchTasks();
     }
   }, [selectedProperty]);
 
@@ -264,6 +267,18 @@ const ViewTickets = () => {
       }
     } catch (error) {
       console.error('Failed to fetch managers:', error);
+    }
+  };
+
+  const fetchTasks = async () => {
+    try {
+      if (!selectedProperty) return;
+      const response = await apiClient.get(`/properties/${selectedProperty}/tasks`);
+      if (response.data?.tasks) {
+        setTasks(response.data.tasks);
+      }
+    } catch (error) {
+      console.error('Failed to fetch tasks:', error);
     }
   };
 
@@ -424,6 +439,14 @@ const ViewTickets = () => {
     return [...tickets].sort((a, b) => {
       let aValue = a[orderBy];
       let bValue = b[orderBy];
+
+      // Special handling for linked tasks sorting
+      if (orderBy === 'linked_tasks') {
+        const aTasks = tasks.filter(task => task.ticket_id === a.ticket_id).length;
+        const bTasks = tasks.filter(task => task.ticket_id === b.ticket_id).length;
+        aValue = aTasks;
+        bValue = bTasks;
+      }
 
       // Handle string comparison
       if (typeof aValue === 'string') {
@@ -731,6 +754,15 @@ const ViewTickets = () => {
                         Group
                       </TableSortLabel>
                     </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'linked_tasks'}
+                        direction={orderBy === 'linked_tasks' ? order : 'asc'}
+                        onClick={() => handleRequestSort('linked_tasks')}
+                      >
+                        Linked Tasks
+                      </TableSortLabel>
+                    </TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -774,6 +806,36 @@ const ViewTickets = () => {
                           size="small"
                           color="primary"
                         />
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const linkedTasks = tasks.filter(task => task.ticket_id === ticket.ticket_id);
+                          return linkedTasks.length > 0 ? (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              <Chip 
+                                label={`${linkedTasks.length} Task${linkedTasks.length > 1 ? 's' : ''}`}
+                                color="primary"
+                                size="small"
+                                onClick={() => navigate(`/tickets/${ticket.ticket_id}`)}
+                                sx={{ cursor: 'pointer' }}
+                              />
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {linkedTasks.map(task => (
+                                  <Chip
+                                    key={task.task_id}
+                                    label={`#${task.task_id}`}
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() => navigate(`/tasks/${task.task_id}`)}
+                                    sx={{ cursor: 'pointer' }}
+                                  />
+                                ))}
+                              </Box>
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" color="textSecondary">No tasks</Typography>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>

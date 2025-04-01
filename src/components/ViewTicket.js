@@ -51,6 +51,8 @@ const ViewTicket = () => {
     subcategory: '',
     room_id: ''
   });
+  const [tasks, setTasks] = useState([]);
+  const [users, setUsers] = useState([]);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
@@ -72,6 +74,8 @@ const ViewTicket = () => {
   useEffect(() => {
     if (ticket?.property_id) {
       fetchRooms();
+      fetchTasks();
+      fetchUsers();
     }
   }, [ticket?.property_id]);
 
@@ -97,6 +101,30 @@ const ViewTicket = () => {
       }
     } catch (error) {
       console.error('Failed to fetch rooms:', error);
+    }
+  };
+
+  const fetchTasks = async () => {
+    try {
+      const response = await apiClient.get(`/properties/${ticket.property_id}/tasks`);
+      if (response.data?.tasks) {
+        // Filter tasks to only show those linked to this ticket
+        const linkedTasks = response.data.tasks.filter(task => task.ticket_id === parseInt(ticketId));
+        setTasks(linkedTasks);
+      }
+    } catch (error) {
+      console.error('Failed to fetch tasks:', error);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const response = await apiClient.get(`/properties/${ticket.property_id}/users`);
+      if (response.data?.users) {
+        setUsers(response.data.users);
+      }
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
     }
   };
 
@@ -343,6 +371,93 @@ const ViewTicket = () => {
                 </Button>
               )}
             </Box>
+          </Grid>
+
+          <Grid item xs={12}>
+            <Divider sx={{ my: 2 }} />
+          </Grid>
+
+          <Grid item xs={12}>
+            <Typography variant="h6" gutterBottom>Linked Tasks</Typography>
+            {tasks.length > 0 ? (
+              <Box sx={{ mt: 2 }}>
+                {tasks.map((task) => (
+                  <Paper key={task.task_id} sx={{ p: 2, mb: 2 }}>
+                    <Grid container spacing={2} alignItems="center">
+                      <Grid item xs={12} md={4}>
+                        <Typography variant="subtitle1" gutterBottom>
+                          {task.title}
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          {task.description}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} md={2}>
+                        <Typography variant="subtitle2" gutterBottom>Status</Typography>
+                        <Chip 
+                          label={task.status}
+                          color={
+                            task.status.toLowerCase() === 'pending' ? 'warning' :
+                            task.status.toLowerCase() === 'in progress' ? 'info' :
+                            'success'
+                          }
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={2}>
+                        <Typography variant="subtitle2" gutterBottom>Priority</Typography>
+                        <Chip 
+                          label={task.priority}
+                          color={
+                            task.priority === 'Critical' ? 'error' :
+                            task.priority === 'High' ? 'warning' :
+                            task.priority === 'Medium' ? 'info' :
+                            'success'
+                          }
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={2}>
+                        <Typography variant="subtitle2" gutterBottom>Assigned To</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2">
+                            {users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unassigned'}
+                          </Typography>
+                          {task.assigned_to_id && (
+                            <Chip 
+                              label={users.find(u => u.user_id === task.assigned_to_id)?.group || 'N/A'} 
+                              variant="outlined"
+                              size="small"
+                              color="primary"
+                            />
+                          )}
+                        </Box>
+                      </Grid>
+                      <Grid item xs={12} md={2}>
+                        <Typography variant="subtitle2" gutterBottom>Due Date</Typography>
+                        <Typography variant="body2">
+                          {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} md={2}>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => navigate(`/tasks/${task.task_id}`)}
+                          fullWidth
+                        >
+                          View Task
+                        </Button>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                ))}
+              </Box>
+            ) : (
+              <Typography variant="body2" color="textSecondary">
+                No tasks linked to this ticket.
+              </Typography>
+            )}
           </Grid>
         </Grid>
       </Paper>
