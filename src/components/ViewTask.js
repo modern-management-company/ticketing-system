@@ -57,7 +57,9 @@ const ViewTask = () => {
     status: 'pending',
     assigned_to_id: '',
     due_date: null,
-    ticket_id: null
+    ticket_id: null,
+    time_spent: '',
+    cost: ''
   });
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState(null);
@@ -150,7 +152,9 @@ const ViewTask = () => {
       status: task.status,
       assigned_to_id: task.assigned_to_id || '',
       due_date: task.due_date ? new Date(task.due_date) : null,
-      ticket_id: task.ticket_id || null
+      ticket_id: task.ticket_id || null,
+      time_spent: task.time_spent || '',
+      cost: task.cost || ''
     });
     setOpenDialog(true);
   };
@@ -164,7 +168,9 @@ const ViewTask = () => {
       status: 'pending',
       assigned_to_id: '',
       due_date: null,
-      ticket_id: null
+      ticket_id: null,
+      time_spent: '',
+      cost: ''
     });
   };
 
@@ -356,6 +362,20 @@ const ViewTask = () => {
             )}
           </Grid>
 
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle2" gutterBottom>Time Spent</Typography>
+            <Typography variant="body2">
+              {task.time_spent ? `${task.time_spent} hours` : 'N/A'}
+            </Typography>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle2" gutterBottom>Cost</Typography>
+            <Typography variant="body2">
+              {task.cost ? `$${task.cost.toFixed(2)}` : 'N/A'}
+            </Typography>
+          </Grid>
+
           <Grid item xs={12}>
             <Divider sx={{ my: 2 }} />
           </Grid>
@@ -532,6 +552,22 @@ const ViewTask = () => {
                   ))}
               </Select>
             </FormControl>
+            <TextField
+              label="Cost ($)"
+              type="number"
+              value={taskForm.cost}
+              onChange={(e) => setTaskForm({ ...taskForm, cost: e.target.value })}
+              fullWidth
+              inputProps={{ min: 0, step: 0.01 }}
+            />
+            <TextField
+              label="Time Spent (hours)"
+              type="number"
+              value={taskForm.time_spent}
+              onChange={(e) => setTaskForm({ ...taskForm, time_spent: e.target.value })}
+              fullWidth
+              inputProps={{ min: 0, step: 0.5 }}
+            />
           </Box>
         </DialogContent>
         <DialogActions>

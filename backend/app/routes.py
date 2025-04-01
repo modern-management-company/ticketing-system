@@ -1025,6 +1025,10 @@ def manage_task(task_id):
                     task_assignment.assigned_to_user_id = data['assigned_to_id']
             if 'due_date' in data:
                 task.due_date = datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if data['due_date'] else None
+            if 'time_spent' in data:
+                task.time_spent = float(data['time_spent']) if data.get('time_spent') else None
+            if 'cost' in data:
+                task.cost = float(data['cost']) if data.get('cost') else None
 
             # Handle ticket_id changes
             if 'ticket_id' in data:
@@ -1235,7 +1239,9 @@ def create_task():
             property_id=data['property_id'],
             status=data.get('status', 'pending'),
             assigned_to_id=data.get('assigned_to_id'),
-            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None
+            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None,
+            time_spent=float(data.get('time_spent')) if data.get('time_spent') else None,
+            cost=float(data.get('cost')) if data.get('cost') else None
         )
         db.session.add(task)
         db.session.flush()  # Flush to get the task_id
