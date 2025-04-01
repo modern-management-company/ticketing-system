@@ -200,6 +200,22 @@ const ViewTask = () => {
     }
   };
 
+  const getScoreLabel = (score) => {
+    if (score >= 90) return 'Excellent';
+    if (score >= 80) return 'Good';
+    if (score >= 70) return 'Fair';
+    if (score >= 60) return 'Poor';
+    return 'Failed';
+  };
+
+  const getScoreColor = (score) => {
+    if (score >= 90) return 'success';
+    if (score >= 80) return 'info';
+    if (score >= 70) return 'warning';
+    if (score >= 60) return 'error';
+    return 'error';
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" p={3}>
@@ -374,6 +390,26 @@ const ViewTask = () => {
             <Typography variant="body2">
               {task.cost ? `$${task.cost.toFixed(2)}` : 'N/A'}
             </Typography>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle2" gutterBottom>Completion Score</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {task.completion_score !== null ? (
+                <>
+                  <Typography variant="body2">
+                    {task.completion_score.toFixed(1)}/100
+                  </Typography>
+                  <Chip 
+                    label={getScoreLabel(task.completion_score)}
+                    color={getScoreColor(task.completion_score)}
+                    size="small"
+                  />
+                </>
+              ) : (
+                <Typography variant="body2">N/A</Typography>
+              )}
+            </Box>
           </Grid>
 
           <Grid item xs={12}>
