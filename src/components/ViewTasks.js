@@ -87,6 +87,7 @@ const ViewTasks = () => {
   const [viewMode, setViewMode] = useState('table');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [navigatingToTicket, setNavigatingToTicket] = useState(null);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -511,7 +512,12 @@ const ViewTasks = () => {
                 size="small"
                 color="secondary"
                 variant="outlined"
-                onClick={() => navigate(`/tickets/${task.ticket_id}`)}
+                onClick={() => {
+                  if (navigatingToTicket !== task.ticket_id) {
+                    setNavigatingToTicket(task.ticket_id);
+                    navigate(`/tickets/${task.ticket_id}`);
+                  }
+                }}
                 sx={{ cursor: 'pointer' }}
               />
             ) : (
@@ -745,7 +751,14 @@ const ViewTasks = () => {
                 <TableBody>
                   {sortTasks(filteredTasks).map((task) => (
                     <TableRow key={task.task_id}>
-                      <TableCell>{task.task_id}</TableCell>
+                      <TableCell>
+                        <Button
+                          onClick={() => navigate(`/tasks/${task.task_id}`)}
+                          sx={{ textTransform: 'none', minWidth: 'auto' }}
+                        >
+                          {task.task_id}
+                        </Button>
+                      </TableCell>
                       <TableCell>{task.title}</TableCell>
                       <TableCell>
                         {task.room_info ? (
@@ -768,7 +781,12 @@ const ViewTasks = () => {
                             size="small"
                             color="secondary"
                             variant="outlined"
-                            onClick={() => navigate(`/tickets/${task.ticket_id}`)}
+                            onClick={() => {
+                              if (navigatingToTicket !== task.ticket_id) {
+                                setNavigatingToTicket(task.ticket_id);
+                                navigate(`/tickets/${task.ticket_id}`);
+                              }
+                            }}
                             sx={{ cursor: 'pointer' }}
                           />
                         ) : (

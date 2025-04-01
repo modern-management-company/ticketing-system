@@ -352,8 +352,10 @@ const ViewTask = () => {
                 color="secondary"
                 variant="outlined"
                 onClick={() => {
-                  setNavigatingToTicket(task.ticket_id);
-                  navigate(`/tickets/${task.ticket_id}`);
+                  if (navigatingToTicket !== task.ticket_id) {
+                    setNavigatingToTicket(task.ticket_id);
+                    navigate(`/tickets/${task.ticket_id}`);
+                  }
                 }}
                 sx={{ cursor: 'pointer' }}
               />

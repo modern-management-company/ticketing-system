@@ -769,7 +769,14 @@ const ViewTickets = () => {
                 <TableBody>
                   {sortTickets(filteredTickets).map((ticket) => (
                     <TableRow key={ticket.ticket_id}>
-                      <TableCell>{ticket.ticket_id}</TableCell>
+                      <TableCell>
+                        <Button
+                          onClick={() => navigate(`/tickets/${ticket.ticket_id}`)}
+                          sx={{ textTransform: 'none', minWidth: 'auto' }}
+                        >
+                          {ticket.ticket_id}
+                        </Button>
+                      </TableCell>
                       <TableCell>{ticket.title}</TableCell>
                       <TableCell>{ticket.description}</TableCell>
                       <TableCell>

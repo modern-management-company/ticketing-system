@@ -539,8 +539,10 @@ const ViewTicket = () => {
                         variant="outlined"
                         size="small"
                         onClick={() => {
-                          setNavigatingToTask(task.task_id);
-                          navigate(`/tasks/${task.task_id}`);
+                          if (navigatingToTask !== task.task_id) {
+                            setNavigatingToTask(task.task_id);
+                            navigate(`/tasks/${task.task_id}`);
+                          }
                         }}
                         disabled={navigatingToTask === task.task_id}
                       >
