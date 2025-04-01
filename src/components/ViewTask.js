@@ -35,6 +35,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
 import { format } from 'date-fns';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 const ViewTask = () => {
   const { taskId } = useParams();
@@ -58,6 +59,9 @@ const ViewTask = () => {
     due_date: null,
     ticket_id: null
   });
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [newStatus, setNewStatus] = useState(null);
+  const [navigatingToTicket, setNavigatingToTicket] = useState(null);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -81,7 +85,7 @@ const ViewTask = () => {
       setError(null);
     } catch (error) {
       console.error('Failed to fetch task:', error);
-      setError(error.response?.data?.msg || 'Failed to fetch task');
+      setError(error.response?.data?.msg || 'Failed to fetch task. Please try refreshing the page.');
     } finally {
       setLoading(false);
     }
@@ -106,13 +110,20 @@ const ViewTask = () => {
       }
     } catch (error) {
       console.error('Failed to fetch tickets:', error);
+      setError('Failed to load ticket information. Please try refreshing the page.');
     }
   };
 
   const handleStatusChange = async (newStatus) => {
+    setNewStatus(newStatus);
+    setStatusDialogOpen(true);
+  };
+
+  const confirmStatusChange = async () => {
     try {
       await apiClient.patch(`/tasks/${taskId}`, { status: newStatus });
       setMessage('Task status updated successfully');
+      setStatusDialogOpen(false);
       fetchTask(); // Refresh task data
     } catch (error) {
       setError('Failed to update task status');
@@ -232,13 +243,26 @@ const ViewTask = () => {
                 <Typography variant="h6" gutterBottom>{task.title}</Typography>
                 <Typography variant="body1" paragraph>{task.description}</Typography>
               </Box>
-              <Button
-                startIcon={<EditIcon />}
-                onClick={handleOpenDialog}
-                variant="outlined"
-              >
-                Edit Task
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  startIcon={<RefreshIcon />}
+                  onClick={() => {
+                    fetchTask();
+                    fetchUsers();
+                    fetchTickets();
+                  }}
+                  variant="outlined"
+                >
+                  Refresh
+                </Button>
+                <Button
+                  startIcon={<EditIcon />}
+                  onClick={handleOpenDialog}
+                  variant="outlined"
+                >
+                  Edit Task
+                </Button>
+              </Box>
             </Box>
           </Grid>
 
@@ -305,7 +329,10 @@ const ViewTask = () => {
                 size="small"
                 color="secondary"
                 variant="outlined"
-                onClick={() => navigate(`/tickets/${task.ticket_id}`)}
+                onClick={() => {
+                  setNavigatingToTicket(task.ticket_id);
+                  navigate(`/tickets/${task.ticket_id}`);
+                }}
                 sx={{ cursor: 'pointer' }}
               />
             ) : (
@@ -516,6 +543,24 @@ const ViewTask = () => {
             disabled={isSubmitting}
           >
             {isSubmitting ? 'Updating...' : 'Update Task'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={statusDialogOpen}
+        onClose={() => setStatusDialogOpen(false)}
+      >
+        <DialogTitle>Confirm Status Change</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to mark this task as {newStatus}?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
+          <Button onClick={confirmStatusChange} color="primary" variant="contained">
+            Confirm
           </Button>
         </DialogActions>
       </Dialog>

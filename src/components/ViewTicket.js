@@ -31,6 +31,12 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RestoreIcon from '@mui/icons-material/Restore';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import AddIcon from '@mui/icons-material/Add';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
+import { format } from 'date-fns';
 
 const ViewTicket = () => {
   const { ticketId } = useParams();
@@ -53,6 +59,20 @@ const ViewTicket = () => {
   });
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
+  const [navigatingToTask, setNavigatingToTask] = useState(null);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [newStatus, setNewStatus] = useState(null);
+  const [openAddTaskDialog, setOpenAddTaskDialog] = useState(false);
+  const [taskForm, setTaskForm] = useState({
+    title: '',
+    description: '',
+    priority: 'Low',
+    status: 'pending',
+    assigned_to_id: '',
+    due_date: null,
+    ticket_id: null
+  });
+  const [openDueDatePicker, setOpenDueDatePicker] = useState(false);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
@@ -87,7 +107,7 @@ const ViewTicket = () => {
       setError(null);
     } catch (error) {
       console.error('Failed to fetch ticket:', error);
-      setError(error.response?.data?.msg || 'Failed to fetch ticket');
+      setError(error.response?.data?.msg || 'Failed to fetch ticket. Please try refreshing the page.');
     } finally {
       setLoading(false);
     }
@@ -101,6 +121,7 @@ const ViewTicket = () => {
       }
     } catch (error) {
       console.error('Failed to fetch rooms:', error);
+      setError('Failed to load room information. Please try refreshing the page.');
     }
   };
 
@@ -114,6 +135,7 @@ const ViewTicket = () => {
       }
     } catch (error) {
       console.error('Failed to fetch tasks:', error);
+      setError('Failed to load linked tasks. Please try refreshing the page.');
     }
   };
 
@@ -125,13 +147,20 @@ const ViewTicket = () => {
       }
     } catch (error) {
       console.error('Failed to fetch users:', error);
+      setError('Failed to load user information. Please try refreshing the page.');
     }
   };
 
   const handleStatusChange = async (newStatus) => {
+    setNewStatus(newStatus);
+    setStatusDialogOpen(true);
+  };
+
+  const confirmStatusChange = async () => {
     try {
       await apiClient.patch(`/tickets/${ticketId}`, { status: newStatus });
       setMessage('Ticket status updated successfully');
+      setStatusDialogOpen(false);
       fetchTicket(); // Refresh ticket data
     } catch (error) {
       setError('Failed to update ticket status');
@@ -195,6 +224,61 @@ const ViewTicket = () => {
     } catch (error) {
       console.error('Failed to update ticket:', error);
       setError(error.response?.data?.msg || 'Failed to update ticket');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenAddTaskDialog = () => {
+    setTaskForm({
+      title: '',
+      description: '',
+      priority: 'Low',
+      status: 'pending',
+      assigned_to_id: '',
+      due_date: null,
+      ticket_id: parseInt(ticketId)
+    });
+    setOpenAddTaskDialog(true);
+  };
+
+  const handleCloseAddTaskDialog = () => {
+    setOpenAddTaskDialog(false);
+    setTaskForm({
+      title: '',
+      description: '',
+      priority: 'Low',
+      status: 'pending',
+      assigned_to_id: '',
+      due_date: null,
+      ticket_id: null
+    });
+  };
+
+  const handleCreateTask = async () => {
+    try {
+      if (isSubmitting) return;
+      
+      if (!taskForm.title.trim()) {
+        setError('Title is required');
+        return;
+      }
+      if (!taskForm.description.trim()) {
+        setError('Description is required');
+        return;
+      }
+
+      setIsSubmitting(true);
+      await apiClient.post('/tasks', {
+        ...taskForm,
+        property_id: ticket.property_id
+      });
+      setMessage('Task created successfully');
+      handleCloseAddTaskDialog();
+      fetchTasks(); // Refresh tasks list
+    } catch (error) {
+      console.error('Failed to create task:', error);
+      setError(error.response?.data?.msg || 'Failed to create task');
     } finally {
       setIsSubmitting(false);
     }
@@ -264,13 +348,26 @@ const ViewTicket = () => {
                 <Typography variant="h6" gutterBottom>{ticket.title}</Typography>
                 <Typography variant="body1" paragraph>{ticket.description}</Typography>
               </Box>
-              <Button
-                startIcon={<EditIcon />}
-                onClick={handleOpenDialog}
-                variant="outlined"
-              >
-                Edit Ticket
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  startIcon={<RefreshIcon />}
+                  onClick={() => {
+                    fetchTicket();
+                    fetchTasks();
+                    fetchUsers();
+                  }}
+                  variant="outlined"
+                >
+                  Refresh
+                </Button>
+                <Button
+                  startIcon={<EditIcon />}
+                  onClick={handleOpenDialog}
+                  variant="outlined"
+                >
+                  Edit Ticket
+                </Button>
+              </Box>
             </Box>
           </Grid>
 
@@ -378,78 +475,78 @@ const ViewTicket = () => {
           </Grid>
 
           <Grid item xs={12}>
-            <Typography variant="h6" gutterBottom>Linked Tasks</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">Linked Tasks</Typography>
+              <Button
+                startIcon={<AddIcon />}
+                onClick={() => navigate('/tasks', { 
+                  state: { 
+                    createTask: true,
+                    ticketId: ticketId,
+                    propertyId: ticket.property_id
+                  }
+                })}
+                variant="contained"
+                color="primary"
+                size="small"
+              >
+                Add Task
+              </Button>
+            </Box>
             {tasks.length > 0 ? (
               <Box sx={{ mt: 2 }}>
                 {tasks.map((task) => (
                   <Paper key={task.task_id} sx={{ p: 2, mb: 2 }}>
-                    <Grid container spacing={2} alignItems="center">
-                      <Grid item xs={12} md={4}>
-                        <Typography variant="subtitle1" gutterBottom>
-                          {task.title}
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          {task.description}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} md={2}>
-                        <Typography variant="subtitle2" gutterBottom>Status</Typography>
-                        <Chip 
-                          label={task.status}
-                          color={
-                            task.status.toLowerCase() === 'pending' ? 'warning' :
-                            task.status.toLowerCase() === 'in progress' ? 'info' :
-                            'success'
-                          }
-                          size="small"
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={2}>
-                        <Typography variant="subtitle2" gutterBottom>Priority</Typography>
-                        <Chip 
-                          label={task.priority}
-                          color={
-                            task.priority === 'Critical' ? 'error' :
-                            task.priority === 'High' ? 'warning' :
-                            task.priority === 'Medium' ? 'info' :
-                            'success'
-                          }
-                          size="small"
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={2}>
-                        <Typography variant="subtitle2" gutterBottom>Assigned To</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2">
-                            {users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unassigned'}
-                          </Typography>
-                          {task.assigned_to_id && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <Box>
+                        <Typography variant="subtitle1" gutterBottom>{task.title}</Typography>
+                        <Typography variant="body2" color="textSecondary" paragraph>{task.description}</Typography>
+                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                          <Chip 
+                            label={task.status}
+                            color={
+                              task.status.toLowerCase() === 'pending' ? 'warning' :
+                              task.status.toLowerCase() === 'in progress' ? 'info' :
+                              'success'
+                            }
+                            size="small"
+                          />
+                          <Chip 
+                            label={task.priority}
+                            color={
+                              task.priority === 'Critical' ? 'error' :
+                              task.priority === 'High' ? 'warning' :
+                              task.priority === 'Medium' ? 'info' :
+                              'success'
+                            }
+                            size="small"
+                          />
+                          <Chip 
+                            label={users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unassigned'}
+                            variant="outlined"
+                            size="small"
+                          />
+                          {task.due_date && (
                             <Chip 
-                              label={users.find(u => u.user_id === task.assigned_to_id)?.group || 'N/A'} 
+                              label={`Due: ${new Date(task.due_date).toLocaleDateString()}`}
                               variant="outlined"
                               size="small"
-                              color="primary"
                             />
                           )}
                         </Box>
-                      </Grid>
-                      <Grid item xs={12} md={2}>
-                        <Typography variant="subtitle2" gutterBottom>Due Date</Typography>
-                        <Typography variant="body2">
-                          {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} md={2}>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => navigate(`/tasks/${task.task_id}`)}
-                          fullWidth
-                        >
-                          View Task
-                        </Button>
-                      </Grid>
-                    </Grid>
+                      </Box>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          setNavigatingToTask(task.task_id);
+                          navigate(`/tasks/${task.task_id}`);
+                        }}
+                        disabled={navigatingToTask === task.task_id}
+                      >
+                        {navigatingToTask === task.task_id ? 'Loading...' : 'View Task'}
+                      </Button>
+                    </Box>
                   </Paper>
                 ))}
               </Box>
@@ -584,6 +681,24 @@ const ViewTicket = () => {
             disabled={isSubmitting}
           >
             {isSubmitting ? 'Updating...' : 'Update Ticket'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={statusDialogOpen}
+        onClose={() => setStatusDialogOpen(false)}
+      >
+        <DialogTitle>Confirm Status Change</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to mark this ticket as {newStatus}?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
+          <Button onClick={confirmStatusChange} color="primary" variant="contained">
+            Confirm
           </Button>
         </DialogActions>
       </Dialog>

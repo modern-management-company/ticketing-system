@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import apiClient from "./apiClient"; 
 import {
   Box,
@@ -58,6 +58,7 @@ import RestoreIcon from '@mui/icons-material/Restore';
 
 const ViewTasks = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { auth } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
@@ -104,6 +105,33 @@ const ViewTasks = () => {
       fetchTasks();
     }
   }, [selectedProperty]);
+
+  useEffect(() => {
+    if (location.state?.createTask) {
+      const { ticketId, propertyId } = location.state;
+      
+      // Set the selected property
+      if (propertyId) {
+        setSelectedProperty(propertyId);
+      }
+      
+      // Pre-populate form data
+      if (ticketId) {
+        setTaskForm(prev => ({
+          ...prev,
+          ticket_id: ticketId
+        }));
+        
+        // Open the dialog after a short delay
+        setTimeout(() => {
+          setOpenDialog(true);
+        }, 300);
+      }
+      
+      // Clear location state immediately
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const fetchTasks = async () => {
     try {
