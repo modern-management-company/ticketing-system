@@ -878,6 +878,15 @@ def assign_task():
         db.session.add(task)
         db.session.flush()  # Get the task_id
 
+        # Record history for task creation
+        current_user = get_user_from_jwt()
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
         # Create a new task assignment
         task_assignment = TaskAssignment(
             task_id=task.task_id,
@@ -886,6 +895,29 @@ def assign_task():
             status=task_status  # Use mapped status
         )
         db.session.add(task_assignment)
+
+        # Record history for task assignment
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='assigned',
+            field_name='assigned_to',
+            old_value='None',
+            new_value=user.username,
+            user_id=current_user.user_id
+        )
+
+        # Record history for ticket association
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='updated',
+            field_name='associated_ticket',
+            old_value='None',
+            new_value=f"Ticket #{ticket.ticket_id}",
+            user_id=current_user.user_id
+        )
+
         db.session.commit()
 
         # Send email notification
@@ -3203,6 +3235,14 @@ def create_service_request():
         db.session.add(new_request)
         db.session.flush()  # Get the request ID
 
+        # Record history for service request creation
+        History.create_entry(
+            entity_type='service_request',
+            entity_id=new_request.request_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
         # Create a task for the request
         task = Task(
             title=f"{data['request_group']} Request: {data['request_type']} - Room {room.name}",
@@ -3215,6 +3255,13 @@ def create_service_request():
         db.session.add(task)
         db.session.flush()  # Get the task ID
         
+        # Record history for task creation
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
         # Link task to request
         new_request.assigned_task_id = task.task_id
         
@@ -3237,6 +3284,14 @@ def create_service_request():
                     status='Pending'
                 )
                 db.session.add(task_assignment)
+
+                # Record history for task assignment
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task.task_id,
+                    action='assigned',
+                    user_id=current_user.user_id
+                )
 
                 # Send SMS notification if staff has phone number
                 if staff.phone:
@@ -3365,6 +3420,15 @@ def update_service_request(request_id):
                 setattr(service_request, field, data[field])
 
         db.session.commit()
+
+        # Record history for service request update
+        History.create_entry(
+            entity_type='service_request',
+            entity_id=service_request.request_id,
+            action='updated',
+            user_id=current_user.user_id
+        )   
+        
         return jsonify({
             'msg': 'Service request updated successfully',
             'request': service_request.to_dict()
@@ -3423,6 +3487,15 @@ def create_user():
         db.session.add(new_user)
         db.session.flush()  # Flush to get the user_id
 
+        
+        # Record history for user creation
+        History.create_entry(
+            entity_type='user',
+            entity_id=new_user.user_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
         # Handle property assignments
         if 'property_ids' in data and data['property_ids']:
             for property_id in data['property_ids']:
@@ -3433,6 +3506,15 @@ def create_user():
                 )
                 db.session.add(user_property)
 
+                
+                # Record history for user creation
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=new_user.user_id,
+                    action='created',
+                    user_id=current_user.user_id
+                )
+
                 # If user is a manager, also create PropertyManager relationship
                 if data['role'] == 'manager':
                     property_manager = PropertyManager(
@@ -3440,6 +3522,17 @@ def create_user():
                         property_id=property_id
                     )
                     db.session.add(property_manager)
+
+                                        # Record history for manager role assignment
+                    History.create_entry(
+                        entity_type='user',
+                        entity_id=new_user.user_id,
+                        action='updated',
+                        field_name='manager_role',
+                        old_value='None',
+                        new_value=f"Manager for {property.name}",
+                        user_id=current_user.user_id
+                    )
 
         db.session.commit()
 
@@ -3491,6 +3584,18 @@ def update_user(user_id):
         if 'role' in data and data['role'] != user.role:
             old_role = user.role
             new_role = data['role']
+
+                        # Record history for role change
+            History.create_entry(
+                entity_type='user',
+                entity_id=user_id,
+                action='updated',
+                field_name='role',
+                old_value=old_role,
+                new_value=new_role,
+                user_id=current_user.user_id
+            )
+            
             
             # If changing to manager
             if new_role == 'manager':
@@ -3512,6 +3617,17 @@ def update_user(user_id):
                             property_id=up.property_id
                         )
                         db.session.add(property_manager)
+
+                        # Record history for manager role assignment
+                        History.create_entry(
+                            entity_type='user',
+                            entity_id=user.user_id,
+                            action='updated',   
+                            field_name='manager_role',
+                            old_value='None',
+                            new_value=f"Manager for {Property.query.get(up.property_id).name}",
+                            user_id=current_user.user_id
+                        )
             
             # If changing from manager
             elif old_role == 'manager':
@@ -3555,6 +3671,13 @@ def update_user(user_id):
                 )
                 db.session.add(user_property)
                 
+                # Record history for user creation
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=user.user_id,
+                    action='updated',
+                    user_id=current_user.user_id
+                )   
                 # Add PropertyManager only for managers
                 if user.role == 'manager':
                     property_manager = PropertyManager(
@@ -3562,6 +3685,14 @@ def update_user(user_id):
                         property_id=property_id
                     )
                     db.session.add(property_manager)
+
+                    # Record history for manager role assignment
+                    History.create_entry(
+                        entity_type='user',
+                        entity_id=user.user_id,
+                        action='updated',
+                        user_id=current_user.user_id
+                    )
 
         db.session.commit()
         return jsonify({
