@@ -24,7 +24,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
 import { format } from 'date-fns';
-import axios from 'axios';
+import apiClient from './apiClient';
 
 const HistoryView = () => {
   const [history, setHistory] = useState([]);
@@ -57,12 +57,17 @@ const HistoryView = () => {
         end_date: filters.end_date ? filters.end_date.toISOString() : ''
       });
 
-      const response = await axios.get(`/api/history?${params}`);
-      setHistory(response.data.history);
-      setTotalEntries(response.data.total);
+      const response = await apiClient.get(`/history?${params}`);
+      console.log('History API response:', response.data);
+      
+      // Ensure we have a valid history array, even if the API returns undefined
+      setHistory(response.data?.history || []);
+      setTotalEntries(response.data?.total || 0);
       setError(null);
     } catch (err) {
+      console.error('Error fetching history:', err);
       setError(err.response?.data?.msg || 'Error fetching history');
+      setHistory([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -135,6 +140,8 @@ const HistoryView = () => {
   };
 
   const formatHistoryEntry = (entry) => {
+    if (!entry) return 'Unknown action';
+    
     switch (entry.action) {
       case 'created':
         return `${entry.entity_type} created by ${entry.username}`;
@@ -214,6 +221,7 @@ const HistoryView = () => {
                     displayStaticWrapperAs="desktop"
                     value={filters.start_date}
                     onChange={handleDateChange('start_date')}
+                    renderInput={(params) => <TextField {...params} />}
                   />
                 </DialogContent>
               </Dialog>
@@ -234,6 +242,7 @@ const HistoryView = () => {
                     displayStaticWrapperAs="desktop"
                     value={filters.end_date}
                     onChange={handleDateChange('end_date')}
+                    renderInput={(params) => <TextField {...params} />}
                   />
                 </DialogContent>
               </Dialog>
@@ -270,25 +279,33 @@ const HistoryView = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {history.map((entry) => (
-              <TableRow key={entry.history_id}>
-                <TableCell>
-                  {format(new Date(entry.created_at), 'PPpp')}
+            {history && history.length > 0 ? (
+              history.map((entry) => (
+                <TableRow key={entry.history_id}>
+                  <TableCell>
+                    {format(new Date(entry.created_at), 'PPpp')}
+                  </TableCell>
+                  <TableCell>
+                    {entry.entity_type.charAt(0).toUpperCase() + entry.entity_type.slice(1)}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={entry.action}
+                      color={getActionColor(entry.action)}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>{formatHistoryEntry(entry)}</TableCell>
+                  <TableCell>{entry.username}</TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={5} align="center">
+                  No history entries found
                 </TableCell>
-                <TableCell>
-                  {entry.entity_type.charAt(0).toUpperCase() + entry.entity_type.slice(1)}
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={entry.action}
-                    color={getActionColor(entry.action)}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>{formatHistoryEntry(entry)}</TableCell>
-                <TableCell>{entry.username}</TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
         <TablePagination
