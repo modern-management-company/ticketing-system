@@ -33,6 +33,7 @@ import {
   Home as HomeIcon,
   Email as EmailIcon,
   CleaningServices as HousekeepingIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -113,6 +114,11 @@ const Layout = () => {
         text: 'Email Settings',
         icon: <EmailIcon />,
         path: '/admin/email-settings',
+      },
+      {
+        text: 'History',
+        icon: <HistoryIcon />,
+        path: '/admin/history',
       }
     ];
 

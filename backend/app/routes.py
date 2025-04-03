@@ -4153,3 +4153,58 @@ def get_task_history(task_id):
         }), 200
     except Exception as e:
         return jsonify({'msg': str(e)}), 500
+
+@app.route('/history', methods=['GET'])
+@jwt_required()
+def get_all_history():
+    """Get all history entries with pagination and filtering"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Only super_admin can view all history
+        if current_user.role != 'super_admin':
+            return jsonify({'msg': 'Unauthorized - Only super admins can view all history'}), 403
+
+        # Get query parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        entity_type = request.args.get('entity_type')
+        action = request.args.get('action')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        user_id = request.args.get('user_id', type=int)
+
+        # Build query
+        query = History.query
+
+        # Apply filters
+        if entity_type:
+            query = query.filter(History.entity_type == entity_type)
+        if action:
+            query = query.filter(History.action == action)
+        if start_date:
+            query = query.filter(History.created_at >= datetime.fromisoformat(start_date))
+        if end_date:
+            query = query.filter(History.created_at <= datetime.fromisoformat(end_date))
+        if user_id:
+            query = query.filter(History.user_id == user_id)
+
+        # Order by most recent first
+        query = query.order_by(History.created_at.desc())
+
+        # Paginate results
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        history_entries = pagination.items
+
+        return jsonify({
+            'history': [entry.to_dict() for entry in history_entries],
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': page
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting history: {str(e)}")
+        return jsonify({'msg': str(e)}), 500

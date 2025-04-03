@@ -32,6 +32,7 @@ import EmailSettings from './components/EmailSettings';
 import ServiceRequests from './components/ServiceRequests';
 import Welcome from './components/Welcome';
 import ViewTask from './components/ViewTask';
+import HistoryView from './components/HistoryView';
 
 const App = () => {
   return (
@@ -136,6 +137,11 @@ const App = () => {
                 <Route path="email-settings" element={
                   <ProtectedRoute allowedRoles={['super_admin']}>
                     <EmailSettings />
+                  </ProtectedRoute>
+                } />
+                <Route path="history" element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <HistoryView />
                   </ProtectedRoute>
                 } />
               </Route>
