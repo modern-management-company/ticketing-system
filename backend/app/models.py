@@ -430,3 +430,48 @@ class ServiceRequest(db.Model):
             'created_by_name': self.created_by.username if self.created_by else None,
             'task_status': self.assigned_task.status if self.assigned_task else None
         }
+
+class History(db.Model):
+    __tablename__ = 'history'
+    history_id = db.Column(db.Integer, primary_key=True)
+    entity_type = db.Column(db.String(20), nullable=False)  # 'ticket' or 'task'
+    entity_id = db.Column(db.Integer, nullable=False)  # ID of the ticket or task
+    action = db.Column(db.String(50), nullable=False)  # 'created', 'updated', 'status_changed', 'assigned', etc.
+    field_name = db.Column(db.String(50))  # Name of the field that was changed (for updates)
+    old_value = db.Column(db.Text)  # Previous value
+    new_value = db.Column(db.Text)  # New value
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref='history_entries')
+
+    def to_dict(self):
+        return {
+            'history_id': self.history_id,
+            'entity_type': self.entity_type,
+            'entity_id': self.entity_id,
+            'action': self.action,
+            'field_name': self.field_name,
+            'old_value': self.old_value,
+            'new_value': self.new_value,
+            'user_id': self.user_id,
+            'username': self.user.username if self.user else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+    @classmethod
+    def create_entry(cls, entity_type, entity_id, action, user_id, field_name=None, old_value=None, new_value=None):
+        """Helper method to create a history entry"""
+        entry = cls(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            action=action,
+            user_id=user_id,
+            field_name=field_name,
+            old_value=str(old_value) if old_value is not None else None,
+            new_value=str(new_value) if new_value is not None else None
+        )
+        db.session.add(entry)
+        db.session.commit()
+        return entry

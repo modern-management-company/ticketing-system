@@ -1,7 +1,7 @@
 from flask import request, jsonify
 from app import app
 from app.extensions import db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment, History
 from app.services import EmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
@@ -3769,3 +3769,35 @@ def download_ticket_attachment(ticket_id, attachment_id):
     except Exception as e:
         app.logger.error(f"Error getting ticket attachment URL: {str(e)}")
         return jsonify({'msg': 'Failed to get file URL'}), 500
+
+@app.route('/tickets/<int:ticket_id>/history', methods=['GET'])
+@jwt_required()
+def get_ticket_history(ticket_id):
+    """Get history entries for a specific ticket"""
+    try:
+        history_entries = History.query.filter_by(
+            entity_type='ticket',
+            entity_id=ticket_id
+        ).order_by(History.created_at.desc()).all()
+        
+        return jsonify({
+            'history': [entry.to_dict() for entry in history_entries]
+        }), 200
+    except Exception as e:
+        return jsonify({'msg': str(e)}), 500
+
+@app.route('/tasks/<int:task_id>/history', methods=['GET'])
+@jwt_required()
+def get_task_history(task_id):
+    """Get history entries for a specific task"""
+    try:
+        history_entries = History.query.filter_by(
+            entity_type='task',
+            entity_id=task_id
+        ).order_by(History.created_at.desc()).all()
+        
+        return jsonify({
+            'history': [entry.to_dict() for entry in history_entries]
+        }), 200
+    except Exception as e:
+        return jsonify({'msg': str(e)}), 500

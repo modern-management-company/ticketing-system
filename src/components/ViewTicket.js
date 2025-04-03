@@ -39,6 +39,13 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import AddIcon from '@mui/icons-material/Add';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import DownloadIcon from '@mui/icons-material/Download';
+import HistoryIcon from '@mui/icons-material/History';
+import Timeline from '@mui/lab/Timeline';
+import TimelineItem from '@mui/lab/TimelineItem';
+import TimelineSeparator from '@mui/lab/TimelineSeparator';
+import TimelineConnector from '@mui/lab/TimelineConnector';
+import TimelineContent from '@mui/lab/TimelineContent';
+import TimelineDot from '@mui/lab/TimelineDot';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
@@ -82,6 +89,8 @@ const ViewTicket = () => {
   const [attachments, setAttachments] = useState([]);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [fileInputRef, setFileInputRef] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
@@ -107,6 +116,12 @@ const ViewTicket = () => {
       fetchUsers();
     }
   }, [ticket?.property_id]);
+
+  useEffect(() => {
+    if (ticketId) {
+      fetchHistory();
+    }
+  }, [ticketId]);
 
   const fetchTicket = async () => {
     try {
@@ -158,6 +173,19 @@ const ViewTicket = () => {
     } catch (error) {
       console.error('Failed to fetch users:', error);
       setError('Failed to load user information. Please try refreshing the page.');
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      setLoadingHistory(true);
+      const response = await apiClient.get(`/tickets/${ticketId}/history`);
+      setHistory(response.data.history);
+    } catch (error) {
+      console.error('Failed to fetch ticket history:', error);
+      setError('Failed to load ticket history');
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -353,6 +381,36 @@ const ViewTicket = () => {
     } catch (error) {
       console.error('Error downloading attachment:', error);
       setError('Failed to download attachment');
+    }
+  };
+
+  const getHistoryActionColor = (action) => {
+    switch (action) {
+      case 'created':
+        return 'success';
+      case 'updated':
+        return 'info';
+      case 'status_changed':
+        return 'warning';
+      case 'assigned':
+        return 'primary';
+      default:
+        return 'default';
+    }
+  };
+
+  const formatHistoryEntry = (entry) => {
+    switch (entry.action) {
+      case 'created':
+        return `Ticket created by ${entry.username}`;
+      case 'updated':
+        return `${entry.username} updated ${entry.field_name} from "${entry.old_value}" to "${entry.new_value}"`;
+      case 'status_changed':
+        return `${entry.username} changed status from "${entry.old_value}" to "${entry.new_value}"`;
+      case 'assigned':
+        return `${entry.username} assigned the ticket to ${entry.new_value}`;
+      default:
+        return `${entry.username} performed ${entry.action}`;
     }
   };
 
@@ -671,6 +729,44 @@ const ViewTicket = () => {
             </ListItem>
           )}
         </List>
+      </Paper>
+
+      <Paper sx={{ p: 2, mt: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">History</Typography>
+          <Button
+            startIcon={<RefreshIcon />}
+            onClick={fetchHistory}
+            disabled={loadingHistory}
+            variant="outlined"
+          >
+            {loadingHistory ? 'Loading...' : 'Refresh History'}
+          </Button>
+        </Box>
+
+        <Timeline>
+          {history.map((entry, index) => (
+            <TimelineItem key={entry.history_id}>
+              <TimelineSeparator>
+                <TimelineDot color={getHistoryActionColor(entry.action)} />
+                {index < history.length - 1 && <TimelineConnector />}
+              </TimelineSeparator>
+              <TimelineContent>
+                <Typography variant="body2" color="textSecondary">
+                  {format(new Date(entry.created_at), 'PPpp')}
+                </Typography>
+                <Typography variant="body1">
+                  {formatHistoryEntry(entry)}
+                </Typography>
+              </TimelineContent>
+            </TimelineItem>
+          ))}
+          {history.length === 0 && (
+            <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', py: 2 }}>
+              No history available
+            </Typography>
+          )}
+        </Timeline>
       </Paper>
 
       {/* Edit Dialog */}

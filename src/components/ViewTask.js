@@ -36,6 +36,12 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
 import { format } from 'date-fns';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import Timeline from '@mui/lab/Timeline';
+import TimelineItem from '@mui/lab/TimelineItem';
+import TimelineSeparator from '@mui/lab/TimelineSeparator';
+import TimelineConnector from '@mui/lab/TimelineConnector';
+import TimelineContent from '@mui/lab/TimelineContent';
+import TimelineDot from '@mui/lab/TimelineDot';
 
 const ViewTask = () => {
   const { taskId } = useParams();
@@ -64,6 +70,8 @@ const ViewTask = () => {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState(null);
   const [navigatingToTicket, setNavigatingToTicket] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -78,6 +86,12 @@ const ViewTask = () => {
       fetchTickets();
     }
   }, [task?.property_id]);
+
+  useEffect(() => {
+    if (taskId) {
+      fetchHistory();
+    }
+  }, [taskId]);
 
   const fetchTask = async () => {
     try {
@@ -113,6 +127,19 @@ const ViewTask = () => {
     } catch (error) {
       console.error('Failed to fetch tickets:', error);
       setError('Failed to load ticket information. Please try refreshing the page.');
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      setLoadingHistory(true);
+      const response = await apiClient.get(`/tasks/${taskId}/history`);
+      setHistory(response.data.history);
+    } catch (error) {
+      console.error('Failed to fetch task history:', error);
+      setError('Failed to load task history');
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -214,6 +241,36 @@ const ViewTask = () => {
     if (score >= 70) return 'warning';
     if (score >= 60) return 'error';
     return 'error';
+  };
+
+  const getHistoryActionColor = (action) => {
+    switch (action) {
+      case 'created':
+        return 'success';
+      case 'updated':
+        return 'info';
+      case 'status_changed':
+        return 'warning';
+      case 'assigned':
+        return 'primary';
+      default:
+        return 'default';
+    }
+  };
+
+  const formatHistoryEntry = (entry) => {
+    switch (entry.action) {
+      case 'created':
+        return `Task created by ${entry.username}`;
+      case 'updated':
+        return `${entry.username} updated ${entry.field_name} from "${entry.old_value}" to "${entry.new_value}"`;
+      case 'status_changed':
+        return `${entry.username} changed status from "${entry.old_value}" to "${entry.new_value}"`;
+      case 'assigned':
+        return `${entry.username} assigned the task to ${entry.new_value}`;
+      default:
+        return `${entry.username} performed ${entry.action}`;
+    }
   };
 
   if (loading) {
@@ -454,6 +511,44 @@ const ViewTask = () => {
             </Box>
           </Grid>
         </Grid>
+      </Paper>
+
+      <Paper sx={{ p: 2, mt: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">History</Typography>
+          <Button
+            startIcon={<RefreshIcon />}
+            onClick={fetchHistory}
+            disabled={loadingHistory}
+            variant="outlined"
+          >
+            {loadingHistory ? 'Loading...' : 'Refresh History'}
+          </Button>
+        </Box>
+
+        <Timeline>
+          {history.map((entry, index) => (
+            <TimelineItem key={entry.history_id}>
+              <TimelineSeparator>
+                <TimelineDot color={getHistoryActionColor(entry.action)} />
+                {index < history.length - 1 && <TimelineConnector />}
+              </TimelineSeparator>
+              <TimelineContent>
+                <Typography variant="body2" color="textSecondary">
+                  {format(new Date(entry.created_at), 'PPpp')}
+                </Typography>
+                <Typography variant="body1">
+                  {formatHistoryEntry(entry)}
+                </Typography>
+              </TimelineContent>
+            </TimelineItem>
+          ))}
+          {history.length === 0 && (
+            <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', py: 2 }}>
+              No history available
+            </Typography>
+          )}
+        </Timeline>
       </Paper>
 
       {/* Edit Dialog */}
