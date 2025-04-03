@@ -352,6 +352,31 @@ def create_ticket():
                     'group': assigned_manager.group
                 }
 
+            # Record history for ticket creation
+            History.create_entry(
+                entity_type='ticket',
+                entity_id=new_ticket.ticket_id,
+                action='created',
+                user_id=current_user.user_id
+            )
+
+            
+            History.create_entry(
+                entity_type='task',
+                entity_id=task.task_id,
+                action='created',
+                user_id=current_user.user_id
+                )
+            History.create_entry(
+                entity_type='task',
+                entity_id=task.task_id,
+                action='assigned',
+                field_name='assigned_to',
+                old_value='None',
+                new_value=assigned_manager.username,
+                user_id=current_user.user_id
+                )
+
             return jsonify(response_data), 201
 
         except Exception as e:
@@ -993,11 +1018,46 @@ def manage_task(task_id):
 
             # Update task fields
             if 'title' in data:
+                old_value = task.title
                 task.title = data['title']
+                # Record history for title change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='title',
+                    old_value=old_value,
+                    new_value=data['title'],
+                    user_id=current_user.user_id
+                )
+
             if 'description' in data:
+                old_value = task.description
                 task.description = data['description']
+                # Record history for description change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='description',
+                    old_value=old_value,
+                    new_value=data['description'],
+                    user_id=current_user.user_id
+                )
+
             if 'status' in data:
+                old_value = task.status
                 task.status = data['status']
+                # Record history for status change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='status',
+                    old_value=old_value,
+                    new_value=data['status'],
+                    user_id=current_user.user_id
+                )
                 # Update associated task assignment and ticket
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
@@ -1011,31 +1071,111 @@ def manage_task(task_id):
                             ticket.status = 'in progress'
                         elif data['status'] == 'pending':
                             ticket.status = 'open'
+
             if 'priority' in data:
+                old_value = task.priority
                 task.priority = data['priority']
+                # Record history for priority change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='priority',
+                    old_value=old_value,
+                    new_value=data['priority'],
+                    user_id=current_user.user_id
+                )
                 # Update associated ticket priority
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
                     ticket = Ticket.query.get(task_assignment.ticket_id)
                     if ticket:
                         ticket.priority = data['priority']
+
             if 'assigned_to_id' in data:
+                old_value = task.assigned_to_id
                 task.assigned_to_id = data['assigned_to_id']
+                # Record history for assignee change
+                old_user = User.query.get(old_value) if old_value else None
+                new_user = User.query.get(data['assigned_to_id']) if data['assigned_to_id'] else None
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='assigned_to',
+                    old_value=old_user.username if old_user else 'None',
+                    new_value=new_user.username if new_user else 'None',
+                    user_id=current_user.user_id
+                )
                 # Update task assignment if exists
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
                     task_assignment.assigned_to_user_id = data['assigned_to_id']
+
             if 'due_date' in data:
+                old_value = task.due_date.isoformat() if task.due_date else 'None'
+                new_value = data['due_date'] if data['due_date'] else 'None'
                 task.due_date = datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if data['due_date'] else None
+                # Record history for due date change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='due_date',
+                    old_value=old_value,
+                    new_value=new_value,
+                    user_id=current_user.user_id
+                )
+
             if 'time_spent' in data:
+                old_value = str(task.time_spent) if task.time_spent is not None else 'None'
+                new_value = str(data['time_spent']) if data.get('time_spent') is not None else 'None'
                 task.time_spent = float(data['time_spent']) if data.get('time_spent') else None
+                # Record history for time spent change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='time_spent',
+                    old_value=old_value,
+                    new_value=new_value,
+                    user_id=current_user.user_id
+                )
+
             if 'cost' in data:
+                old_value = str(task.cost) if task.cost is not None else 'None'
+                new_value = str(data['cost']) if data.get('cost') is not None else 'None'
                 task.cost = float(data['cost']) if data.get('cost') else None
+                # Record history for cost change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='cost',
+                    old_value=old_value,
+                    new_value=new_value,
+                    user_id=current_user.user_id
+                )
 
             # Handle ticket_id changes
             if 'ticket_id' in data:
                 # Get existing task assignment if any
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
+                old_ticket_id = task_assignment.ticket_id if task_assignment else None
+                new_ticket_id = data['ticket_id']
+                
+                # Record history for ticket association change
+                old_ticket = Ticket.query.get(old_ticket_id) if old_ticket_id else None
+                new_ticket = Ticket.query.get(new_ticket_id) if new_ticket_id else None
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='associated_ticket',
+                    old_value=f"Ticket #{old_ticket_id}" if old_ticket_id else 'None',
+                    new_value=f"Ticket #{new_ticket_id}" if new_ticket_id else 'None',
+                    user_id=current_user.user_id
+                )
                 
                 # If there's a new ticket_id
                 if data['ticket_id']:
@@ -1110,6 +1250,14 @@ def manage_task(task_id):
         elif request.method == 'DELETE':
             if current_user.role not in ['super_admin', 'manager']:
                 return jsonify({'msg': 'Unauthorized'}), 403
+                
+            # Record history before deletion
+            History.create_entry(
+                entity_type='task',
+                entity_id=task_id,
+                action='deleted',
+                user_id=current_user.user_id
+            )
                 
             # Delete associated task assignment if exists
             task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
@@ -1247,6 +1395,17 @@ def create_task():
         )
         db.session.add(task)
         db.session.flush()  # Flush to get the task_id
+        
+        current_user = get_user_from_jwt()
+
+        # Record history for task creation
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
 
         # If this task is imported from a ticket, create task assignment and sync status/priority
         if 'ticket_id' in data:
@@ -1268,6 +1427,14 @@ def create_task():
                 db.session.add(task_assignment)
 
         db.session.commit()
+
+        # Record history for task creation
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
 
         # Send email notification if user is assigned
         notifications_sent = False
@@ -2465,6 +2632,10 @@ def manage_ticket(ticket_id):
         if not ticket:
             return jsonify({'msg': 'Ticket not found'}), 404
 
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
         if request.method == 'GET':
             return jsonify(ticket.to_dict()), 200
 
@@ -2480,6 +2651,16 @@ def manage_ticket(ticket_id):
                     if old_value != new_value:
                         setattr(ticket, field, new_value)
                         changes.append(f"{field.title()}: {old_value} → {new_value}")
+                        # Record history for each field change
+                        History.create_entry(
+                            entity_type='ticket',
+                            entity_id=ticket_id,
+                            action='updated',
+                            field_name=field,
+                            old_value=str(old_value),
+                            new_value=str(new_value),
+                            user_id=current_user.user_id
+                        )
 
             # Handle status and priority updates with task synchronization
             if 'status' in data:
@@ -2488,6 +2669,16 @@ def manage_ticket(ticket_id):
                 if old_status != new_status:
                     ticket.status = new_status
                     changes.append(f"Status: {old_status} → {new_status}")
+                    # Record history for status change
+                    History.create_entry(
+                        entity_type='ticket',
+                        entity_id=ticket_id,
+                        action='updated',
+                        field_name='status',
+                        old_value=old_status,
+                        new_value=new_status,
+                        user_id=current_user.user_id
+                    )
                     
                     # Update associated task status
                     task_assignment = TaskAssignment.query.filter_by(ticket_id=ticket_id).first()
@@ -2509,6 +2700,16 @@ def manage_ticket(ticket_id):
                 if old_priority != new_priority:
                     ticket.priority = new_priority
                     changes.append(f"Priority: {old_priority} → {new_priority}")
+                    # Record history for priority change
+                    History.create_entry(
+                        entity_type='ticket',
+                        entity_id=ticket_id,
+                        action='updated',
+                        field_name='priority',
+                        old_value=old_priority,
+                        new_value=new_priority,
+                        user_id=current_user.user_id
+                    )
                     
                     # Update associated task priority
                     task_assignment = TaskAssignment.query.filter_by(ticket_id=ticket_id).first()
@@ -2536,8 +2737,20 @@ def manage_ticket(ticket_id):
                         else:
                             new_room.status = 'Out of Order'
                     
+                    old_room_name = old_room.name if old_room else 'None'
+                    new_room_name = new_room.name if new_room else 'None'
                     ticket.room_id = data['room_id']
                     changes.append(f"Room: {old_room.name if old_room else 'None'} → {new_room.name if new_room else 'None'}")
+                    # Record history for room change
+                    History.create_entry(
+                        entity_type='ticket',
+                        entity_id=ticket_id,
+                        action='updated',
+                        field_name='room',
+                        old_value=old_room_name,
+                        new_value=new_room_name,
+                        user_id=current_user.user_id
+                    )
 
             try:
                 db.session.commit()
@@ -2583,6 +2796,14 @@ def manage_ticket(ticket_id):
 
         elif request.method == 'DELETE':
             try:
+                # Record history before deletion
+                History.create_entry(
+                    entity_type='ticket',
+                    entity_id=ticket_id,
+                    action='deleted',
+                    user_id=current_user.user_id
+                )
+
                 # Get property managers and super admins before deleting
                 property_managers = User.query.join(PropertyManager).filter(
                     PropertyManager.property_id == ticket.property_id
