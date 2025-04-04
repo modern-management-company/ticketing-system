@@ -112,14 +112,14 @@ const Layout = () => {
         path: '/admin/users',
       },
       {
-        text: 'Email Settings',
-        icon: <EmailIcon />,
-        path: '/admin/email-settings',
-      },
-      {
         text: 'History',
         icon: <HistoryIcon />,
         path: '/admin/history',
+      },
+      {
+        text: 'Email Settings',
+        icon: <EmailIcon />,
+        path: '/admin/email-settings',
       },
       {
         text: 'SMS Settings',
