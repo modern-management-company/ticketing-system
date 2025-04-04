@@ -1,0 +1,67 @@
+# General
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.log
+*.env
+.env.local
+
+# Python
+env/
+venv/
+*.sqlite3
+*.db
+*.DS_Store
+
+# Flask
+backend/app/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/__pycache__/
+backend/instance/
+backend/*.log
+backend/migrations/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# React Build
+build/
+dist/
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.iml
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+package-lock.json
+backend/serviceAccountKey.json
+.qodo/history.sqlite
+backend/logs/app.log.2
+backend/logs/app.log.1
+backend/logs/app.log.3
+backend/logs/app.log.4
+backend/logs/app.log.5
+backend/logs/app.log.6
+backend/logs/app.log.7
+backend/logs/app.log.8
+backend/logs/app.log.9
+backend/logs/app.log.10
+package-lock.json
+backend/database_backups/
+backend/flask
+backend/flask_sqlalchemy
+backend/gunicorn
+backend/install
+backend/pip
+backend/ssl
+backend/setup_env.sh
