@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import apiClient from "./apiClient"; 
 import {
   Box,
@@ -30,7 +30,9 @@ import {
   Card,
   CardContent,
   CardActions,
-  TableSortLabel
+  TableSortLabel,
+  ToggleButton,
+  ToggleButtonGroup
 } from "@mui/material";
 import { useAuth } from '../context/AuthContext';
 import EditIcon from '@mui/icons-material/Edit';
@@ -49,9 +51,14 @@ import CloseIcon from '@mui/icons-material/Close';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import TableViewIcon from '@mui/icons-material/TableView';
 import KanbanBoard from './TasksKanbanBoard';
+import ArchiveIcon from '@mui/icons-material/Archive';
+import UnarchiveIcon from '@mui/icons-material/Unarchive';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import RestoreIcon from '@mui/icons-material/Restore';
 
 const ViewTasks = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { auth } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
@@ -69,7 +76,8 @@ const ViewTasks = () => {
     priority: 'Low',
     status: 'pending',
     assigned_to_id: '',
-    due_date: null
+    due_date: null,
+    ticket_id: null
   });
   const [openDueDatePicker, setOpenDueDatePicker] = useState(false);
   const [managers, setManagers] = useState([]);
@@ -78,6 +86,8 @@ const ViewTasks = () => {
   const [order, setOrder] = useState('asc');
   const [viewMode, setViewMode] = useState('table');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [navigatingToTicket, setNavigatingToTicket] = useState(null);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -97,6 +107,33 @@ const ViewTasks = () => {
     }
   }, [selectedProperty]);
 
+  useEffect(() => {
+    if (location.state?.createTask) {
+      const { ticketId, propertyId } = location.state;
+      
+      // Set the selected property
+      if (propertyId) {
+        setSelectedProperty(propertyId);
+      }
+      
+      // Pre-populate form data
+      if (ticketId) {
+        setTaskForm(prev => ({
+          ...prev,
+          ticket_id: ticketId
+        }));
+        
+        // Open the dialog after a short delay
+        setTimeout(() => {
+          setOpenDialog(true);
+        }, 300);
+      }
+      
+      // Clear location state immediately
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
   const fetchTasks = async () => {
     try {
       if (!auth?.token || !selectedProperty) {
@@ -114,11 +151,16 @@ const ViewTasks = () => {
       ]);
 
       console.log('Tasks response:', tasksResponse.data);
-      console.log('Users response:', usersResponse.data);
-      console.log('Tickets response:', ticketsResponse.data);
-      console.log('Managers response:', managersResponse.data);
 
       if (tasksResponse.data?.tasks) {
+        // Log task details with ticket and room information
+        console.log('Tasks with ticket info:', tasksResponse.data.tasks.map(task => ({
+          task_id: task.task_id,
+          ticket_id: task.ticket_id,
+          room_info: task.room_info,
+          title: task.title
+        })));
+        
         setTasks(tasksResponse.data.tasks);
       } else {
         console.warn('No tasks data in response');
@@ -164,7 +206,8 @@ const ViewTasks = () => {
       priority: ticket.priority,
       status: 'pending',
       assigned_to_id: '',
-      ticket_id: ticket.ticket_id
+      ticket_id: ticket.ticket_id,
+      due_date: null
     });
     setOpenImportDialog(false);
     setOpenDialog(true);
@@ -235,7 +278,8 @@ const ViewTasks = () => {
         priority: task.priority,
         status: task.status,
         assigned_to_id: task.assigned_to_id || '',
-        due_date: task.due_date ? new Date(task.due_date) : null
+        due_date: task.due_date ? new Date(task.due_date) : null,
+        ticket_id: task.ticket_id || null
       });
     } else {
       setEditingTask(null);
@@ -245,7 +289,8 @@ const ViewTasks = () => {
         priority: 'Low',
         status: 'pending',
         assigned_to_id: '',
-        due_date: null
+        due_date: null,
+        ticket_id: null
       });
     }
     setOpenDialog(true);
@@ -260,7 +305,8 @@ const ViewTasks = () => {
       priority: 'Low',
       status: 'pending',
       assigned_to_id: '',
-      due_date: null
+      due_date: null,
+      ticket_id: null
     });
   };
 
@@ -358,8 +404,11 @@ const ViewTasks = () => {
       let aValue = a[orderBy];
       let bValue = b[orderBy];
 
-      // Special handling for nested values
-      if (orderBy === 'assigned_to') {
+      // Special handling for room sorting
+      if (orderBy === 'room_name') {
+        aValue = a.room_info?.room_name || '';
+        bValue = b.room_info?.room_name || '';
+      } else if (orderBy === 'assigned_to') {
         aValue = users.find(u => u.user_id === a.assigned_to_id)?.username || '';
         bValue = users.find(u => u.user_id === b.assigned_to_id)?.username || '';
       } else if (orderBy === 'group') {
@@ -368,6 +417,9 @@ const ViewTasks = () => {
       } else if (orderBy === 'due_date') {
         aValue = a.due_date ? new Date(a.due_date).getTime() : 0;
         bValue = b.due_date ? new Date(b.due_date).getTime() : 0;
+      } else if (orderBy === 'ticket_id') {
+        aValue = a.ticket_id || 0;
+        bValue = b.ticket_id || 0;
       }
 
       // Handle string comparison
@@ -382,6 +434,26 @@ const ViewTasks = () => {
         return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
       }
     });
+  };
+
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => {
+      const isCompleted = task.status.toLowerCase() === 'completed';
+      return showCompleted ? isCompleted : !isCompleted;
+    });
+  }, [tasks, showCompleted]);
+
+  const handleArchiveTask = async (taskId) => {
+    try {
+      await apiClient.patch(`/tasks/${taskId}`, { 
+        status: 'completed',
+        archived_at: new Date().toISOString()
+      });
+      await fetchTasks();
+      setMessage('Task archived successfully');
+    } catch (error) {
+      setError('Failed to archive task');
+    }
   };
 
   const TaskCard = ({ task }) => (
@@ -416,6 +488,42 @@ const ViewTasks = () => {
         </Grid>
 
         <Grid container spacing={1}>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Room</Typography>
+            {task.room_info ? (
+              <Tooltip title={`From Ticket #${task.room_info.ticket_id}`}>
+                <Chip 
+                  label={task.room_info.room_name}
+                  size="small"
+                  color="info"
+                  variant="outlined"
+                  onClick={() => task.ticket_id && window.confirm(`View ticket #${task.ticket_id}?`) && navigate(`/tickets/${task.ticket_id}`)}
+                />
+              </Tooltip>
+            ) : (
+              <Typography variant="body2">N/A</Typography>
+            )}
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="subtitle2">Linked Ticket</Typography>
+            {task.ticket_id ? (
+              <Chip
+                label={`Ticket #${task.ticket_id}`}
+                size="small"
+                color="secondary"
+                variant="outlined"
+                onClick={() => {
+                  if (navigatingToTicket !== task.ticket_id) {
+                    setNavigatingToTicket(task.ticket_id);
+                    navigate(`/tickets/${task.ticket_id}`);
+                  }
+                }}
+                sx={{ cursor: 'pointer' }}
+              />
+            ) : (
+              <Typography variant="body2">N/A</Typography>
+            )}
+          </Grid>
           <Grid item xs={6}>
             <Typography variant="subtitle2">Assigned To</Typography>
             <Typography variant="body2">
@@ -456,27 +564,58 @@ const ViewTasks = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">Tasks</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h5">
+            {showCompleted ? 'Completed Tasks' : 'Active Tasks'}
+          </Typography>
+          <ToggleButtonGroup
+            value={showCompleted}
+            exclusive
+            onChange={(e, value) => setShowCompleted(value)}
+            size="small"
+          >
+            <ToggleButton value={false}>
+              <Tooltip title="View Active Tasks">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AssignmentIcon />
+                  Active
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value={true}>
+              <Tooltip title="View Completed Tasks">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CheckCircleIcon />
+                  Completed
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<ImportExportIcon />}
-            onClick={() => setOpenImportDialog(true)}
-            disabled={!selectedProperty}
-          >
-            Import from Ticket
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-            disabled={!selectedProperty}
-          >
-            Create Task
-          </Button>
+          {!showCompleted && (
+            <>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<ImportExportIcon />}
+                onClick={() => setOpenImportDialog(true)}
+                disabled={!selectedProperty}
+              >
+                Import from Ticket
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenDialog()}
+                disabled={!selectedProperty}
+              >
+                Create Task
+              </Button>
+            </>
+          )}
           <Tooltip title={viewMode === 'table' ? 'Switch to Kanban View' : 'Switch to Table View'}>
             <IconButton onClick={() => setViewMode(viewMode === 'table' ? 'kanban' : 'table')}>
               {viewMode === 'table' ? <ViewWeekIcon /> : <TableViewIcon />}
@@ -507,7 +646,7 @@ const ViewTasks = () => {
         <>
           {viewMode === 'kanban' ? (
             <KanbanBoard
-              tasks={tasks}
+              tasks={filteredTasks}
               users={users}
               onTaskMove={handleStatusChange}
               onEditTask={handleOpenDialog}
@@ -516,7 +655,7 @@ const ViewTasks = () => {
             />
           ) : isMobile ? (
             <Box sx={{ mt: 2 }}>
-              {tasks.map((task) => (
+              {filteredTasks.map((task) => (
                 <TaskCard key={task.task_id} task={task} />
               ))}
             </Box>
@@ -545,11 +684,20 @@ const ViewTasks = () => {
                     </TableCell>
                     <TableCell>
                       <TableSortLabel
-                        active={orderBy === 'description'}
-                        direction={orderBy === 'description' ? order : 'asc'}
-                        onClick={() => handleRequestSort('description')}
+                        active={orderBy === 'room_name'}
+                        direction={orderBy === 'room_name' ? order : 'asc'}
+                        onClick={() => handleRequestSort('room_name')}
                       >
-                        Description
+                        Room
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'ticket_id'}
+                        direction={orderBy === 'ticket_id' ? order : 'asc'}
+                        onClick={() => handleRequestSort('ticket_id')}
+                      >
+                        Linked Ticket
                       </TableSortLabel>
                     </TableCell>
                     <TableCell>
@@ -601,11 +749,50 @@ const ViewTasks = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {sortTasks(tasks).map((task) => (
+                  {sortTasks(filteredTasks).map((task) => (
                     <TableRow key={task.task_id}>
-                      <TableCell>{task.task_id}</TableCell>
+                      <TableCell>
+                        <Button
+                          onClick={() => navigate(`/tasks/${task.task_id}`)}
+                          sx={{ textTransform: 'none', minWidth: 'auto' }}
+                        >
+                          {task.task_id}
+                        </Button>
+                      </TableCell>
                       <TableCell>{task.title}</TableCell>
-                      <TableCell>{task.description}</TableCell>
+                      <TableCell>
+                        {task.room_info ? (
+                          <Tooltip title={`From Ticket #${task.room_info.ticket_id}`}>
+                            <Chip 
+                              label={task.room_info.room_name}
+                              size="small"
+                              color="info"
+                              variant="outlined"
+                            />
+                          </Tooltip>
+                        ) : (
+                          'N/A'
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {task.ticket_id ? (
+                          <Chip 
+                            label={`Ticket #${task.ticket_id}`}
+                            size="small"
+                            color="secondary"
+                            variant="outlined"
+                            onClick={() => {
+                              if (navigatingToTicket !== task.ticket_id) {
+                                setNavigatingToTicket(task.ticket_id);
+                                navigate(`/tickets/${task.ticket_id}`);
+                              }
+                            }}
+                            sx={{ cursor: 'pointer' }}
+                          />
+                        ) : (
+                          'N/A'
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Chip 
                           label={task.status}
@@ -643,22 +830,43 @@ const ViewTasks = () => {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Button
-                            startIcon={<EditIcon />}
-                            onClick={() => handleOpenDialog(task)}
-                            size="small"
-                          >
-                            Edit
-                          </Button>
-                          {(auth?.user?.role === 'super_admin' || 
-                            managers.some(m => m.user_id === auth?.user?.user_id)) && (
+                          {!showCompleted ? (
+                            <>
+                              <Button
+                                startIcon={<EditIcon />}
+                                onClick={() => handleOpenDialog(task)}
+                                size="small"
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                startIcon={<CheckCircleIcon />}
+                                onClick={() => handleStatusChange(task.task_id, 'completed')}
+                                size="small"
+                                color="success"
+                              >
+                                Mark Complete
+                              </Button>
+                              {(auth?.user?.role === 'super_admin' || 
+                                managers.some(m => m.user_id === auth?.user?.user_id)) && (
+                                <Button
+                                  startIcon={<DeleteIcon />}
+                                  onClick={() => handleDeleteTask(task.task_id)}
+                                  size="small"
+                                  color="error"
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </>
+                          ) : (
                             <Button
-                              startIcon={<DeleteIcon />}
-                              onClick={() => handleDeleteTask(task.task_id)}
+                              startIcon={<RestoreIcon />}
+                              onClick={() => handleStatusChange(task.task_id, 'pending')}
                               size="small"
-                              color="error"
+                              color="primary"
                             >
-                              Delete
+                              Reopen
                             </Button>
                           )}
                         </Box>
@@ -786,6 +994,31 @@ const ViewTasks = () => {
                 </DialogContent>
               </Dialog>
             </LocalizationProvider>
+            <FormControl fullWidth>
+              <InputLabel>Linked Ticket</InputLabel>
+              <Select
+                value={taskForm.ticket_id || ''}
+                onChange={(e) => setTaskForm({ ...taskForm, ticket_id: e.target.value ? Number(e.target.value) : null })}
+                label="Linked Ticket"
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {tickets.length > 0 ? (
+                  tickets
+                    .filter(ticket => ticket.status.toLowerCase() !== 'completed' || ticket.ticket_id === taskForm.ticket_id)
+                    .map((ticket) => (
+                      <MenuItem key={ticket.ticket_id} value={ticket.ticket_id}>
+                        #{ticket.ticket_id}: {ticket.title.substring(0, 50)}{ticket.title.length > 50 ? '...' : ''}
+                      </MenuItem>
+                    ))
+                ) : (
+                  <MenuItem disabled>
+                    <em>No tickets available</em>
+                  </MenuItem>
+                )}
+              </Select>
+            </FormControl>
           </Box>
         </DialogContent>
         <DialogActions>
@@ -810,6 +1043,9 @@ const ViewTasks = () => {
       >
         <DialogTitle>Import Task from Ticket</DialogTitle>
         <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Only active tickets that haven't been linked to tasks are shown. Completed tickets and tickets that already have associated tasks are filtered out.
+          </Alert>
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
@@ -822,7 +1058,14 @@ const ViewTasks = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {tickets.map((ticket) => (
+                {tickets
+                  .filter(ticket => 
+                    // Filter out completed tickets
+                    ticket.status.toLowerCase() !== 'completed' && 
+                    // Filter out tickets that are already imported (have associated tasks)
+                    !tasks.some(task => task.ticket_id === ticket.ticket_id)
+                  )
+                  .map((ticket) => (
                   <TableRow key={ticket.ticket_id}>
                     <TableCell>{ticket.ticket_id}</TableCell>
                     <TableCell>{ticket.title}</TableCell>
@@ -854,6 +1097,18 @@ const ViewTasks = () => {
                     </TableCell>
                   </TableRow>
                 ))}
+                {tickets.filter(ticket => 
+                  ticket.status.toLowerCase() !== 'completed' && 
+                  !tasks.some(task => task.ticket_id === ticket.ticket_id)
+                ).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      <Typography variant="body2" color="textSecondary" sx={{ py: 2 }}>
+                        No tickets available for import. All tickets are either completed or already imported.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>

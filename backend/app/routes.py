@@ -1,6 +1,7 @@
-from flask import request, jsonify, current_app
-from app import app, db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, SMSSettings
+from flask import request, jsonify
+from app import app
+from app.extensions import db
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment, History, SMSSettings
 from app.services import EmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
@@ -13,6 +14,8 @@ import logging
 import secrets
 from sqlalchemy import or_
 from app.services.sms_service import SMSService
+from app.services.supabase_service import SupabaseService
+from werkzeug.utils import secure_filename
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -348,6 +351,31 @@ def create_ticket():
                     'username': assigned_manager.username,
                     'group': assigned_manager.group
                 }
+
+            # Record history for ticket creation
+            History.create_entry(
+                entity_type='ticket',
+                entity_id=new_ticket.ticket_id,
+                action='created',
+                user_id=current_user.user_id
+            )
+
+            
+            History.create_entry(
+                entity_type='task',
+                entity_id=task.task_id,
+                action='created',
+                user_id=current_user.user_id
+                )
+            History.create_entry(
+                entity_type='task',
+                entity_id=task.task_id,
+                action='assigned',
+                field_name='assigned_to',
+                old_value='None',
+                new_value=assigned_manager.username,
+                user_id=current_user.user_id
+                )
 
             return jsonify(response_data), 201
 
@@ -850,6 +878,15 @@ def assign_task():
         db.session.add(task)
         db.session.flush()  # Get the task_id
 
+        # Record history for task creation
+        current_user = get_user_from_jwt()
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
         # Create a new task assignment
         task_assignment = TaskAssignment(
             task_id=task.task_id,
@@ -858,6 +895,29 @@ def assign_task():
             status=task_status  # Use mapped status
         )
         db.session.add(task_assignment)
+
+        # Record history for task assignment
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='assigned',
+            field_name='assigned_to',
+            old_value='None',
+            new_value=user.username,
+            user_id=current_user.user_id
+        )
+
+        # Record history for ticket association
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='updated',
+            field_name='associated_ticket',
+            old_value='None',
+            new_value=f"Ticket #{ticket.ticket_id}",
+            user_id=current_user.user_id
+        )
+
         db.session.commit()
 
         # Send email notification
@@ -990,11 +1050,46 @@ def manage_task(task_id):
 
             # Update task fields
             if 'title' in data:
+                old_value = task.title
                 task.title = data['title']
+                # Record history for title change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='title',
+                    old_value=old_value,
+                    new_value=data['title'],
+                    user_id=current_user.user_id
+                )
+
             if 'description' in data:
+                old_value = task.description
                 task.description = data['description']
+                # Record history for description change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='description',
+                    old_value=old_value,
+                    new_value=data['description'],
+                    user_id=current_user.user_id
+                )
+
             if 'status' in data:
+                old_value = task.status
                 task.status = data['status']
+                # Record history for status change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='status',
+                    old_value=old_value,
+                    new_value=data['status'],
+                    user_id=current_user.user_id
+                )
                 # Update associated task assignment and ticket
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
@@ -1008,22 +1103,136 @@ def manage_task(task_id):
                             ticket.status = 'in progress'
                         elif data['status'] == 'pending':
                             ticket.status = 'open'
+
             if 'priority' in data:
+                old_value = task.priority
                 task.priority = data['priority']
+                # Record history for priority change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='priority',
+                    old_value=old_value,
+                    new_value=data['priority'],
+                    user_id=current_user.user_id
+                )
                 # Update associated ticket priority
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
                     ticket = Ticket.query.get(task_assignment.ticket_id)
                     if ticket:
                         ticket.priority = data['priority']
+
             if 'assigned_to_id' in data:
+                old_value = task.assigned_to_id
                 task.assigned_to_id = data['assigned_to_id']
+                # Record history for assignee change
+                old_user = User.query.get(old_value) if old_value else None
+                new_user = User.query.get(data['assigned_to_id']) if data['assigned_to_id'] else None
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='assigned_to',
+                    old_value=old_user.username if old_user else 'None',
+                    new_value=new_user.username if new_user else 'None',
+                    user_id=current_user.user_id
+                )
                 # Update task assignment if exists
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
                     task_assignment.assigned_to_user_id = data['assigned_to_id']
+
             if 'due_date' in data:
+                old_value = task.due_date.isoformat() if task.due_date else 'None'
+                new_value = data['due_date'] if data['due_date'] else 'None'
                 task.due_date = datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if data['due_date'] else None
+                # Record history for due date change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='due_date',
+                    old_value=old_value,
+                    new_value=new_value,
+                    user_id=current_user.user_id
+                )
+
+            if 'time_spent' in data:
+                old_value = str(task.time_spent) if task.time_spent is not None else 'None'
+                new_value = str(data['time_spent']) if data.get('time_spent') is not None else 'None'
+                task.time_spent = float(data['time_spent']) if data.get('time_spent') else None
+                # Record history for time spent change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='time_spent',
+                    old_value=old_value,
+                    new_value=new_value,
+                    user_id=current_user.user_id
+                )
+
+            if 'cost' in data:
+                old_value = str(task.cost) if task.cost is not None else 'None'
+                new_value = str(data['cost']) if data.get('cost') is not None else 'None'
+                task.cost = float(data['cost']) if data.get('cost') else None
+                # Record history for cost change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='cost',
+                    old_value=old_value,
+                    new_value=new_value,
+                    user_id=current_user.user_id
+                )
+
+            # Handle ticket_id changes
+            if 'ticket_id' in data:
+                # Get existing task assignment if any
+                task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
+                old_ticket_id = task_assignment.ticket_id if task_assignment else None
+                new_ticket_id = data['ticket_id']
+                
+                # Record history for ticket association change
+                old_ticket = Ticket.query.get(old_ticket_id) if old_ticket_id else None
+                new_ticket = Ticket.query.get(new_ticket_id) if new_ticket_id else None
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='associated_ticket',
+                    old_value=f"Ticket #{old_ticket_id}" if old_ticket_id else 'None',
+                    new_value=f"Ticket #{new_ticket_id}" if new_ticket_id else 'None',
+                    user_id=current_user.user_id
+                )
+                
+                # If there's a new ticket_id
+                if data['ticket_id']:
+                    # Get the ticket
+                    ticket = Ticket.query.get(data['ticket_id'])
+                    if not ticket:
+                        return jsonify({'msg': 'Ticket not found'}), 404
+                        
+                    # If there's no existing assignment, create one
+                    if not task_assignment:
+                        task_assignment = TaskAssignment(
+                            task_id=task_id,
+                            ticket_id=data['ticket_id'],
+                            assigned_to_user_id=task.assigned_to_id or current_user.user_id,
+                            status=task.status
+                        )
+                        db.session.add(task_assignment)
+                    # If assignment exists but for a different ticket, update it
+                    elif task_assignment.ticket_id != data['ticket_id']:
+                        task_assignment.ticket_id = data['ticket_id']
+                        task_assignment.status = task.status
+                else:
+                    # If ticket_id is null/empty and there's an existing assignment, delete it
+                    if task_assignment:
+                        db.session.delete(task_assignment)
 
             task.updated_at = datetime.utcnow()
             
@@ -1074,6 +1283,14 @@ def manage_task(task_id):
             if current_user.role not in ['super_admin', 'manager']:
                 return jsonify({'msg': 'Unauthorized'}), 403
                 
+            # Record history before deletion
+            History.create_entry(
+                entity_type='task',
+                entity_id=task_id,
+                action='deleted',
+                user_id=current_user.user_id
+            )
+                
             # Delete associated task assignment if exists
             task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
             if task_assignment:
@@ -1090,8 +1307,10 @@ def manage_task(task_id):
 
 @app.route('/properties/<int:property_id>/tasks', methods=['GET'])
 @jwt_required()
+@handle_errors
 def get_property_tasks(property_id):
     try:
+        # Get current user and verify access
         current_user = get_user_from_jwt()
         if not current_user:
             return jsonify({"msg": "User not found"}), 404
@@ -1106,28 +1325,80 @@ def get_property_tasks(property_id):
             if not has_access:
                 return jsonify({'msg': 'Unauthorized access to property'}), 403
 
-        # Get tasks based on user role and property
-        tasks = Task.query.filter_by(property_id=property_id)
+        # 1. Get tasks based on user role and property
+        tasks_query = Task.query.filter_by(property_id=property_id)
         
         if current_user.role == 'user':
             # Users only see tasks assigned to them
-            tasks = tasks.filter_by(assigned_to_id=current_user.user_id)
+            tasks_query = tasks_query.filter_by(assigned_to_id=current_user.user_id)
 
-        tasks = tasks.all()
+        tasks = tasks_query.all()
         
-        # Format tasks with user information
-        task_list = []
-        for task in tasks:
-            assigned_user = User.query.get(task.assigned_to_id) if task.assigned_to_id else None
-            task_data = task.to_dict()
-            task_data['assigned_to'] = assigned_user.username if assigned_user else None
-            task_list.append(task_data)
+        if not tasks:
+            return jsonify({"tasks": [], "total": 0}), 200
+            
+        # 2. Get task assignments with tickets in a single query
+        task_assignments = (
+            db.session.query(TaskAssignment, Ticket)
+            .join(Ticket, TaskAssignment.ticket_id == Ticket.ticket_id)
+            .filter(TaskAssignment.task_id.in_([task.task_id for task in tasks]))
+            .all()
+        )
+        
+        # Create a mapping of task_id to ticket and assignment data
+        task_ticket_map = {}
+        for assignment, ticket in task_assignments:
+            task_ticket_map[assignment.task_id] = {
+                'ticket_id': ticket.ticket_id,
+                'ticket': ticket
+            }
+        
+        # 3. Get room information for tickets with rooms
+        ticket_room_map = {}
+        for assignment, ticket in task_assignments:
+            if ticket.room_id:
+                room = Room.query.get(ticket.room_id)
+                if room:
+                    ticket_room_map[ticket.ticket_id] = {
+                        'room_id': room.room_id,
+                        'room_name': room.name,
+                        'ticket_id': ticket.ticket_id
+                    }
 
-        return jsonify({'tasks': task_list}), 200
+        # Construct response data with all relevant information
+        tasks_data = []
+        for task in tasks:
+            task_dict = task.to_dict()
+            
+            # Add ticket information if available
+            ticket_info = task_ticket_map.get(task.task_id)
+            if ticket_info:
+                task_dict['ticket_id'] = ticket_info['ticket_id']
+                ticket_id = ticket_info['ticket_id']
+                task_dict['room_info'] = ticket_room_map.get(ticket_id)
+            else:
+                task_dict['ticket_id'] = None
+                task_dict['room_info'] = None
+            
+            # Add user information if assigned
+            if task.assigned_to_id:
+                user = User.query.get(task.assigned_to_id)
+                if user:
+                    task_dict['assigned_to'] = user.username
+                    task_dict['assigned_user_group'] = user.group
+            
+            tasks_data.append(task_dict)
+
+        app.logger.info(f"Retrieved {len(tasks_data)} tasks for property {property_id}")
+        
+        return jsonify({
+            "tasks": tasks_data,
+            "total": len(tasks_data)
+        }), 200
 
     except Exception as e:
-        app.logger.error(f"Error in get_property_tasks: {str(e)}")
-        return jsonify({"msg": "Internal server error"}), 500
+        app.logger.error(f"Error getting property tasks: {str(e)}")
+        return jsonify({"message": f"Failed to get property tasks: {str(e)}"}), 500
 
 @app.route('/tasks', methods=['POST'])
 @jwt_required()
@@ -1150,10 +1421,23 @@ def create_task():
             property_id=data['property_id'],
             status=data.get('status', 'pending'),
             assigned_to_id=data.get('assigned_to_id'),
-            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None
+            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None,
+            time_spent=float(data.get('time_spent')) if data.get('time_spent') else None,
+            cost=float(data.get('cost')) if data.get('cost') else None
         )
         db.session.add(task)
         db.session.flush()  # Flush to get the task_id
+        
+        current_user = get_user_from_jwt()
+
+        # Record history for task creation
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
 
         # If this task is imported from a ticket, create task assignment and sync status/priority
         if 'ticket_id' in data:
@@ -1175,6 +1459,14 @@ def create_task():
                 db.session.add(task_assignment)
 
         db.session.commit()
+
+        # Record history for task creation
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
 
         # Send email notification if user is assigned
         notifications_sent = False
@@ -2119,6 +2411,15 @@ def get_dashboard_stats():
         
         # Get tasks with filters
         tasks = Task.query.filter(*task_filters).all()
+        
+        # Get service requests
+        service_request_filters = []
+        if property_id:
+            service_request_filters.append(ServiceRequest.property_id == property_id)
+        elif current_user['role'] == 'manager' and 'managed_property_ids' in locals():
+            service_request_filters.append(ServiceRequest.property_id.in_(managed_property_ids))
+            
+        service_requests = ServiceRequest.query.filter(*service_request_filters).all()
 
         # Calculate total properties based on role
         if current_user['role'] == 'super_admin':
@@ -2142,12 +2443,19 @@ def get_dashboard_stats():
         for ticket in tickets:
             status_counts[ticket.status] += 1
             priority_counts[ticket.priority] += 1
-            if ticket.status == 'Completed' and hasattr(ticket, 'completed_at') and ticket.completed_at:
-                delta = ticket.completed_at - ticket.created_at
+            if ticket.status == 'completed' and hasattr(ticket, 'updated_at') and ticket.updated_at:
+                delta = ticket.updated_at - ticket.created_at
                 resolution_times.append(delta.total_seconds() / 3600)
 
-        # Calculate task statistics
-        active_tasks = len([t for t in tasks if t.status != 'Completed'])
+        # Calculate open tickets: status is not "completed"
+        open_tickets = len([t for t in tickets if t.status.lower() != 'completed'])
+        
+        # Calculate active tasks: status is not "completed"
+        active_tasks = len([t for t in tasks if t.status.lower() != 'completed'])
+        
+        # Calculate open service requests: status is not "completed"
+        open_requests = len([r for r in service_requests if r.status.lower() != 'completed'])
+        
         total_tasks = len(tasks)
         completed_tasks = total_tasks - active_tasks
 
@@ -2164,8 +2472,9 @@ def get_dashboard_stats():
             total_rooms = Room.query.filter(Room.property_id.in_(property_ids)).count()
 
         return jsonify({
-            'openTickets': status_counts.get('Open', 0),
+            'openTickets': open_tickets,
             'activeTasks': active_tasks,
+            'openRequests': open_requests,
             'completedTasks': completed_tasks,
             'totalTasks': total_tasks,
             'resolutionRate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2),
@@ -2217,7 +2526,11 @@ def get_system_settings():
                 'smtp_username': os.getenv('SMTP_USERNAME', 'modernmanagementhotels@gmail.com'),
                 'smtp_password': '',
                 'sender_email': os.getenv('SENDER_EMAIL', 'modernmanagementhotels@gmail.com'),
-                'enable_email_notifications': True
+                'enable_email_notifications': True,
+                'daily_report_hour': 18,
+                'daily_report_minute': 0,
+                'daily_report_timezone': 'America/New_York',
+                'enable_daily_reports': True
             })
 
         return jsonify(settings.to_dict())
@@ -2253,8 +2566,24 @@ def update_system_settings():
             settings.smtp_password = data.get('smtp_password')
         settings.sender_email = data.get('sender_email', settings.sender_email)
         settings.enable_email_notifications = data.get('enable_email_notifications', settings.enable_email_notifications)
+        
+        # Update scheduler settings
+        settings.daily_report_hour = data.get('daily_report_hour', settings.daily_report_hour)
+        settings.daily_report_minute = data.get('daily_report_minute', settings.daily_report_minute)
+        settings.daily_report_timezone = data.get('daily_report_timezone', settings.daily_report_timezone)
+        settings.enable_daily_reports = data.get('enable_daily_reports', settings.enable_daily_reports)
 
         db.session.commit()
+
+        # Update the scheduler job if it exists
+        from app import scheduler
+        if hasattr(scheduler, 'update_daily_report_schedule'):
+            scheduler.update_daily_report_schedule(
+                hour=settings.daily_report_hour,
+                minute=settings.daily_report_minute,
+                timezone=settings.daily_report_timezone,
+                enabled=settings.enable_daily_reports
+            )
 
         # Return updated settings
         return jsonify(settings.to_dict())
@@ -2335,6 +2664,10 @@ def manage_ticket(ticket_id):
         if not ticket:
             return jsonify({'msg': 'Ticket not found'}), 404
 
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
         if request.method == 'GET':
             return jsonify(ticket.to_dict()), 200
 
@@ -2350,6 +2683,16 @@ def manage_ticket(ticket_id):
                     if old_value != new_value:
                         setattr(ticket, field, new_value)
                         changes.append(f"{field.title()}: {old_value} → {new_value}")
+                        # Record history for each field change
+                        History.create_entry(
+                            entity_type='ticket',
+                            entity_id=ticket_id,
+                            action='updated',
+                            field_name=field,
+                            old_value=str(old_value),
+                            new_value=str(new_value),
+                            user_id=current_user.user_id
+                        )
 
             # Handle status and priority updates with task synchronization
             if 'status' in data:
@@ -2358,6 +2701,16 @@ def manage_ticket(ticket_id):
                 if old_status != new_status:
                     ticket.status = new_status
                     changes.append(f"Status: {old_status} → {new_status}")
+                    # Record history for status change
+                    History.create_entry(
+                        entity_type='ticket',
+                        entity_id=ticket_id,
+                        action='updated',
+                        field_name='status',
+                        old_value=old_status,
+                        new_value=new_status,
+                        user_id=current_user.user_id
+                    )
                     
                     # Update associated task status
                     task_assignment = TaskAssignment.query.filter_by(ticket_id=ticket_id).first()
@@ -2379,6 +2732,16 @@ def manage_ticket(ticket_id):
                 if old_priority != new_priority:
                     ticket.priority = new_priority
                     changes.append(f"Priority: {old_priority} → {new_priority}")
+                    # Record history for priority change
+                    History.create_entry(
+                        entity_type='ticket',
+                        entity_id=ticket_id,
+                        action='updated',
+                        field_name='priority',
+                        old_value=old_priority,
+                        new_value=new_priority,
+                        user_id=current_user.user_id
+                    )
                     
                     # Update associated task priority
                     task_assignment = TaskAssignment.query.filter_by(ticket_id=ticket_id).first()
@@ -2406,8 +2769,20 @@ def manage_ticket(ticket_id):
                         else:
                             new_room.status = 'Out of Order'
                     
+                    old_room_name = old_room.name if old_room else 'None'
+                    new_room_name = new_room.name if new_room else 'None'
                     ticket.room_id = data['room_id']
                     changes.append(f"Room: {old_room.name if old_room else 'None'} → {new_room.name if new_room else 'None'}")
+                    # Record history for room change
+                    History.create_entry(
+                        entity_type='ticket',
+                        entity_id=ticket_id,
+                        action='updated',
+                        field_name='room',
+                        old_value=old_room_name,
+                        new_value=new_room_name,
+                        user_id=current_user.user_id
+                    )
 
             try:
                 db.session.commit()
@@ -2453,6 +2828,14 @@ def manage_ticket(ticket_id):
 
         elif request.method == 'DELETE':
             try:
+                # Record history before deletion
+                History.create_entry(
+                    entity_type='ticket',
+                    entity_id=ticket_id,
+                    action='deleted',
+                    user_id=current_user.user_id
+                )
+
                 # Get property managers and super admins before deleting
                 property_managers = User.query.join(PropertyManager).filter(
                     PropertyManager.property_id == ticket.property_id
@@ -2852,6 +3235,14 @@ def create_service_request():
         db.session.add(new_request)
         db.session.flush()  # Get the request ID
 
+        # Record history for service request creation
+        History.create_entry(
+            entity_type='service_request',
+            entity_id=new_request.request_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
         # Create a task for the request
         task = Task(
             title=f"{data['request_group']} Request: {data['request_type']} - Room {room.name}",
@@ -2864,6 +3255,13 @@ def create_service_request():
         db.session.add(task)
         db.session.flush()  # Get the task ID
         
+        # Record history for task creation
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
         # Link task to request
         new_request.assigned_task_id = task.task_id
         
@@ -2886,6 +3284,14 @@ def create_service_request():
                     status='Pending'
                 )
                 db.session.add(task_assignment)
+
+                # Record history for task assignment
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task.task_id,
+                    action='assigned',
+                    user_id=current_user.user_id
+                )
 
                 # Send SMS notification if staff has phone number
                 if staff.phone:
@@ -3014,6 +3420,15 @@ def update_service_request(request_id):
                 setattr(service_request, field, data[field])
 
         db.session.commit()
+
+        # Record history for service request update
+        History.create_entry(
+            entity_type='service_request',
+            entity_id=service_request.request_id,
+            action='updated',
+            user_id=current_user.user_id
+        )   
+        
         return jsonify({
             'msg': 'Service request updated successfully',
             'request': service_request.to_dict()
@@ -3072,6 +3487,15 @@ def create_user():
         db.session.add(new_user)
         db.session.flush()  # Flush to get the user_id
 
+        
+        # Record history for user creation
+        History.create_entry(
+            entity_type='user',
+            entity_id=new_user.user_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
         # Handle property assignments
         if 'property_ids' in data and data['property_ids']:
             for property_id in data['property_ids']:
@@ -3082,6 +3506,15 @@ def create_user():
                 )
                 db.session.add(user_property)
 
+                
+                # Record history for user creation
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=new_user.user_id,
+                    action='created',
+                    user_id=current_user.user_id
+                )
+
                 # If user is a manager, also create PropertyManager relationship
                 if data['role'] == 'manager':
                     property_manager = PropertyManager(
@@ -3089,6 +3522,17 @@ def create_user():
                         property_id=property_id
                     )
                     db.session.add(property_manager)
+
+                                        # Record history for manager role assignment
+                    History.create_entry(
+                        entity_type='user',
+                        entity_id=new_user.user_id,
+                        action='updated',
+                        field_name='manager_role',
+                        old_value='None',
+                        new_value=f"Manager for {property.name}",
+                        user_id=current_user.user_id
+                    )
 
         db.session.commit()
 
@@ -3140,6 +3584,18 @@ def update_user(user_id):
         if 'role' in data and data['role'] != user.role:
             old_role = user.role
             new_role = data['role']
+
+                        # Record history for role change
+            History.create_entry(
+                entity_type='user',
+                entity_id=user_id,
+                action='updated',
+                field_name='role',
+                old_value=old_role,
+                new_value=new_role,
+                user_id=current_user.user_id
+            )
+            
             
             # If changing to manager
             if new_role == 'manager':
@@ -3161,6 +3617,17 @@ def update_user(user_id):
                             property_id=up.property_id
                         )
                         db.session.add(property_manager)
+
+                        # Record history for manager role assignment
+                        History.create_entry(
+                            entity_type='user',
+                            entity_id=user.user_id,
+                            action='updated',   
+                            field_name='manager_role',
+                            old_value='None',
+                            new_value=f"Manager for {Property.query.get(up.property_id).name}",
+                            user_id=current_user.user_id
+                        )
             
             # If changing from manager
             elif old_role == 'manager':
@@ -3204,6 +3671,13 @@ def update_user(user_id):
                 )
                 db.session.add(user_property)
                 
+                # Record history for user creation
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=user.user_id,
+                    action='updated',
+                    user_id=current_user.user_id
+                )   
                 # Add PropertyManager only for managers
                 if user.role == 'manager':
                     property_manager = PropertyManager(
@@ -3211,6 +3685,14 @@ def update_user(user_id):
                         property_id=property_id
                     )
                     db.session.add(property_manager)
+
+                    # Record history for manager role assignment
+                    History.create_entry(
+                        entity_type='user',
+                        entity_id=user.user_id,
+                        action='updated',
+                        user_id=current_user.user_id
+                    )
 
         db.session.commit()
         return jsonify({
@@ -3308,6 +3790,425 @@ def fix_manager_properties():
         db.session.rollback()
         app.logger.error(f"Error fixing manager properties: {str(e)}")
         return jsonify({"msg": f"Error fixing manager properties: {str(e)}"}), 500
+
+# Add this new route to get task details with ticket room info
+@app.route('/tasks/<int:task_id>/details', methods=['GET'])
+@jwt_required()
+def get_task_details(task_id):
+    try:
+        # Get the task
+        task = Task.query.get_or_404(task_id)
+        
+        # Get the task assignment
+        task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
+        
+        # If there's a task assignment, get the ticket and room info
+        room_info = None
+        if task_assignment and task_assignment.ticket_id:
+            ticket = Ticket.query.get(task_assignment.ticket_id)
+            if ticket and ticket.room_id:
+                room = Room.query.get(ticket.room_id)
+                if room:
+                    room_info = {
+                        'room_id': room.room_id,
+                        'room_name': room.name,
+                        'ticket_id': ticket.ticket_id
+                    }
+
+        # Convert task to dictionary and add room info
+        task_data = task.to_dict()
+        task_data['room_info'] = room_info
+
+        return jsonify(task_data), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting task details: {str(e)}")
+        return jsonify({"message": "Failed to get task details"}), 500
+@app.route('/api/reports/send-email', methods=['POST'])
+@jwt_required()
+def send_report_email():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"msg": "No input data provided"}), 400
+
+        # Validate required fields
+        required_fields = ['property_id', 'date', 'type']
+        if not all(field in data for field in required_fields):
+            return jsonify({"msg": "Missing required fields"}), 400
+
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({"msg": "User not found"}), 404
+
+        # Get property
+        property = Property.query.get(data['property_id'])
+        if not property:
+            return jsonify({"msg": "Property not found"}), 404
+
+        # Get report data based on type
+        report_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        report_type = data['type']
+
+        # Get the data using the same endpoints as the frontend
+        if report_type == 'tickets':
+            tickets = Ticket.query.filter_by(property_id=data['property_id']).all()
+            items = []
+            for t in tickets:
+                creator = User.query.get(t.user_id)
+                items.append({
+                    'id': t.ticket_id,
+                    'title': t.title,
+                    'room': t.room_name if hasattr(t, 'room_name') else 'N/A',
+                    'status': t.status,
+                    'priority': t.priority,
+                    'created_by': creator.username if creator else 'Unknown',
+                    'created_at': t.created_at.strftime('%m/%d/%Y %H:%M')
+                })
+        elif report_type == 'tasks':
+            tasks = Task.query.filter_by(property_id=data['property_id']).all()
+            items = []
+            for t in tasks:
+                assigned_user = User.query.get(t.assigned_to_id) if t.assigned_to_id else None
+                items.append({
+                    'id': t.task_id,
+                    'title': t.title,
+                    'status': t.status,
+                    'priority': t.priority,
+                    'assigned_to': assigned_user.username if assigned_user else 'Unassigned',
+                    'due_date': t.due_date.strftime('%m/%d/%Y') if t.due_date else 'No due date'
+                })
+        elif report_type == 'requests':
+            requests = ServiceRequest.query.filter_by(property_id=data['property_id']).all()
+            items = [{
+                'id': r.request_id,
+                'type': r.request_type,
+                'room': r.room_number or 'N/A',
+                'group': r.request_group,
+                'status': r.status,
+                'priority': r.priority,
+                'guest': r.guest_name or 'N/A',
+                'created_at': r.created_at.strftime('%m/%d/%Y %H:%M')
+            } for r in requests]
+        else:
+            return jsonify({"msg": "Invalid report type"}), 400
+
+        # Generate HTML email content
+        html_content = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+                th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+                th {{ background-color: #f8f9fa; }}
+                .critical {{ color: #dc3545; }}
+                .high {{ color: #fd7e14; }}
+                .medium {{ color: #ffc107; }}
+                .low {{ color: #28a745; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>{report_type.capitalize()} Report - {property.name}</h2>
+                <p>Date: {report_date.strftime('%B %d, %Y')}</p>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        {''.join(f'<th>{key.replace("_", " ").title()}</th>' for key in items[0].keys() if key != 'id')}
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(f'''
+                    <tr>
+                        {''.join(f'<td class="{item["priority"].lower()}">{value}</td>' for key, value in item.items() if key != 'id')}
+                    </tr>
+                    ''' for item in items)}
+                </tbody>
+            </table>
+        </body>
+        </html>
+        """
+
+        # Send email
+        email_service = EmailService()
+        success = email_service.send_report_email(
+            to_email=current_user.email,
+            subject=f"{report_type.capitalize()} Report - {property.name}",
+            content=html_content,
+            is_html=True
+        )
+
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "Report sent successfully"
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Failed to send report email"
+            }), 500
+
+    except Exception as e:
+        app.logger.error(f"Error sending report email: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": "Internal server error"
+        }), 500
+@app.route('/api/settings/resend-executive-report', methods=['POST'])
+@jwt_required()
+def resend_executive_report():
+    """Resend daily reports to all executive users"""
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can resend reports'}), 403
+
+        # Import the send_daily_reports function
+        from app.scheduler import send_daily_reports
+        
+        # Call the function to send reports
+        send_daily_reports()
+        
+        return jsonify({'message': 'Executive reports have been resent successfully'}), 200
+
+    except Exception as e:
+        app.logger.error(f"Error in resend_executive_report: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/tickets/<int:ticket_id>/attachments', methods=['POST'])
+@jwt_required()
+def upload_ticket_attachment(ticket_id):
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Get the ticket
+        ticket = Ticket.query.get_or_404(ticket_id)
+
+        # Check if user has permission to upload attachments
+        if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+            return jsonify({'msg': 'Unauthorized - You can only upload attachments to your own tickets'}), 403
+
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            return jsonify({'msg': 'No file uploaded'}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'msg': 'No file selected'}), 400
+
+        # Log environment variables (without sensitive data)
+        app.logger.debug(f"Supabase URL: {app.config.get('SUPABASE_URL')}")
+        app.logger.debug(f"Supabase bucket: {app.config.get('SUPABASE_BUCKET_NAME')}")
+
+        # Initialize Supabase service
+        try:
+            supabase_service = SupabaseService()
+        except ValueError as e:
+            app.logger.error(f"Supabase configuration error: {str(e)}")
+            return jsonify({'msg': 'Storage service configuration error'}), 500
+
+        # Upload file to Supabase
+        try:
+            file_info = supabase_service.upload_file(file, ticket_id)
+        except Exception as e:
+            app.logger.error(f"Error uploading file to Supabase: {str(e)}")
+            return jsonify({'msg': 'Failed to upload file to storage'}), 500
+
+        # Create attachment record in database
+        attachment = TicketAttachment(
+            ticket_id=ticket_id,
+            file_name=secure_filename(file.filename),
+            file_path=file_info['file_path'],
+            file_type=file_info['file_type'],
+            file_size=file_info['file_size'],
+            uploaded_by_id=current_user.user_id
+        )
+
+        db.session.add(attachment)
+        db.session.commit()
+
+        return jsonify({
+            'msg': 'File uploaded successfully',
+            'attachment': attachment.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error uploading ticket attachment: {str(e)}")
+        return jsonify({'msg': 'Failed to upload file'}), 500
+
+@app.route('/tickets/<int:ticket_id>/attachments/<int:attachment_id>', methods=['DELETE'])
+@jwt_required()
+def delete_ticket_attachment(ticket_id, attachment_id):
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Get the ticket and attachment
+        ticket = Ticket.query.get_or_404(ticket_id)
+        attachment = TicketAttachment.query.get_or_404(attachment_id)
+
+        # Verify attachment belongs to ticket
+        if attachment.ticket_id != ticket_id:
+            return jsonify({'msg': 'Attachment does not belong to this ticket'}), 400
+
+        # Check if user has permission to delete attachment
+        if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+            return jsonify({'msg': 'Unauthorized - You can only delete attachments from your own tickets'}), 403
+
+        # Initialize Supabase service
+        supabase_service = SupabaseService()
+
+        # Delete file from Supabase
+        if not supabase_service.delete_file(attachment.file_path):
+            return jsonify({'msg': 'Failed to delete file from storage'}), 500
+
+        # Delete attachment record from database
+        db.session.delete(attachment)
+        db.session.commit()
+
+        return jsonify({'msg': 'Attachment deleted successfully'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting ticket attachment: {str(e)}")
+        return jsonify({'msg': 'Failed to delete attachment'}), 500
+
+@app.route('/tickets/<int:ticket_id>/attachments/<int:attachment_id>/download', methods=['GET'])
+@jwt_required()
+def download_ticket_attachment(ticket_id, attachment_id):
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Get the ticket and attachment
+        ticket = Ticket.query.get_or_404(ticket_id)
+        attachment = TicketAttachment.query.get_or_404(attachment_id)
+
+        # Verify attachment belongs to ticket
+        if attachment.ticket_id != ticket_id:
+            return jsonify({'msg': 'Attachment does not belong to this ticket'}), 400
+
+        # Check if user has permission to download attachment
+        if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+            return jsonify({'msg': 'Unauthorized - You can only download attachments from your own tickets'}), 403
+
+        # Initialize Supabase service
+        supabase_service = SupabaseService()
+
+        # Get the file URL
+        file_url = supabase_service.get_file_url(attachment.file_path)
+
+        return jsonify({
+            'file_url': file_url,
+            'file_name': attachment.file_name
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting ticket attachment URL: {str(e)}")
+        return jsonify({'msg': 'Failed to get file URL'}), 500
+
+@app.route('/tickets/<int:ticket_id>/history', methods=['GET'])
+@jwt_required()
+def get_ticket_history(ticket_id):
+    """Get history entries for a specific ticket"""
+    try:
+        history_entries = History.query.filter_by(
+            entity_type='ticket',
+            entity_id=ticket_id
+        ).order_by(History.created_at.desc()).all()
+        
+        return jsonify({
+            'history': [entry.to_dict() for entry in history_entries]
+        }), 200
+    except Exception as e:
+        return jsonify({'msg': str(e)}), 500
+
+@app.route('/tasks/<int:task_id>/history', methods=['GET'])
+@jwt_required()
+def get_task_history(task_id):
+    """Get history entries for a specific task"""
+    try:
+        history_entries = History.query.filter_by(
+            entity_type='task',
+            entity_id=task_id
+        ).order_by(History.created_at.desc()).all()
+        
+        return jsonify({
+            'history': [entry.to_dict() for entry in history_entries]
+        }), 200
+    except Exception as e:
+        return jsonify({'msg': str(e)}), 500
+
+@app.route('/history', methods=['GET'])
+@jwt_required()
+def get_all_history():
+    """Get all history entries with pagination and filtering"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Only super_admin can view all history
+        if current_user.role != 'super_admin':
+            return jsonify({'msg': 'Unauthorized - Only super admins can view all history'}), 403
+
+        # Get query parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        entity_type = request.args.get('entity_type')
+        action = request.args.get('action')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        user_id = request.args.get('user_id', type=int)
+
+        # Build query
+        query = History.query
+
+        # Apply filters
+        if entity_type:
+            query = query.filter(History.entity_type == entity_type)
+        if action:
+            query = query.filter(History.action == action)
+        if start_date:
+            query = query.filter(History.created_at >= datetime.fromisoformat(start_date))
+        if end_date:
+            query = query.filter(History.created_at <= datetime.fromisoformat(end_date))
+        if user_id:
+            query = query.filter(History.user_id == user_id)
+
+        # Order by most recent first
+        query = query.order_by(History.created_at.desc())
+
+        # Paginate results
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        history_entries = pagination.items
+
+        return jsonify({
+            'history': [entry.to_dict() for entry in history_entries],
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': page
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting history: {str(e)}")
+        return jsonify({'msg': str(e)}), 500
+
 
 @app.route('/api/settings/sms', methods=['GET'])
 @jwt_required()

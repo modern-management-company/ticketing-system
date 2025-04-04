@@ -48,6 +48,10 @@ const PropertyManagement = () => {
     status: 'active',
     description: ''
   });
+  const [selectedProperty, setSelectedProperty] = useState(null);
+  const [managersDialogOpen, setManagersDialogOpen] = useState(false);
+  const [propertyManagers, setPropertyManagers] = useState([]);
+  const [loadingManagers, setLoadingManagers] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -176,6 +180,25 @@ const PropertyManagement = () => {
     });
   };
 
+  const fetchPropertyManagers = async (propertyId) => {
+    try {
+      setLoadingManagers(true);
+      const response = await apiClient.get(`/properties/${propertyId}/managers`);
+      setPropertyManagers(response.data?.managers || []);
+    } catch (error) {
+      console.error('Failed to fetch property managers:', error);
+      setError('Failed to load property managers');
+    } finally {
+      setLoadingManagers(false);
+    }
+  };
+
+  const handleShowManagers = (property) => {
+    setSelectedProperty(property);
+    setManagersDialogOpen(true);
+    fetchPropertyManagers(property.property_id);
+  };
+
   if (loading) return <CircularProgress />;
 
   return (
@@ -224,6 +247,12 @@ const PropertyManagement = () => {
                     </Typography>
                   )}
                   <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                      size="small"
+                      onClick={() => handleShowManagers(property)}
+                    >
+                      Show Managers
+                    </Button>
                     <IconButton
                       onClick={() => handlePropertyEdit(property)}
                       color="primary"
@@ -365,6 +394,53 @@ const PropertyManagement = () => {
           </TableContainer>
         </Box>
       )}
+
+      {/* Property Managers Dialog */}
+      <Dialog 
+        open={managersDialogOpen} 
+        onClose={() => setManagersDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {selectedProperty ? `Managers for ${selectedProperty.name}` : 'Property Managers'}
+        </DialogTitle>
+        <DialogContent>
+          {loadingManagers ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : propertyManagers.length > 0 ? (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Email</TableCell>
+                    <TableCell>Role</TableCell>
+                    <TableCell>Department</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {propertyManagers.map((manager) => (
+                    <TableRow key={manager.id}>
+                      <TableCell>{manager.name || manager.username}</TableCell>
+                      <TableCell>{manager.email}</TableCell>
+                      <TableCell>{manager.role}</TableCell>
+                      <TableCell>{manager.group || 'N/A'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Alert severity="info">No managers assigned to this property</Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setManagersDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useAuth } from '../context/AuthContext';
 import apiClient from "./apiClient";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -31,7 +31,10 @@ import {
   CardActions,
   Grid,
   TableSortLabel,
-  Tooltip
+  Tooltip,
+  ToggleButtonGroup,
+  ToggleButton,
+  Autocomplete
 } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -42,10 +45,16 @@ import CloseIcon from '@mui/icons-material/Close';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import TableViewIcon from '@mui/icons-material/TableView';
 import TicketKanbanBoard from './TicketKanbanBoard';
+import ArchiveIcon from '@mui/icons-material/Archive';
+import UnarchiveIcon from '@mui/icons-material/Unarchive';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import RestoreIcon from '@mui/icons-material/Restore';
 
 const ViewTickets = () => {
   const { auth } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -56,6 +65,7 @@ const ViewTickets = () => {
   const [rooms, setRooms] = useState([]);
   const [properties, setProperties] = useState([]);
   const [managers, setManagers] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [ticketForm, setTicketForm] = useState({
     title: '',
     description: '',
@@ -69,6 +79,7 @@ const ViewTickets = () => {
   const [order, setOrder] = useState('asc');
   const [viewMode, setViewMode] = useState('table');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
@@ -103,6 +114,7 @@ const ViewTickets = () => {
       fetchTickets();
       fetchRooms();
       fetchManagers();
+      fetchTasks();
     }
   }, [selectedProperty]);
 
@@ -255,6 +267,18 @@ const ViewTickets = () => {
       }
     } catch (error) {
       console.error('Failed to fetch managers:', error);
+    }
+  };
+
+  const fetchTasks = async () => {
+    try {
+      if (!selectedProperty) return;
+      const response = await apiClient.get(`/properties/${selectedProperty}/tasks`);
+      if (response.data?.tasks) {
+        setTasks(response.data.tasks);
+      }
+    } catch (error) {
+      console.error('Failed to fetch tasks:', error);
     }
   };
 
@@ -416,6 +440,14 @@ const ViewTickets = () => {
       let aValue = a[orderBy];
       let bValue = b[orderBy];
 
+      // Special handling for linked tasks sorting
+      if (orderBy === 'linked_tasks') {
+        const aTasks = tasks.filter(task => task.ticket_id === a.ticket_id).length;
+        const bTasks = tasks.filter(task => task.ticket_id === b.ticket_id).length;
+        aValue = aTasks;
+        bValue = bTasks;
+      }
+
       // Handle string comparison
       if (typeof aValue === 'string') {
         aValue = aValue.toLowerCase();
@@ -427,6 +459,28 @@ const ViewTickets = () => {
       } else {
         return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
       }
+    });
+  };
+
+  const filteredTickets = useMemo(() => {
+    return tickets.filter(ticket => {
+      const isCompleted = ticket.status.toLowerCase() === 'completed';
+      return showCompleted ? isCompleted : !isCompleted;
+    });
+  }, [tickets, showCompleted]);
+
+  const sortRooms = (rooms) => {
+    return [...rooms].sort((a, b) => {
+      const roomA = a.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const roomB = b.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      
+      const numA = parseInt(roomA);
+      const numB = parseInt(roomB);
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+      
+      return roomA.localeCompare(roomB);
     });
   };
 
@@ -522,18 +576,47 @@ const ViewTickets = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">Tickets</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h5">
+            {showCompleted ? 'Completed Tickets' : 'Active Tickets'}
+          </Typography>
+          <ToggleButtonGroup
+            value={showCompleted}
+            exclusive
+            onChange={(e, value) => setShowCompleted(value)}
+            size="small"
+          >
+            <ToggleButton value={false}>
+              <Tooltip title="View Active Tickets">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AssignmentIcon />
+                  Active
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value={true}>
+              <Tooltip title="View Completed Tickets">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CheckCircleIcon />
+                  Completed
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-            disabled={!selectedProperty}
-          >
-            Create Ticket
-          </Button>
+          {!showCompleted && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+              disabled={!selectedProperty}
+            >
+              Create Ticket
+            </Button>
+          )}
           <Tooltip title={viewMode === 'table' ? 'Switch to Kanban View' : 'Switch to Table View'}>
             <IconButton onClick={() => setViewMode(viewMode === 'table' ? 'kanban' : 'table')}>
               {viewMode === 'table' ? <ViewWeekIcon /> : <TableViewIcon />}
@@ -564,7 +647,7 @@ const ViewTickets = () => {
         <>
           {viewMode === 'kanban' ? (
             <TicketKanbanBoard
-              tickets={tickets}
+              tickets={filteredTickets}
               onTicketMove={(ticketId, newStatus) => handleStatusChange(ticketId, newStatus)}
               onEditTicket={handleOpenDialog}
               onDeleteTicket={handleDeleteTicket}
@@ -572,7 +655,7 @@ const ViewTickets = () => {
             />
           ) : isMobile ? (
             <Box sx={{ mt: 2 }}>
-              {tickets.map((ticket) => (
+              {filteredTickets.map((ticket) => (
                 <TicketCard key={ticket.ticket_id} ticket={ticket} />
               ))}
             </Box>
@@ -671,13 +754,29 @@ const ViewTickets = () => {
                         Group
                       </TableSortLabel>
                     </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'linked_tasks'}
+                        direction={orderBy === 'linked_tasks' ? order : 'asc'}
+                        onClick={() => handleRequestSort('linked_tasks')}
+                      >
+                        Linked Tasks
+                      </TableSortLabel>
+                    </TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {sortTickets(tickets).map((ticket) => (
+                  {sortTickets(filteredTickets).map((ticket) => (
                     <TableRow key={ticket.ticket_id}>
-                      <TableCell>{ticket.ticket_id}</TableCell>
+                      <TableCell>
+                        <Button
+                          onClick={() => navigate(`/tickets/${ticket.ticket_id}`)}
+                          sx={{ textTransform: 'none', minWidth: 'auto' }}
+                        >
+                          {ticket.ticket_id}
+                        </Button>
+                      </TableCell>
                       <TableCell>{ticket.title}</TableCell>
                       <TableCell>{ticket.description}</TableCell>
                       <TableCell>
@@ -716,24 +815,75 @@ const ViewTickets = () => {
                         />
                       </TableCell>
                       <TableCell>
+                        {(() => {
+                          const linkedTasks = tasks.filter(task => task.ticket_id === ticket.ticket_id);
+                          return linkedTasks.length > 0 ? (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              <Chip 
+                                label={`${linkedTasks.length} Task${linkedTasks.length > 1 ? 's' : ''}`}
+                                color="primary"
+                                size="small"
+                                onClick={() => navigate(`/tickets/${ticket.ticket_id}`)}
+                                sx={{ cursor: 'pointer' }}
+                              />
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {linkedTasks.map(task => (
+                                  <Chip
+                                    key={task.task_id}
+                                    label={`#${task.task_id}`}
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() => navigate(`/tasks/${task.task_id}`)}
+                                    sx={{ cursor: 'pointer' }}
+                                  />
+                                ))}
+                              </Box>
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" color="textSecondary">No tasks</Typography>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Button
-                            startIcon={<EditIcon />}
-                            onClick={() => handleOpenDialog(ticket)}
-                            size="small"
-                          >
-                            Edit
-                          </Button>
-                          {(auth?.user?.role === 'super_admin' || 
-                            managers.some(m => m.user_id === auth?.user?.user_id) || 
-                            ticket.created_by_id === auth?.user?.user_id) && (
+                          {!showCompleted ? (
+                            <>
+                              <Button
+                                startIcon={<EditIcon />}
+                                onClick={() => handleOpenDialog(ticket)}
+                                size="small"
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                startIcon={<CheckCircleIcon />}
+                                onClick={() => handleStatusChange(ticket.ticket_id, 'completed')}
+                                size="small"
+                                color="success"
+                              >
+                                Mark Complete
+                              </Button>
+                              {(auth?.user?.role === 'super_admin' || 
+                                managers.some(m => m.user_id === auth?.user?.user_id) || 
+                                ticket.created_by_id === auth?.user?.user_id) && (
+                                <Button
+                                  startIcon={<DeleteIcon />}
+                                  onClick={() => handleDeleteTicket(ticket.ticket_id)}
+                                  size="small"
+                                  color="error"
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </>
+                          ) : (
                             <Button
-                              startIcon={<DeleteIcon />}
-                              onClick={() => handleDeleteTicket(ticket.ticket_id)}
+                              startIcon={<RestoreIcon />}
+                              onClick={() => handleStatusChange(ticket.ticket_id, 'open')}
                               size="small"
-                              color="error"
+                              color="primary"
                             >
-                              Delete
+                              Reopen
                             </Button>
                           )}
                         </Box>
@@ -789,23 +939,38 @@ const ViewTickets = () => {
               fullWidth
               required
             />
-            <FormControl fullWidth>
-              <InputLabel>Room</InputLabel>
-              <Select
-                value={ticketForm.room_id}
-                onChange={(e) => setTicketForm({ ...ticketForm, room_id: e.target.value })}
-                label="Room"
-              >
-                <MenuItem value="">
-                  <em>None</em>
-                </MenuItem>
-                {rooms.map((room) => (
-                  <MenuItem key={room.room_id} value={room.room_id}>
-                    {room.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              options={sortRooms(rooms)}
+              getOptionLabel={(option) => option.name || ''}
+              value={rooms.find(room => room.room_id === ticketForm.room_id) || null}
+              onChange={(event, newValue) => {
+                setTicketForm({
+                  ...ticketForm,
+                  room_id: newValue?.room_id || '',
+                  property_id: selectedProperty
+                });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Room"
+                  required
+                  error={!ticketForm.room_id}
+                />
+              )}
+              isOptionEqualToValue={(option, value) => option.room_id === value.room_id}
+              freeSolo={false}
+              autoSelect
+              autoComplete
+              clearOnBlur={false}
+              filterOptions={(options, { inputValue }) => {
+                // Custom filter to match room numbers
+                const filtered = options.filter(option =>
+                  option.name.toLowerCase().includes(inputValue.toLowerCase())
+                );
+                return filtered;
+              }}
+            />
             <FormControl fullWidth>
               <InputLabel>Priority</InputLabel>
               <Select

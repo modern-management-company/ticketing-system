@@ -22,6 +22,7 @@ import Dashboard from "./components/Dashboard";
 import ManageUsers from './components/ManageUsers';
 import ViewTasks from './components/ViewTasks';
 import ViewTickets from './components/ViewTickets';
+import ViewTicket from './components/ViewTicket';
 import ViewRooms from './components/ViewRooms';
 import PropertyManagement from './components/PropertyManagement';
 import Unauthorized from './components/Unauthorized';
@@ -30,6 +31,9 @@ import HomeOverview from './components/HomeOverview';
 import EmailSettings from './components/EmailSettings';
 import SMSSettings from './components/SMSSettings';
 import ServiceRequests from './components/ServiceRequests';
+import Welcome from './components/Welcome';
+import ViewTask from './components/ViewTask';
+import HistoryView from './components/HistoryView';
 
 const App = () => {
   return (
@@ -38,13 +42,40 @@ const App = () => {
       <AuthProvider>
         <Router>
           <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<RegisterUser />} />
+            {/* Welcome page - redirect to /home if authenticated */}
+            <Route path="/" element={
+              <ProtectedRoute requiresAuth={false} redirectTo="/home">
+                <Welcome />
+              </ProtectedRoute>
+            } />
+
+            {/* Public routes - redirect to /home if authenticated */}
+            <Route path="/login" element={
+              <ProtectedRoute requiresAuth={false} redirectTo="/home">
+                <Login />
+              </ProtectedRoute>
+            } />
+            <Route path="/register" element={
+              <ProtectedRoute requiresAuth={false} redirectTo="/home">
+                <RegisterUser />
+              </ProtectedRoute>
+            } />
+            <Route path="/register-admin" element={
+              <ProtectedRoute requiresAuth={false} redirectTo="/home">
+                <RegisterUser isAdminRegistration={true} />
+              </ProtectedRoute>
+            } />
+            
             <Route path="/unauthorized" element={<Unauthorized />} />
             
             {/* Protected routes */}
             <Route element={<Layout />}>
+              <Route path="/home" element={
+                <ProtectedRoute>
+                  <HomeOverview />
+                </ProtectedRoute>
+              } />
+              
               <Route path="/dashboard" element={
                 <ProtectedRoute>
                   <Dashboard />
@@ -54,6 +85,12 @@ const App = () => {
               <Route path="/tickets" element={
                 <ProtectedRoute>
                   <ViewTickets />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/tickets/:ticketId" element={
+                <ProtectedRoute>
+                  <ViewTicket />
                 </ProtectedRoute>
               } />
               
@@ -81,6 +118,12 @@ const App = () => {
                 </ProtectedRoute>
               } />
               
+              <Route path="/tasks/:taskId" element={
+                <ProtectedRoute>
+                  <ViewTask />
+                </ProtectedRoute>
+              } />
+              
               <Route path="/admin">
                 <Route path="properties" element={
                   <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
@@ -97,22 +140,21 @@ const App = () => {
                     <EmailSettings />
                   </ProtectedRoute>
                 } />
+                <Route path="history" element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <HistoryView />
+                  </ProtectedRoute>
+                } />
                 <Route path="sms-settings" element={
                   <ProtectedRoute allowedRoles={['super_admin']}>
                     <SMSSettings />
                   </ProtectedRoute>
                 } />
               </Route>
-              
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <HomeOverview />
-                </ProtectedRoute>
-              } />
             </Route>
             
-            {/* Default route */}
-            <Route path="*" element={<Navigate to="/unauthorized" replace />} />
+            {/* Redirect any unknown routes to /home if authenticated, / if not */}
+            <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </Router>
       </AuthProvider>

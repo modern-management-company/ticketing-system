@@ -64,3 +64,4 @@ backend/gunicorn
 backend/install
 backend/pip
 backend/ssl
+backend/setup_env.sh

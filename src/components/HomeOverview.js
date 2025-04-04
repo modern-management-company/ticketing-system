@@ -81,6 +81,8 @@ const HomeOverview = () => {
           priorityDistribution: response.data.priorityDistribution || []
         }
       });
+      
+      console.log('Dashboard stats loaded:', response.data);
     } catch (error) {
       console.error('Failed to fetch overview data:', error);
       setError('Failed to load overview data');
@@ -139,18 +141,21 @@ const HomeOverview = () => {
       {
         title: 'Open Tickets',
         value: overview.stats.openTickets,
+        description: 'All tickets not marked as completed',
         icon: <TicketIcon color="primary" />,
         action: () => navigate('/tickets')
       },
       {
         title: 'Active Tasks',
         value: overview.stats.activeTasks,
+        description: 'All tasks in pending or in progress status',
         icon: <TaskIcon color="primary" />,
         action: () => navigate('/tasks')
       },
       {
         title: 'Open Requests',
         value: overview.stats.openRequests || 0,
+        description: 'All service requests not marked as completed',
         icon: <PendingIcon color="primary" />,
         action: () => navigate('/requests')
       }
@@ -335,9 +340,14 @@ const HomeOverview = () => {
                     {stat.title}
                   </Typography>
                 </Box>
-                <Typography variant="h4" component="div">
+                <Typography variant="h4" component="div" fontWeight="bold" color="primary">
                   {stat.value}
                 </Typography>
+                {stat.description && (
+                  <Typography variant="caption" color="text.secondary" mt={1}>
+                    {stat.description}
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>
