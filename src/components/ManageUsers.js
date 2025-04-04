@@ -51,6 +51,7 @@ const ManageUsers = () => {
     password: '',
     role: 'user',
     group: '',
+    phone: '',
     assigned_properties: [],
     is_active: true
   });
@@ -163,6 +164,7 @@ const ManageUsers = () => {
       password: '',
       role: user.role,
       group: user.group || '',
+      phone: user.phone || '',
       assigned_properties: user.assigned_properties.map(p => p.property_id),
       is_active: user.is_active
     });
@@ -288,6 +290,7 @@ const ManageUsers = () => {
       password: '',
       role: 'user',
       group: '',
+      phone: '',
       assigned_properties: [],
       is_active: true
     });
@@ -357,6 +360,7 @@ const ManageUsers = () => {
             <TableRow>
               <TableCell>Username</TableCell>
               <TableCell>Email</TableCell>
+              <TableCell>Phone</TableCell>
               <TableCell>Role</TableCell>
               <TableCell>Group</TableCell>
               <TableCell>Status</TableCell>
@@ -369,6 +373,7 @@ const ManageUsers = () => {
               <TableRow key={user.user_id}>
                 <TableCell>{user.username}</TableCell>
                 <TableCell>{user.email}</TableCell>
+                <TableCell>{user.phone || 'Not set'}</TableCell>
                 <TableCell>
                   {auth.role === 'super_admin' ? (
                     <Select
@@ -511,6 +516,15 @@ const ManageUsers = () => {
               onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
               margin="normal"
               required
+            />
+            <TextField
+              fullWidth
+              label="Phone Number"
+              name="phone"
+              value={userFormData.phone}
+              onChange={(e) => setUserFormData({ ...userFormData, phone: e.target.value })}
+              margin="normal"
+              placeholder="+1234567890"
             />
             {!editingUser && (
               <TextField

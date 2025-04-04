@@ -29,6 +29,7 @@ import Unauthorized from './components/Unauthorized';
 import Reports from './components/Reports';
 import HomeOverview from './components/HomeOverview';
 import EmailSettings from './components/EmailSettings';
+import SMSSettings from './components/SMSSettings';
 import ServiceRequests from './components/ServiceRequests';
 import Welcome from './components/Welcome';
 import ViewTask from './components/ViewTask';
@@ -142,6 +143,11 @@ const App = () => {
                 <Route path="history" element={
                   <ProtectedRoute allowedRoles={['super_admin']}>
                     <HistoryView />
+                  </ProtectedRoute>
+                } />
+                <Route path="sms-settings" element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <SMSSettings />
                   </ProtectedRoute>
                 } />
               </Route>

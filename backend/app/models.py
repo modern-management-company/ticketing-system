@@ -386,6 +386,30 @@ class EmailSettings(db.Model):
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
+class SMSSettings(db.Model):
+    __tablename__ = 'sms_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    service_provider = db.Column(db.String(255), nullable=False)
+    account_sid = db.Column(db.String(255), nullable=False)
+    auth_token = db.Column(db.String(255), nullable=False)
+    sender_phone = db.Column(db.String(20), nullable=False)
+    enable_sms_notifications = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        """Convert SMS settings object to dictionary"""
+        return {
+            'id': self.id,
+            'service_provider': self.service_provider,
+            'account_sid': self.account_sid,
+            'auth_token': self.auth_token,
+            'sender_phone': self.sender_phone,
+            'enable_sms_notifications': self.enable_sms_notifications,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
 class ServiceRequest(db.Model):
     __tablename__ = 'service_requests'
     request_id = db.Column(db.Integer, primary_key=True)

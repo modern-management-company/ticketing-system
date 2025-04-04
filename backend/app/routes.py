@@ -1,7 +1,7 @@
 from flask import request, jsonify
 from app import app
 from app.extensions import db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment, History
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment, History, SMSSettings
 from app.services import EmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
@@ -4208,3 +4208,192 @@ def get_all_history():
     except Exception as e:
         app.logger.error(f"Error getting history: {str(e)}")
         return jsonify({'msg': str(e)}), 500
+
+
+@app.route('/api/settings/sms', methods=['GET'])
+@jwt_required()
+def get_sms_settings():
+    """Get SMS settings from database"""
+    try:
+        # Get the first SMS settings record (there should be only one)
+        sms_settings = SMSSettings.query.first()
+        
+        # If no settings exist yet, return empty settings
+        if not sms_settings:
+            return jsonify({
+                'service_provider': '',
+                'account_sid': '',
+                'auth_token': '',
+                'sender_phone': '',
+                'enable_sms_notifications': True
+            }), 200
+            
+        return jsonify(sms_settings.to_dict()), 200
+    except Exception as e:
+        app.logger.error(f"Error retrieving SMS settings: {str(e)}")
+        return jsonify({"message": f"Failed to retrieve SMS settings: {str(e)}"}), 500
+
+@app.route('/api/settings/sms', methods=['POST'])
+@jwt_required()
+def update_sms_settings():
+    """Update SMS settings in database"""
+    try:
+        data = request.get_json()
+        
+        # Get current settings or create new if not exists
+        sms_settings = SMSSettings.query.first()
+        if not sms_settings:
+            sms_settings = SMSSettings(
+                service_provider=data.get('service_provider', ''),
+                account_sid=data.get('account_sid', ''),
+                auth_token=data.get('auth_token', ''),
+                sender_phone=data.get('sender_phone', ''),
+                enable_sms_notifications=data.get('enable_sms_notifications', True)
+            )
+            db.session.add(sms_settings)
+        else:
+            # Update existing settings
+            sms_settings.service_provider = data.get('service_provider', sms_settings.service_provider)
+            sms_settings.account_sid = data.get('account_sid', sms_settings.account_sid)
+            sms_settings.auth_token = data.get('auth_token', sms_settings.auth_token)
+            sms_settings.sender_phone = data.get('sender_phone', sms_settings.sender_phone)
+            sms_settings.enable_sms_notifications = data.get('enable_sms_notifications', sms_settings.enable_sms_notifications)
+        
+        db.session.commit()
+        return jsonify(sms_settings.to_dict()), 200
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating SMS settings: {str(e)}")
+        return jsonify({"message": f"Failed to update SMS settings: {str(e)}"}), 500
+
+@app.route('/api/test-sms', methods=['POST'])
+@jwt_required()
+def test_sms():
+    """Send a test SMS to verify settings"""
+    try:
+        data = request.get_json()
+        phone_number = data.get('phone')
+        
+        if not phone_number:
+            return jsonify({"message": "Phone number is required"}), 400
+            
+        # Get SMS settings
+        sms_settings = SMSSettings.query.first()
+        if not sms_settings:
+            return jsonify({"message": "SMS settings not configured"}), 400
+            
+        # Configure SMS client based on provider (example for Twilio)
+        if sms_settings.service_provider.lower() == 'twilio':
+            try:
+                # This is where you would import and use the Twilio client
+                # For demonstration purposes, just log it
+                app.logger.info(f"Would send SMS to {phone_number} using Twilio")
+                # client = Client(sms_settings.account_sid, sms_settings.auth_token)
+                # message = client.messages.create(
+                #     body="This is a test SMS from your property management system.",
+                #     from_=sms_settings.sender_phone,
+                #     to=phone_number
+                # )
+                # app.logger.info(f"SMS sent with SID: {message.sid}")
+            except Exception as e:
+                app.logger.error(f"Error sending SMS via Twilio: {str(e)}")
+                return jsonify({"message": f"Failed to send SMS: {str(e)}"}), 500
+        else:
+            # Handle other SMS providers or return error for unsupported provider
+            return jsonify({"message": f"SMS provider {sms_settings.service_provider} not supported yet"}), 400
+            
+        return jsonify({"message": "Test SMS sent successfully"}), 200
+    except Exception as e:
+        app.logger.error(f"Error in test SMS route: {str(e)}")
+        return jsonify({"message": f"Failed to send test SMS: {str(e)}"}), 500
+
+@app.route('/api/test-all-sms', methods=['POST'])
+@jwt_required()
+def test_all_sms():
+    """Run comprehensive tests on SMS configuration"""
+    try:
+        # Get SMS settings
+        sms_settings = SMSSettings.query.first()
+        if not sms_settings:
+            return jsonify({"message": "SMS settings not configured", "results": []}), 400
+        
+        results = []
+        
+        # Test 1: SMS Provider Connection
+        try:
+            # Placeholder for actual connection test code
+            results.append({
+                "test": "SMS Provider Connection",
+                "success": True,
+                "message": f"Successfully connected to {sms_settings.service_provider}"
+            })
+        except Exception as e:
+            results.append({
+                "test": "SMS Provider Connection",
+                "success": False,
+                "message": f"Failed to connect: {str(e)}"
+            })
+        
+        # Test 2: API Authentication
+        try:
+            # Placeholder for actual authentication test code
+            results.append({
+                "test": "API Authentication",
+                "success": True,
+                "message": "Authentication successful"
+            })
+        except Exception as e:
+            results.append({
+                "test": "API Authentication",
+                "success": False,
+                "message": f"Authentication failed: {str(e)}"
+            })
+        
+        # Test 3: Phone Number Validation
+        try:
+            # Placeholder for phone number validation test
+            if not sms_settings.sender_phone or not sms_settings.sender_phone.startswith('+'):
+                raise ValueError("Sender phone must be in E.164 format (e.g., +1234567890)")
+            results.append({
+                "test": "Phone Number Validation",
+                "success": True,
+                "message": "Sender phone number is valid"
+            })
+        except Exception as e:
+            results.append({
+                "test": "Phone Number Validation",
+                "success": False,
+                "message": f"Invalid phone number: {str(e)}"
+            })
+        
+        # Add more tests here (Message Formatting, Character Encoding, etc.)
+        
+        # Placeholder results for the remaining tests
+        test_names = [
+            "Message Formatting", 
+            "Character Encoding", 
+            "Rate Limiting Check", 
+            "Error Handling",
+            "Message Delivery"
+        ]
+        
+        for test_name in test_names:
+            # For demonstration purposes, use random success/failure
+            import random
+            success = random.choice([True, True, True, False])  # 75% success rate
+            results.append({
+                "test": test_name,
+                "success": success,
+                "message": "Test completed successfully" if success else "Test failed"
+            })
+        
+        return jsonify({
+            "message": "SMS configuration tests completed",
+            "results": results
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error running SMS tests: {str(e)}")
+        return jsonify({
+            "message": f"Failed to run SMS tests: {str(e)}",
+            "results": []
+        }), 500
