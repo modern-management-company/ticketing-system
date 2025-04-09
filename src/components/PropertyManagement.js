@@ -318,46 +318,43 @@ const PropertyManagement = () => {
           </Grid>
         )
       ) : (
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Basic Plan
-                </Typography>
-                <Typography variant="h4" color="primary" gutterBottom>
-                  $20/month
-                </Typography>
-                <List>
-                  <Typography variant="body2">• Core Ticketing System</Typography>
-                  <Typography variant="body2">• Basic Support</Typography>
-                  <Typography variant="body2">• Ticket creation & assignment</Typography>
-                  <Typography variant="body2">• Property & room management</Typography>
-                  <Typography variant="body2">• Task management features</Typography>
-                  <Typography variant="body2">• Email/SMS notifications (basic)</Typography>
-                </List>
-              </CardContent>
-            </Card>
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="h6" gutterBottom>Subscription Overview</Typography>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Basic Plan</Typography>
+                  <Typography variant="h4" color="primary" gutterBottom>$20/month</Typography>
+                  <List>
+                    <Typography variant="body2">• Core Ticketing System</Typography>
+                    <Typography variant="body2">• Basic Support</Typography>
+                    <Typography variant="body2">• Ticket creation & assignment</Typography>
+                    <Typography variant="body2">• Property & room management</Typography>
+                    <Typography variant="body2">• Task management features</Typography>
+                    <Typography variant="body2">• Email notifications</Typography>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Premium Plan</Typography>
+                  <Typography variant="h4" color="primary" gutterBottom>$30/month</Typography>
+                  <List>
+                    <Typography variant="body2">• All Basic Plan features</Typography>
+                    <Typography variant="body2">• File Attachments</Typography>
+                    <Typography variant="body2">• SMS Notifications</Typography>
+                    <Typography variant="body2">• Priority Support</Typography>
+                    <Typography variant="body2">• Advanced Analytics</Typography>
+                    <Typography variant="body2">• Custom Branding</Typography>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
           </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Attachments Add-on
-                </Typography>
-                <Typography variant="h4" color="primary" gutterBottom>
-                  +$10/month
-                </Typography>
-                <List>
-                  <Typography variant="body2">• File Attachment Storage & Management</Typography>
-                  <Typography variant="body2">• Integrated Cloud Storage (Supabase)</Typography>
-                  <Typography variant="body2">• Secure file uploads/downloads</Typography>
-                  <Typography variant="body2">• Direct file access in tickets</Typography>
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+        </Box>
       )}
 
       {/* Property Dialog */}
@@ -421,7 +418,7 @@ const PropertyManagement = () => {
                   disabled={propertyFormData.subscription_plan !== 'premium'}
                 />
               }
-              label="Enable Attachments (+$10/month)"
+              label="Enable Attachments"
             />
             <TextField
               fullWidth
