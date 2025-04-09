@@ -19,7 +19,7 @@ import {
   Tooltip
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
+import apiClient from './apiClient';
 import InfoIcon from '@mui/icons-material/Info';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import StorageIcon from '@mui/icons-material/Storage';
@@ -54,7 +54,7 @@ const AttachmentSettings = () => {
 
   const fetchSettings = async () => {
     try {
-      const response = await axios.get('/api/settings/attachments');
+      const response = await apiClient.get('/api/settings/attachments');
       setSettings(response.data);
       setLoading(false);
     } catch (err) {
@@ -78,7 +78,7 @@ const AttachmentSettings = () => {
     setSuccess('');
 
     try {
-      await axios.post('/api/settings/attachments', settings);
+      await apiClient.post('/api/settings/attachments', settings);
       setSuccess('Settings saved successfully');
     } catch (err) {
       setError('Failed to save settings');
@@ -90,7 +90,7 @@ const AttachmentSettings = () => {
   const handleTestSettings = async () => {
     setTestResult(null);
     try {
-      const response = await axios.post('/api/settings/attachments/test', settings);
+      const response = await apiClient.post('/api/settings/attachments/test', settings);
       setTestResult({
         success: true,
         message: 'Connection test successful'
