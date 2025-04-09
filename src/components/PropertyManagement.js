@@ -406,7 +406,7 @@ const PropertyManagement = () => {
               <InputLabel>Subscription Plan</InputLabel>
               <Select
                 value={propertyFormData.subscription_plan}
-                onChange={(e) => setPropertyFormData({ ...propertyFormData, subscription_plan: e.target.value })}
+                onChange={(e) => setPropertyFormData({ ...propertyFormData, subscription_plan: e.target.value, has_attachments: e.target.value === 'premium' ? propertyFormData.has_attachments : false })}
                 label="Subscription Plan"
               >
                 <MenuItem value="basic">Basic ($20/month)</MenuItem>
@@ -418,6 +418,7 @@ const PropertyManagement = () => {
                 <Checkbox
                   checked={propertyFormData.has_attachments}
                   onChange={(e) => setPropertyFormData({ ...propertyFormData, has_attachments: e.target.checked })}
+                  disabled={propertyFormData.subscription_plan !== 'premium'}
                 />
               }
               label="Enable Attachments (+$10/month)"

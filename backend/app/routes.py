@@ -503,6 +503,13 @@ def create_property():
         if missing_fields:
             app.logger.error(f"Missing required fields: {missing_fields}")
             return jsonify({"msg": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+        # Validate subscription and attachment settings
+        subscription_plan = data.get('subscription_plan', 'basic')
+        has_attachments = data.get('has_attachments', False)
+        
+        if has_attachments and subscription_plan != 'premium':
+            return jsonify({"msg": "Attachments are only available with premium subscription"}), 400
             
         # Create new property
         new_property = Property(
@@ -511,8 +518,8 @@ def create_property():
             type=data.get('type', 'residential'),
             status=data.get('status', 'active'),
             description=data.get('description', ''),
-            subscription_plan=data.get('subscription_plan', 'basic'),
-            has_attachments=data.get('has_attachments', False)
+            subscription_plan=subscription_plan,
+            has_attachments=has_attachments
         )
         
         db.session.add(new_property)
@@ -1722,6 +1729,13 @@ def manage_property(property_id):
             if not data:
                 return jsonify({'message': 'No data provided'}), 400
 
+            # Validate subscription and attachment settings
+            subscription_plan = data.get('subscription_plan', property.subscription_plan)
+            has_attachments = data.get('has_attachments', property.has_attachments)
+            
+            if has_attachments and subscription_plan != 'premium':
+                return jsonify({"msg": "Attachments are only available with premium subscription"}), 400
+
             # Update allowed fields
             allowed_fields = ['name', 'address', 'type', 'status', 'description', 'subscription_plan', 'has_attachments']
             for field in allowed_fields:
@@ -1797,6 +1811,13 @@ def manage_property(property_id):
         elif request.method == 'PATCH':
             data = request.get_json()
             old_status = property.status
+
+            # Validate subscription and attachment settings
+            subscription_plan = data.get('subscription_plan', property.subscription_plan)
+            has_attachments = data.get('has_attachments', property.has_attachments)
+            
+            if has_attachments and subscription_plan != 'premium':
+                return jsonify({"msg": "Attachments are only available with premium subscription"}), 400
 
             # Update property fields
             for field in ['name', 'address', 'status', 'description', 'subscription_plan', 'has_attachments']:
