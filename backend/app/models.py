@@ -126,6 +126,8 @@ class Property(db.Model):
     type = db.Column(db.String(50))
     status = db.Column(db.String(20), default='active')
     description = db.Column(db.Text)
+    subscription_plan = db.Column(db.String(20), default='basic')  # 'basic' or 'premium'
+    has_attachments = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     rooms = db.relationship('Room', backref='property', lazy=True)
@@ -141,6 +143,8 @@ class Property(db.Model):
             'type': self.type,
             'status': self.status,
             'description': self.description,
+            'subscription_plan': self.subscription_plan,
+            'has_attachments': self.has_attachments,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

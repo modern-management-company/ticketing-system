@@ -35,6 +35,7 @@ import ServiceRequests from './components/ServiceRequests';
 import Welcome from './components/Welcome';
 import ViewTask from './components/ViewTask';
 import HistoryView from './components/HistoryView';
+import Pricing from './components/Pricing';
 
 const App = () => {
   return (
@@ -64,6 +65,11 @@ const App = () => {
             <Route path="/register-admin" element={
               <ProtectedRoute requiresAuth={false} redirectTo="/home">
                 <RegisterUser isAdminRegistration={true} />
+              </ProtectedRoute>
+            } />
+            <Route path="/pricing" element={
+              <ProtectedRoute requiresAuth={false} redirectTo="/home">
+                <Pricing />
               </ProtectedRoute>
             } />
             

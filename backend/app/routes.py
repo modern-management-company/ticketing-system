@@ -510,7 +510,9 @@ def create_property():
             address=data['address'],
             type=data.get('type', 'residential'),
             status=data.get('status', 'active'),
-            description=data.get('description', '')
+            description=data.get('description', ''),
+            subscription_plan=data.get('subscription_plan', 'basic'),
+            has_attachments=data.get('has_attachments', False)
         )
         
         db.session.add(new_property)
@@ -1721,7 +1723,7 @@ def manage_property(property_id):
                 return jsonify({'message': 'No data provided'}), 400
 
             # Update allowed fields
-            allowed_fields = ['name', 'address', 'type', 'status', 'description']
+            allowed_fields = ['name', 'address', 'type', 'status', 'description', 'subscription_plan', 'has_attachments']
             for field in allowed_fields:
                 if field in data:
                     setattr(property, field, data[field])
@@ -1797,7 +1799,7 @@ def manage_property(property_id):
             old_status = property.status
 
             # Update property fields
-            for field in ['name', 'address', 'status', 'description']:
+            for field in ['name', 'address', 'status', 'description', 'subscription_plan', 'has_attachments']:
                 if field in data:
                     setattr(property, field, data[field])
 

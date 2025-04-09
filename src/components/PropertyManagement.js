@@ -25,11 +25,17 @@ import {
   TableRow,
   Paper,
   Chip,
-  CircularProgress
+  CircularProgress,
+  Tabs,
+  Tab,
+  List,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import { useAuth } from '../context/AuthContext';
 import apiClient from './apiClient';
 
@@ -46,12 +52,15 @@ const PropertyManagement = () => {
     address: '',
     type: '',
     status: 'active',
-    description: ''
+    description: '',
+    subscription_plan: 'basic', // 'basic' or 'premium'
+    has_attachments: false
   });
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [managersDialogOpen, setManagersDialogOpen] = useState(false);
   const [propertyManagers, setPropertyManagers] = useState([]);
   const [loadingManagers, setLoadingManagers] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
 
   useEffect(() => {
     fetchData();
@@ -98,7 +107,9 @@ const PropertyManagement = () => {
         address: propertyFormData.address.trim(),
         type: propertyFormData.type || '',
         status: propertyFormData.status || 'active',
-        description: propertyFormData.description || ''
+        description: propertyFormData.description || '',
+        subscription_plan: propertyFormData.subscription_plan,
+        has_attachments: propertyFormData.has_attachments
       };
 
       let response;
@@ -127,7 +138,9 @@ const PropertyManagement = () => {
       address: property.address || '',
       type: property.type || '',
       status: property.status || 'active',
-      description: property.description || ''
+      description: property.description || '',
+      subscription_plan: property.subscription_plan || 'basic',
+      has_attachments: property.has_attachments || false
     });
     setOpenPropertyDialog(true);
   };
@@ -176,7 +189,9 @@ const PropertyManagement = () => {
       address: '',
       type: '',
       status: 'active',
-      description: ''
+      description: '',
+      subscription_plan: 'basic',
+      has_attachments: false
     });
   };
 
@@ -197,6 +212,12 @@ const PropertyManagement = () => {
     setSelectedProperty(property);
     setManagersDialogOpen(true);
     fetchPropertyManagers(property.property_id);
+  };
+
+  const calculateMonthlyCost = (property) => {
+    const baseCost = 20; // Basic plan cost
+    const attachmentCost = 10; // Attachment add-on cost
+    return baseCost + (property.has_attachments ? attachmentCost : 0);
   };
 
   if (loading) return <CircularProgress />;
@@ -229,52 +250,118 @@ const PropertyManagement = () => {
         </Alert>
       )}
 
-      {properties.length === 0 ? (
-        <Alert severity="info" sx={{ mb: 2 }}>No properties found</Alert>
+      <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3 }}>
+        <Tab label="Properties" />
+        <Tab label="Subscription Overview" />
+      </Tabs>
+
+      {activeTab === 0 ? (
+        properties.length === 0 ? (
+          <Alert severity="info" sx={{ mb: 2 }}>No properties found</Alert>
+        ) : (
+          <Grid container spacing={3}>
+            {properties.map((property) => (
+              <Grid item xs={12} sm={6} md={4} key={property.property_id}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6">{property.name}</Typography>
+                    <Typography color="textSecondary">{property.address}</Typography>
+                    <Typography>Type: {property.type || 'N/A'}</Typography>
+                    <Typography>Status: {property.status}</Typography>
+                    <Box sx={{ mt: 1, mb: 2 }}>
+                      <Chip 
+                        label={`${property.subscription_plan === 'premium' ? 'Premium' : 'Basic'} Plan`}
+                        color={property.subscription_plan === 'premium' ? 'primary' : 'default'}
+                        size="small"
+                      />
+                      {property.has_attachments && (
+                        <Chip 
+                          label="Attachments Enabled" 
+                          color="secondary" 
+                          size="small" 
+                          sx={{ ml: 1 }}
+                        />
+                      )}
+                    </Box>
+                    <Typography variant="body2" color="primary">
+                      Monthly Cost: ${calculateMonthlyCost(property)}
+                    </Typography>
+                    {property.description && (
+                      <Typography variant="body2" sx={{ mt: 1 }}>
+                        {property.description}
+                      </Typography>
+                    )}
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                      <Button
+                        size="small"
+                        onClick={() => handleShowManagers(property)}
+                      >
+                        Show Managers
+                      </Button>
+                      <IconButton
+                        onClick={() => handlePropertyEdit(property)}
+                        color="primary"
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton
+                        onClick={() => handlePropertyDelete(property.property_id)}
+                        color="error"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        )
       ) : (
         <Grid container spacing={3}>
-          {properties.map((property) => (
-            <Grid item xs={12} sm={6} md={4} key={property.property_id}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6">{property.name}</Typography>
-                  <Typography color="textSecondary">{property.address}</Typography>
-                  <Typography>Type: {property.type || 'N/A'}</Typography>
-                  <Typography>Status: {property.status}</Typography>
-                  {property.description && (
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                      {property.description}
-                    </Typography>
-                  )}
-                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                    <Button
-                      size="small"
-                      onClick={() => handleShowManagers(property)}
-                    >
-                      Show Managers
-                    </Button>
-                    <IconButton
-                      onClick={() => handlePropertyEdit(property)}
-                      color="primary"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      onClick={() => handlePropertyDelete(property.property_id)}
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Basic Plan
+                </Typography>
+                <Typography variant="h4" color="primary" gutterBottom>
+                  $20/month
+                </Typography>
+                <List>
+                  <Typography variant="body2">• Core Ticketing System</Typography>
+                  <Typography variant="body2">• Basic Support</Typography>
+                  <Typography variant="body2">• Ticket creation & assignment</Typography>
+                  <Typography variant="body2">• Property & room management</Typography>
+                  <Typography variant="body2">• Task management features</Typography>
+                  <Typography variant="body2">• Email/SMS notifications (basic)</Typography>
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Attachments Add-on
+                </Typography>
+                <Typography variant="h4" color="primary" gutterBottom>
+                  +$10/month
+                </Typography>
+                <List>
+                  <Typography variant="body2">• File Attachment Storage & Management</Typography>
+                  <Typography variant="body2">• Integrated Cloud Storage (Supabase)</Typography>
+                  <Typography variant="body2">• Secure file uploads/downloads</Typography>
+                  <Typography variant="body2">• Direct file access in tickets</Typography>
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
       )}
 
       {/* Property Dialog */}
-      <Dialog open={openPropertyDialog} onClose={() => setOpenPropertyDialog(false)}>
+      <Dialog open={openPropertyDialog} onClose={() => setOpenPropertyDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
           {propertyFormData.property_id ? 'Edit Property' : 'Add New Property'}
         </DialogTitle>
@@ -283,7 +370,6 @@ const PropertyManagement = () => {
             <TextField
               fullWidth
               label="Property Name"
-              name="name"
               value={propertyFormData.name}
               onChange={(e) => setPropertyFormData({ ...propertyFormData, name: e.target.value })}
               margin="normal"
@@ -292,7 +378,6 @@ const PropertyManagement = () => {
             <TextField
               fullWidth
               label="Address"
-              name="address"
               value={propertyFormData.address}
               onChange={(e) => setPropertyFormData({ ...propertyFormData, address: e.target.value })}
               margin="normal"
@@ -301,20 +386,9 @@ const PropertyManagement = () => {
             <TextField
               fullWidth
               label="Type"
-              name="type"
               value={propertyFormData.type}
               onChange={(e) => setPropertyFormData({ ...propertyFormData, type: e.target.value })}
               margin="normal"
-            />
-            <TextField
-              fullWidth
-              label="Description"
-              name="description"
-              value={propertyFormData.description}
-              onChange={(e) => setPropertyFormData({ ...propertyFormData, description: e.target.value })}
-              margin="normal"
-              multiline
-              rows={4}
             />
             <FormControl fullWidth margin="normal">
               <InputLabel>Status</InputLabel>
@@ -328,6 +402,35 @@ const PropertyManagement = () => {
                 <MenuItem value="maintenance">Maintenance</MenuItem>
               </Select>
             </FormControl>
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Subscription Plan</InputLabel>
+              <Select
+                value={propertyFormData.subscription_plan}
+                onChange={(e) => setPropertyFormData({ ...propertyFormData, subscription_plan: e.target.value })}
+                label="Subscription Plan"
+              >
+                <MenuItem value="basic">Basic ($20/month)</MenuItem>
+                <MenuItem value="premium">Premium ($30/month)</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={propertyFormData.has_attachments}
+                  onChange={(e) => setPropertyFormData({ ...propertyFormData, has_attachments: e.target.checked })}
+                />
+              }
+              label="Enable Attachments (+$10/month)"
+            />
+            <TextField
+              fullWidth
+              label="Description"
+              value={propertyFormData.description}
+              onChange={(e) => setPropertyFormData({ ...propertyFormData, description: e.target.value })}
+              margin="normal"
+              multiline
+              rows={3}
+            />
           </Box>
         </DialogContent>
         <DialogActions>
