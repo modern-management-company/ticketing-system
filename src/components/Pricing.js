@@ -22,7 +22,7 @@ const Pricing = () => {
 
   const plans = [
     {
-      name: 'Basic Service',
+      name: 'Basic Plan',
       price: 20,
       features: [
         'Core Ticketing System',
@@ -30,22 +30,25 @@ const Pricing = () => {
         'Ticket creation & assignment',
         'Property & room management',
         'Task management features',
-        'Email/SMS notifications (basic)',
+        'Email notifications',
       ],
       buttonText: 'Get Started',
       buttonVariant: 'contained',
     },
     {
-      name: 'Attachments Add-on',
-      price: 10,
+      name: 'Premium Plan',
+      price: 30,
       features: [
-        'File Attachment Storage & Management',
-        'Integrated Cloud Storage (Supabase)',
-        'Secure file uploads/downloads',
-        'Direct file access in tickets',
+        'All Basic Plan features',
+        'File Attachments',
+        'SMS Notifications',
+        'Priority Support',
+        'Advanced Analytics',
+        'Custom Branding',
       ],
-      buttonText: 'Add to Plan',
-      buttonVariant: 'outlined',
+      buttonText: 'Get Premium',
+      buttonVariant: 'contained',
+      highlight: true,
     },
   ];
 
@@ -78,6 +81,8 @@ const Pricing = () => {
                 '&:hover': {
                   transform: 'scale(1.02)',
                 },
+                border: plan.highlight ? '2px solid #1976d2' : 'none',
+                boxShadow: plan.highlight ? '0 4px 20px rgba(0,0,0,0.1)' : 'none',
               }}
             >
               <CardHeader
@@ -110,6 +115,7 @@ const Pricing = () => {
                   variant={plan.buttonVariant}
                   onClick={() => handleSelectPlan(plan)}
                   size="large"
+                  color={plan.highlight ? 'primary' : 'inherit'}
                 >
                   {plan.buttonText}
                 </Button>
@@ -128,10 +134,10 @@ const Pricing = () => {
             <Card>
               <CardContent>
                 <Typography variant="subtitle1" gutterBottom>
-                  Customer A: Core Ticketing Only
+                  Customer A: Basic Features
                 </Typography>
                 <Typography variant="body1" color="text.secondary">
-                  Uses basic ticketing functionality without attachments
+                  Uses core ticketing functionality with email notifications
                 </Typography>
                 <Typography variant="h6" color="primary" sx={{ mt: 1 }}>
                   Total Cost: $20/month
@@ -143,10 +149,10 @@ const Pricing = () => {
             <Card>
               <CardContent>
                 <Typography variant="subtitle1" gutterBottom>
-                  Customer B: Full Features
+                  Customer B: Premium Features
                 </Typography>
                 <Typography variant="body1" color="text.secondary">
-                  Uses ticketing system with attachments
+                  Uses full system with attachments and SMS notifications
                 </Typography>
                 <Typography variant="h6" color="primary" sx={{ mt: 1 }}>
                   Total Cost: $30/month
