@@ -499,3 +499,44 @@ class History(db.Model):
         db.session.add(entry)
         db.session.commit()
         return entry
+
+class AttachmentSettings(db.Model):
+    __tablename__ = 'attachment_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    storage_type = db.Column(db.String(20), default='local')  # local, s3, azure, etc.
+    max_file_size = db.Column(db.Integer, default=16 * 1024 * 1024)  # 16MB default
+    allowed_extensions = db.Column(db.JSON, default=['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'gif'])
+    upload_folder = db.Column(db.String(255), default='uploads')
+    
+    # S3 specific settings
+    s3_bucket_name = db.Column(db.String(255))
+    s3_region = db.Column(db.String(50))
+    s3_access_key = db.Column(db.String(255))
+    s3_secret_key = db.Column(db.String(255))
+    
+    # Azure specific settings
+    azure_account_name = db.Column(db.String(255))
+    azure_account_key = db.Column(db.String(255))
+    azure_container_name = db.Column(db.String(255))
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        """Convert settings object to dictionary"""
+        return {
+            'id': self.id,
+            'storage_type': self.storage_type,
+            'max_file_size': self.max_file_size,
+            'allowed_extensions': self.allowed_extensions,
+            'upload_folder': self.upload_folder,
+            's3_bucket_name': self.s3_bucket_name,
+            's3_region': self.s3_region,
+            's3_access_key': self.s3_access_key if self.s3_access_key else None,
+            's3_secret_key': self.s3_secret_key if self.s3_secret_key else None,
+            'azure_account_name': self.azure_account_name,
+            'azure_account_key': self.azure_account_key if self.azure_account_key else None,
+            'azure_container_name': self.azure_container_name,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }

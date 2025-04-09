@@ -30,6 +30,7 @@ import Reports from './components/Reports';
 import HomeOverview from './components/HomeOverview';
 import EmailSettings from './components/EmailSettings';
 import SMSSettings from './components/SMSSettings';
+import AttachmentSettings from './components/AttachmentSettings';
 import ServiceRequests from './components/ServiceRequests';
 import Welcome from './components/Welcome';
 import ViewTask from './components/ViewTask';
@@ -148,6 +149,11 @@ const App = () => {
                 <Route path="sms-settings" element={
                   <ProtectedRoute allowedRoles={['super_admin']}>
                     <SMSSettings />
+                  </ProtectedRoute>
+                } />
+                <Route path="attachment-settings" element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <AttachmentSettings />
                   </ProtectedRoute>
                 } />
               </Route>
