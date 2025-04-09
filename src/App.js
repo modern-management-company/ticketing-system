@@ -30,10 +30,12 @@ import Reports from './components/Reports';
 import HomeOverview from './components/HomeOverview';
 import EmailSettings from './components/EmailSettings';
 import SMSSettings from './components/SMSSettings';
+import AttachmentSettings from './components/AttachmentSettings';
 import ServiceRequests from './components/ServiceRequests';
 import Welcome from './components/Welcome';
 import ViewTask from './components/ViewTask';
 import HistoryView from './components/HistoryView';
+import Pricing from './components/Pricing';
 
 const App = () => {
   return (
@@ -63,6 +65,11 @@ const App = () => {
             <Route path="/register-admin" element={
               <ProtectedRoute requiresAuth={false} redirectTo="/home">
                 <RegisterUser isAdminRegistration={true} />
+              </ProtectedRoute>
+            } />
+            <Route path="/pricing" element={
+              <ProtectedRoute requiresAuth={false} redirectTo="/home">
+                <Pricing />
               </ProtectedRoute>
             } />
             
@@ -148,6 +155,11 @@ const App = () => {
                 <Route path="sms-settings" element={
                   <ProtectedRoute allowedRoles={['super_admin']}>
                     <SMSSettings />
+                  </ProtectedRoute>
+                } />
+                <Route path="attachment-settings" element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <AttachmentSettings />
                   </ProtectedRoute>
                 } />
               </Route>
