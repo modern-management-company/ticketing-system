@@ -1,7 +1,7 @@
 from flask import request, jsonify
 from app import app
 from app.extensions import db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment, History, SMSSettings
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment, History, SMSSettings, AttachmentSettings
 from app.services import EmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
@@ -16,6 +16,10 @@ from sqlalchemy import or_
 from app.services.sms_service import SMSService
 from app.services.supabase_service import SupabaseService
 from werkzeug.utils import secure_filename
+from app.services.file_storage_service import FileStorageService
+from app.services.s3_storage_service import S3StorageService
+from app.services.azure_storage_service import AzureStorageService
+import io
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -499,6 +503,13 @@ def create_property():
         if missing_fields:
             app.logger.error(f"Missing required fields: {missing_fields}")
             return jsonify({"msg": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+        # Validate subscription and attachment settings
+        subscription_plan = data.get('subscription_plan', 'basic')
+        has_attachments = data.get('has_attachments', False)
+        
+        if has_attachments and subscription_plan != 'premium':
+            return jsonify({"msg": "Attachments are only available with premium subscription"}), 400
             
         # Create new property
         new_property = Property(
@@ -506,7 +517,9 @@ def create_property():
             address=data['address'],
             type=data.get('type', 'residential'),
             status=data.get('status', 'active'),
-            description=data.get('description', '')
+            description=data.get('description', ''),
+            subscription_plan=subscription_plan,
+            has_attachments=has_attachments
         )
         
         db.session.add(new_property)
@@ -1716,8 +1729,15 @@ def manage_property(property_id):
             if not data:
                 return jsonify({'message': 'No data provided'}), 400
 
+            # Validate subscription and attachment settings
+            subscription_plan = data.get('subscription_plan', property.subscription_plan)
+            has_attachments = data.get('has_attachments', property.has_attachments)
+            
+            if has_attachments and subscription_plan != 'premium':
+                return jsonify({"msg": "Attachments are only available with premium subscription"}), 400
+
             # Update allowed fields
-            allowed_fields = ['name', 'address', 'type', 'status', 'description']
+            allowed_fields = ['name', 'address', 'type', 'status', 'description', 'subscription_plan', 'has_attachments']
             for field in allowed_fields:
                 if field in data:
                     setattr(property, field, data[field])
@@ -1792,8 +1812,15 @@ def manage_property(property_id):
             data = request.get_json()
             old_status = property.status
 
+            # Validate subscription and attachment settings
+            subscription_plan = data.get('subscription_plan', property.subscription_plan)
+            has_attachments = data.get('has_attachments', property.has_attachments)
+            
+            if has_attachments and subscription_plan != 'premium':
+                return jsonify({"msg": "Attachments are only available with premium subscription"}), 400
+
             # Update property fields
-            for field in ['name', 'address', 'status', 'description']:
+            for field in ['name', 'address', 'status', 'description', 'subscription_plan', 'has_attachments']:
                 if field in data:
                     setattr(property, field, data[field])
 
@@ -3994,7 +4021,7 @@ def upload_ticket_attachment(ticket_id):
         # Get the ticket
         ticket = Ticket.query.get_or_404(ticket_id)
 
-        # Check if user has permission to upload attachments
+        # Check if user has permission to upload attachment
         if current_user.role == 'user' and ticket.user_id != current_user.user_id:
             return jsonify({'msg': 'Unauthorized - You can only upload attachments to your own tickets'}), 403
 
@@ -4006,22 +4033,14 @@ def upload_ticket_attachment(ticket_id):
         if file.filename == '':
             return jsonify({'msg': 'No file selected'}), 400
 
-        # Log environment variables (without sensitive data)
-        app.logger.debug(f"Supabase URL: {app.config.get('SUPABASE_URL')}")
-        app.logger.debug(f"Supabase bucket: {app.config.get('SUPABASE_BUCKET_NAME')}")
+        # Initialize FileStorage service
+        file_storage_service = FileStorageService()
 
-        # Initialize Supabase service
+        # Upload file to local storage
         try:
-            supabase_service = SupabaseService()
-        except ValueError as e:
-            app.logger.error(f"Supabase configuration error: {str(e)}")
-            return jsonify({'msg': 'Storage service configuration error'}), 500
-
-        # Upload file to Supabase
-        try:
-            file_info = supabase_service.upload_file(file, ticket_id)
+            file_info = file_storage_service.upload_file(file, ticket_id)
         except Exception as e:
-            app.logger.error(f"Error uploading file to Supabase: {str(e)}")
+            app.logger.error(f"Error uploading file: {str(e)}")
             return jsonify({'msg': 'Failed to upload file to storage'}), 500
 
         # Create attachment record in database
@@ -4068,11 +4087,11 @@ def delete_ticket_attachment(ticket_id, attachment_id):
         if current_user.role == 'user' and ticket.user_id != current_user.user_id:
             return jsonify({'msg': 'Unauthorized - You can only delete attachments from your own tickets'}), 403
 
-        # Initialize Supabase service
-        supabase_service = SupabaseService()
+        # Initialize FileStorage service
+        file_storage_service = FileStorageService()
 
-        # Delete file from Supabase
-        if not supabase_service.delete_file(attachment.file_path):
+        # Delete file from storage
+        if not file_storage_service.delete_file(attachment.file_path):
             return jsonify({'msg': 'Failed to delete file from storage'}), 500
 
         # Delete attachment record from database
@@ -4107,20 +4126,25 @@ def download_ticket_attachment(ticket_id, attachment_id):
         if current_user.role == 'user' and ticket.user_id != current_user.user_id:
             return jsonify({'msg': 'Unauthorized - You can only download attachments from your own tickets'}), 403
 
-        # Initialize Supabase service
-        supabase_service = SupabaseService()
+        # Initialize FileStorage service
+        file_storage_service = FileStorageService()
 
-        # Get the file URL
-        file_url = supabase_service.get_file_url(attachment.file_path)
+        # Get the file path
+        file_path = file_storage_service.get_file_path(attachment.file_path)
 
+        # Check if file exists
+        if not os.path.exists(file_path):
+            return jsonify({'msg': 'File not found'}), 404
+
+        # Return the file path for the frontend to handle the download
         return jsonify({
-            'file_url': file_url,
+            'file_path': file_path,
             'file_name': attachment.file_name
         }), 200
 
     except Exception as e:
-        app.logger.error(f"Error getting ticket attachment URL: {str(e)}")
-        return jsonify({'msg': 'Failed to get file URL'}), 500
+        app.logger.error(f"Error getting ticket attachment: {str(e)}")
+        return jsonify({'msg': 'Failed to get file'}), 500
 
 @app.route('/tickets/<int:ticket_id>/history', methods=['GET'])
 @jwt_required()
@@ -4397,3 +4421,141 @@ def test_all_sms():
             "message": f"Failed to run SMS tests: {str(e)}",
             "results": []
         }), 500
+
+@app.route('/api/settings/attachments', methods=['GET'])
+@jwt_required()
+def get_attachment_settings():
+    """Get current attachment storage settings"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Only super_admin can view settings
+        if current_user.role != 'super_admin':
+            return jsonify({'msg': 'Unauthorized - Only super admins can view attachment settings'}), 403
+
+        settings = AttachmentSettings.query.first()
+        if not settings:
+            # Create default settings if none exist
+            settings = AttachmentSettings()
+            db.session.add(settings)
+            db.session.commit()
+
+        return jsonify(settings.to_dict()), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting attachment settings: {str(e)}")
+        return jsonify({'msg': 'Failed to get attachment settings'}), 500
+
+@app.route('/api/settings/attachments', methods=['POST'])
+@jwt_required()
+def update_attachment_settings():
+    """Update attachment storage settings"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Only super_admin can update settings
+        if current_user.role != 'super_admin':
+            return jsonify({'msg': 'Unauthorized - Only super admins can update attachment settings'}), 403
+
+        data = request.get_json()
+        
+        # Get or create settings
+        settings = AttachmentSettings.query.first()
+        if not settings:
+            settings = AttachmentSettings()
+            db.session.add(settings)
+
+        # Update settings
+        settings.storage_type = data.get('storage_type', settings.storage_type)
+        settings.max_file_size = data.get('max_file_size', settings.max_file_size)
+        settings.allowed_extensions = data.get('allowed_extensions', settings.allowed_extensions)
+        settings.upload_folder = data.get('upload_folder', settings.upload_folder)
+
+        # Update S3 settings if provided
+        if settings.storage_type == 's3':
+            settings.s3_bucket_name = data.get('s3_bucket_name', settings.s3_bucket_name)
+            settings.s3_region = data.get('s3_region', settings.s3_region)
+            settings.s3_access_key = data.get('s3_access_key', settings.s3_access_key)
+            settings.s3_secret_key = data.get('s3_secret_key', settings.s3_secret_key)
+
+        # Update Azure settings if provided
+        elif settings.storage_type == 'azure':
+            settings.azure_account_name = data.get('azure_account_name', settings.azure_account_name)
+            settings.azure_account_key = data.get('azure_account_key', settings.azure_account_key)
+            settings.azure_container_name = data.get('azure_container_name', settings.azure_container_name)
+
+        db.session.commit()
+
+        # Update app config
+        app.config['UPLOAD_FOLDER'] = settings.upload_folder
+        app.config['MAX_CONTENT_LENGTH'] = settings.max_file_size
+
+        return jsonify({
+            'msg': 'Attachment settings updated successfully',
+            'settings': settings.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating attachment settings: {str(e)}")
+        return jsonify({'msg': 'Failed to update attachment settings'}), 500
+
+@app.route('/api/settings/attachments/test', methods=['POST'])
+@jwt_required()
+def test_attachment_settings():
+    """Test the current attachment storage settings"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Only super_admin can test settings
+        if current_user.role != 'super_admin':
+            return jsonify({'msg': 'Unauthorized - Only super admins can test attachment settings'}), 403
+
+        settings = AttachmentSettings.query.first()
+        if not settings:
+            return jsonify({'msg': 'No attachment settings found'}), 404
+
+        # Create a test file
+        test_file = io.BytesIO(b'Test file content')
+        test_file.filename = 'test.txt'
+        test_file.content_type = 'text/plain'
+
+        # Initialize appropriate storage service based on settings
+        if settings.storage_type == 'local':
+            storage_service = FileStorageService()
+        elif settings.storage_type == 's3':
+            # Initialize S3 service (to be implemented)
+            storage_service = S3StorageService(
+                bucket_name=settings.s3_bucket_name,
+                region=settings.s3_region,
+                access_key=settings.s3_access_key,
+                secret_key=settings.s3_secret_key
+            )
+        elif settings.storage_type == 'azure':
+            # Initialize Azure service (to be implemented)
+            storage_service = AzureStorageService(
+                account_name=settings.azure_account_name,
+                account_key=settings.azure_account_key,
+                container_name=settings.azure_container_name
+            )
+        else:
+            return jsonify({'msg': 'Invalid storage type'}), 400
+
+        # Try to upload the test file
+        try:
+            file_info = storage_service.upload_file(test_file, 0)  # Using 0 as test ticket_id
+            # Try to delete the test file
+            storage_service.delete_file(file_info['file_path'])
+            return jsonify({'msg': 'Storage settings test successful'}), 200
+        except Exception as e:
+            return jsonify({'msg': f'Storage test failed: {str(e)}'}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error testing attachment settings: {str(e)}")
+        return jsonify({'msg': 'Failed to test attachment settings'}), 500
