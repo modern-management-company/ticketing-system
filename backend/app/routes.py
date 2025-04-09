@@ -14,7 +14,6 @@ import logging
 import secrets
 from sqlalchemy import or_
 from app.services.sms_service import SMSService
-from app.services.supabase_service import SupabaseService
 from werkzeug.utils import secure_filename
 from app.services.file_storage_service import FileStorageService
 from app.services.s3_storage_service import S3StorageService
