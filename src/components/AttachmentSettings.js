@@ -6,40 +6,32 @@ import {
   Typography,
   TextField,
   Button,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Grid,
   Alert,
   CircularProgress,
-  Divider,
   Chip,
-  IconButton,
-  Tooltip
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import apiClient from './apiClient';
-import InfoIcon from '@mui/icons-material/Info';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import StorageIcon from '@mui/icons-material/Storage';
-import CloudIcon from '@mui/icons-material/Cloud';
-import DeleteIcon from '@mui/icons-material/Delete';
+import LockIcon from '@mui/icons-material/Lock';
 
 const AttachmentSettings = () => {
   const { user } = useAuth();
   const [settings, setSettings] = useState({
-    storage_type: 'local',
     max_file_size: 16 * 1024 * 1024, // 16MB default
     allowed_extensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'gif'],
     upload_folder: 'uploads',
-    s3_bucket_name: '',
-    s3_region: '',
-    s3_access_key: '',
-    s3_secret_key: '',
-    azure_account_name: '',
-    azure_account_key: '',
-    azure_container_name: ''
+    property_id: ''
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,10 +39,31 @@ const AttachmentSettings = () => {
   const [success, setSuccess] = useState('');
   const [testResult, setTestResult] = useState(null);
   const [newExtension, setNewExtension] = useState('');
+  const [showProDialog, setShowProDialog] = useState(false);
+  const [properties, setProperties] = useState([]);
+  const [loadingProperties, setLoadingProperties] = useState(false);
+
+  const isProUser = user?.subscription_plan === 'premium';
 
   useEffect(() => {
     fetchSettings();
-  }, []);
+    if (isProUser) {
+      fetchProperties();
+    }
+  }, [isProUser]);
+
+  const fetchProperties = async () => {
+    try {
+      setLoadingProperties(true);
+      const response = await apiClient.get('/api/properties');
+      setProperties(response.data || []);
+    } catch (err) {
+      // Silently handle the error and set empty properties
+      setProperties([]);
+    } finally {
+      setLoadingProperties(false);
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -65,6 +78,15 @@ const AttachmentSettings = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Check if the change requires pro plan
+    if (name === 'max_file_size' && value > 16 * 1024 * 1024) {
+      if (!isProUser) {
+        setShowProDialog(true);
+        return;
+      }
+    }
+    
     setSettings(prev => ({
       ...prev,
       [name]: value
@@ -78,6 +100,11 @@ const AttachmentSettings = () => {
     setSuccess('');
 
     try {
+      if (!isProUser) {
+        setError('Pro plan required to manage attachment settings');
+        return;
+      }
+
       await apiClient.post('/api/settings/attachments', settings);
       setSuccess('Settings saved successfully');
     } catch (err) {
@@ -88,6 +115,11 @@ const AttachmentSettings = () => {
   };
 
   const handleTestSettings = async () => {
+    if (!isProUser) {
+      setShowProDialog(true);
+      return;
+    }
+
     setTestResult(null);
     try {
       const response = await apiClient.post('/api/settings/attachments/test', settings);
@@ -147,6 +179,7 @@ const AttachmentSettings = () => {
         <CardContent>
           <Typography variant="h5" gutterBottom>
             Attachment Settings
+            {!isProUser && <LockIcon sx={{ ml: 1, fontSize: '1rem' }} />}
           </Typography>
           
           {error && (
@@ -163,39 +196,42 @@ const AttachmentSettings = () => {
           
           <form onSubmit={handleSubmit}>
             <Grid container spacing={3}>
-              {/* Storage Type Selection */}
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Storage Type</InputLabel>
-                  <Select
-                    name="storage_type"
-                    value={settings.storage_type}
-                    onChange={handleChange}
-                    label="Storage Type"
-                  >
-                    <MenuItem value="local">
-                      <Box display="flex" alignItems="center">
-                        <StorageIcon sx={{ mr: 1 }} />
-                        Local Storage
-                      </Box>
-                    </MenuItem>
-                    <MenuItem value="s3">
-                      <Box display="flex" alignItems="center">
-                        <CloudIcon sx={{ mr: 1 }} />
-                        Amazon S3
-                      </Box>
-                    </MenuItem>
-                    <MenuItem value="azure">
-                      <Box display="flex" alignItems="center">
-                        <CloudIcon sx={{ mr: 1 }} />
-                        Azure Blob Storage
-                      </Box>
-                    </MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
+              {/* Property Selection */}
+              {isProUser && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth>
+                    <InputLabel>Property</InputLabel>
+                    <Select
+                      name="property_id"
+                      value={settings.property_id}
+                      onChange={handleChange}
+                      label="Property"
+                      disabled={loadingProperties}
+                    >
+                      {loadingProperties ? (
+                        <MenuItem value="" disabled>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <CircularProgress size={20} />
+                            Loading properties...
+                          </Box>
+                        </MenuItem>
+                      ) : properties.length > 0 ? (
+                        properties.map((property) => (
+                          <MenuItem key={property.id} value={property.id}>
+                            {property.name}
+                          </MenuItem>
+                        ))
+                      ) : (
+                        <MenuItem value="" disabled>
+                          No properties available
+                        </MenuItem>
+                      )}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
 
-              {/* Common Settings */}
+              {/* File Size Settings */}
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -204,10 +240,12 @@ const AttachmentSettings = () => {
                   label="Maximum File Size (bytes)"
                   value={settings.max_file_size}
                   onChange={handleChange}
-                  helperText={`Current limit: ${formatFileSize(settings.max_file_size)}`}
+                  helperText={`Current limit: ${formatFileSize(settings.max_file_size)}${!isProUser ? ' (Upgrade to Pro for larger file sizes)' : ''}`}
+                  disabled={!isProUser}
                 />
               </Grid>
 
+              {/* Allowed Extensions */}
               <Grid item xs={12}>
                 <Box>
                   <Typography variant="subtitle1" gutterBottom>
@@ -220,11 +258,12 @@ const AttachmentSettings = () => {
                       onChange={(e) => setNewExtension(e.target.value)}
                       placeholder="Add extension (e.g., pdf)"
                       sx={{ mr: 1 }}
+                      disabled={!isProUser}
                     />
                     <Button
                       variant="outlined"
                       onClick={handleAddExtension}
-                      disabled={!newExtension}
+                      disabled={!newExtension || !isProUser}
                     >
                       Add
                     </Button>
@@ -237,113 +276,25 @@ const AttachmentSettings = () => {
                         onDelete={() => handleRemoveExtension(ext)}
                         color="primary"
                         variant="outlined"
+                        disabled={!isProUser}
                       />
                     ))}
                   </Box>
                 </Box>
               </Grid>
 
-              {/* S3 Settings */}
-              {settings.storage_type === 's3' && (
-                <>
-                  <Grid item xs={12}>
-                    <Typography variant="h6" gutterBottom>
-                      Amazon S3 Settings
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      name="s3_bucket_name"
-                      label="Bucket Name"
-                      value={settings.s3_bucket_name}
-                      onChange={handleChange}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      name="s3_region"
-                      label="Region"
-                      value={settings.s3_region}
-                      onChange={handleChange}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      name="s3_access_key"
-                      label="Access Key"
-                      value={settings.s3_access_key}
-                      onChange={handleChange}
-                      type="password"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      name="s3_secret_key"
-                      label="Secret Key"
-                      value={settings.s3_secret_key}
-                      onChange={handleChange}
-                      type="password"
-                    />
-                  </Grid>
-                </>
-              )}
-
-              {/* Azure Settings */}
-              {settings.storage_type === 'azure' && (
-                <>
-                  <Grid item xs={12}>
-                    <Typography variant="h6" gutterBottom>
-                      Azure Blob Storage Settings
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      name="azure_account_name"
-                      label="Account Name"
-                      value={settings.azure_account_name}
-                      onChange={handleChange}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      name="azure_container_name"
-                      label="Container Name"
-                      value={settings.azure_container_name}
-                      onChange={handleChange}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      name="azure_account_key"
-                      label="Account Key"
-                      value={settings.azure_account_key}
-                      onChange={handleChange}
-                      type="password"
-                    />
-                  </Grid>
-                </>
-              )}
-
-              {/* Local Storage Settings */}
-              {settings.storage_type === 'local' && (
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    name="upload_folder"
-                    label="Upload Folder"
-                    value={settings.upload_folder}
-                    onChange={handleChange}
-                    helperText="Relative path where files will be stored"
-                  />
-                </Grid>
-              )}
+              {/* Upload Folder */}
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  name="upload_folder"
+                  label="Upload Folder"
+                  value={settings.upload_folder}
+                  onChange={handleChange}
+                  helperText="Relative path where files will be stored"
+                  disabled={!isProUser}
+                />
+              </Grid>
 
               {/* Test and Save Buttons */}
               <Grid item xs={12}>
@@ -352,7 +303,7 @@ const AttachmentSettings = () => {
                     variant="contained"
                     color="primary"
                     type="submit"
-                    disabled={saving}
+                    disabled={saving || !isProUser}
                     startIcon={<CloudUploadIcon />}
                   >
                     {saving ? 'Saving...' : 'Save Settings'}
@@ -361,8 +312,9 @@ const AttachmentSettings = () => {
                     variant="outlined"
                     onClick={handleTestSettings}
                     startIcon={<StorageIcon />}
+                    disabled={!isProUser}
                   >
-                    Test Connection
+                    Test Settings
                   </Button>
                 </Box>
               </Grid>
@@ -375,10 +327,40 @@ const AttachmentSettings = () => {
                   </Alert>
                 </Grid>
               )}
+
+              {/* Pro Plan Message */}
+              {!isProUser && (
+                <Grid item xs={12}>
+                  <Alert severity="info">
+                    Upgrade to Pro plan to manage attachment settings and enable file uploads for your properties.
+                  </Alert>
+                </Grid>
+              )}
             </Grid>
           </form>
         </CardContent>
       </Card>
+
+      {/* Pro Plan Dialog */}
+      <Dialog open={showProDialog} onClose={() => setShowProDialog(false)}>
+        <DialogTitle>Pro Plan Required</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This feature is only available with our Pro plan. Upgrade to access:
+          </Typography>
+          <ul>
+            <li>File Upload Management</li>
+            <li>Larger File Size Limits</li>
+            <li>Property-based Attachment Settings</li>
+          </ul>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowProDialog(false)}>Cancel</Button>
+          <Button onClick={() => window.location.href = '/pricing'} color="primary">
+            View Pricing
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
