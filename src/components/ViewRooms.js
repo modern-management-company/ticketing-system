@@ -46,6 +46,7 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useNavigate } from "react-router-dom";
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import RoomServiceIcon from '@mui/icons-material/RoomService';
+import { getFriendlyRoomName, getHotelRoomTypes } from '../utils/roomMappings';
 
 const ViewRooms = () => {
   const { auth } = useAuth();
@@ -78,8 +79,9 @@ const ViewRooms = () => {
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedAmenities, setSelectedAmenities] = useState([]);
+  const [hotelChain, setHotelChain] = useState('MAR'); // Default to Marriott
+  const [availableRoomTypes, setAvailableRoomTypes] = useState([]);
 
-  const roomTypes = ['Single', 'Double', 'Suite', 'Conference', 'Other'];
   const roomStatuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];
   
   // Common amenities list
@@ -122,6 +124,11 @@ const ViewRooms = () => {
     }
   }, [selectedProperty]);
 
+  useEffect(() => {
+    // Initialize room types based on hotel chain
+    setAvailableRoomTypes(getHotelRoomTypes(hotelChain));
+  }, [hotelChain]);
+
   const fetchRooms = async () => {
     if (!selectedProperty) return;
 
@@ -131,7 +138,7 @@ const ViewRooms = () => {
       if (response.data && Array.isArray(response.data.rooms)) {
         const processedRooms = response.data.rooms.map(room => ({
           ...room,
-          type: room.type || roomTypes[0]
+          type: room.type || availableRoomTypes[0]
         }));
         setRooms(processedRooms);
       } else {
@@ -147,6 +154,20 @@ const ViewRooms = () => {
 
   const handlePropertyChange = (propertyId) => {
     setSelectedProperty(propertyId);
+    // You might want to set the hotel chain based on the property
+    // This is just an example - you'll need to get the actual chain from your property data
+    if (propertyId) {
+      // Example: Check property name or other attributes to determine chain
+      // This is just a placeholder - implement your actual logic
+      const chain = determineHotelChain(propertyId);
+      setHotelChain(chain);
+    }
+  };
+
+  const determineHotelChain = (propertyId) => {
+    // Implement your logic to determine the hotel chain based on property
+    // This is just an example - you'll need to implement your actual logic
+    return 'MAR'; // Default to Marriott
   };
 
   const handleAddRoom = async () => {
@@ -592,7 +613,8 @@ const ViewRooms = () => {
                       </Box>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                         <Typography color="textSecondary">
-                          Type: {room.type || 'N/A'}
+                          Type: {getFriendlyRoomName(room.type, hotelChain)}
+                          {room.type && ` (${room.type})`}
                         </Typography>
                         <Typography color="textSecondary">
                           Floor: {room.floor || 'N/A'}
@@ -652,7 +674,7 @@ const ViewRooms = () => {
                             e.stopPropagation(); // Prevent card click from triggering
                             const roomToEdit = {
                               ...room,
-                              type: room.type || roomTypes[0]
+                              type: room.type || availableRoomTypes[0]
                             };
                             setRoomFormData(roomToEdit);
                             setOpenDialog(true);
@@ -708,13 +730,20 @@ const ViewRooms = () => {
               required
             />
             
-            <TextField
-              label="Room Type"
-              value={roomFormData.type || ''}
-              onChange={(e) => setRoomFormData({ ...roomFormData, type: e.target.value })}
-              fullWidth
-              helperText="Enter any room type (e.g. Single, Double, Suite, Public Area, etc.)"
-            />
+            <FormControl fullWidth>
+              <InputLabel>Room Type</InputLabel>
+              <Select
+                value={roomFormData.type || ''}
+                onChange={(e) => setRoomFormData({ ...roomFormData, type: e.target.value })}
+                label="Room Type"
+              >
+                {availableRoomTypes.map(({ code, name }) => (
+                  <MenuItem key={code} value={code}>
+                    {name} ({code})
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             
             <TextField
               label="Floor"
