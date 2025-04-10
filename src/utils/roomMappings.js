@@ -1,55 +1,76 @@
 // Hotel chain identifiers and their common patterns
 export const hotelChainPatterns = {
-  'MAR': ['marriott', 'sheraton', 'westin', 'renaissance', 'le meridien', 'autograph', 'courtyard', 'fairfield', 'springhill', 'residence inn'],
-  'HYT': ['hyatt', 'grand hyatt', 'park hyatt', 'andaz', 'hyatt regency', 'hyatt place', 'hyatt house'],
-  'HIL': ['hilton', 'conrad', 'curio', 'doubletree', 'embassy suites', 'hampton', 'homewood', 'home2', 'tru', 'waldorf'],
-  'BWH': ['best western', 'best western plus', 'best western premier'],
-  'IHG': ['intercontinental', 'crowne plaza', 'holiday inn', 'holiday inn express', 'indigo', 'avid', 'staybridge', 'candlewood'],
-  'ACC': ['accenture', 'accenture hotels', 'accenture resorts'],
-  'WYN': ['wynn', 'wynn resorts', 'encore'],
-  'MGM': ['mgm', 'mgm grand', 'bellagio', 'aria', 'mandalay bay', 'luxor', 'excalibur'],
-  'RAD': ['radisson', 'radisson blu', 'radisson red', 'country inn', 'park plaza', 'park inn'],
-  'CHO': ['choice', 'comfort inn', 'comfort suites', 'quality', 'clarion', 'econo lodge', 'rodeway', 'ascend', 'cambria'],
-  'MGM': ['mgm', 'mgm grand', 'bellagio', 'aria', 'mandalay bay', 'luxor', 'excalibur'],
-  'RAD': ['radisson', 'radisson blu', 'radisson red', 'country inn', 'park plaza', 'park inn'],
-  'CHO': ['choice', 'comfort inn', 'comfort suites', 'quality', 'clarion', 'econo lodge', 'rodeway', 'ascend', 'cambria']
+  'MAR': [
+    'marriott',
+    'sheraton',
+    'westin',
+    'renaissance',
+    'le meridien',
+    'autograph',
+    'courtyard',
+    'fairfield',
+    'springhill',
+    'residence inn',
+    'towneplace',
+    'element',
+    'aloft',
+    'moxy',
+    'protea',
+    'ac hotels',
+    'st. regis',
+    'luxury collection',
+    'w hotels',
+    'design hotels',
+    'tribute portfolio',
+    'gaylord hotels'
+  ],
+  'HIL': [
+    'hilton',
+    'conrad',
+    'curio',
+    'doubletree',
+    'embassy suites',
+    'hampton',
+    'homewood',
+    'home2',
+    'tru',
+    'waldorf',
+    'canopy',
+    'signia',
+    'tempo',
+    'lxb',
+    'motto',
+    'spark',
+    'tapestry',
+    'voco'
+  ],
+  'BWH': [
+    'best western',
+    'best western plus',
+    'best western premier',
+    'glō',
+    'aiden',
+    'sadie',
+    'vīb',
+    'executive residency',
+    'bw signature collection',
+    'bw collection'
+  ]
 };
 
 // Room type mappings for different hotel chains
 export const roomTypeMappings = {
   // Marriott room codes
   'MAR': {
-    'SGL': 'Single Room',
-    'DBL': 'Double Room',
-    'TWN': 'Twin Room',
-    'SUP': 'Superior Room',
+    'STDO': 'Standard Room',
+    'TOBR': 'Two Bedroom Suite',
+    'ONBR': 'One Bedroom Suite',
+    'STU': 'Studio',
     'DLX': 'Deluxe Room',
+    'SUI': 'Suite',
     'JSU': 'Junior Suite',
-    'SUI': 'Suite',
-    'PSU': 'Presidential Suite',
-    'ACC': 'Accessible Room',
-    'CON': 'Connecting Room',
-    'ADJ': 'Adjoining Room',
-    'OCV': 'Ocean View Room',
-    'CIV': 'City View Room',
-    'GV': 'Garden View Room',
-    'POV': 'Pool View Room',
     'EXE': 'Executive Room',
     'CLB': 'Club Room',
-    'FAM': 'Family Room',
-    'HNE': 'Honeymoon Suite',
-    'PEN': 'Penthouse Suite'
-  },
-  // Hyatt room codes
-  'HYT': {
-    'STD': 'Standard Room',
-    'DLX': 'Deluxe Room',
-    'SUP': 'Superior Room',
-    'EXE': 'Executive Room',
-    'CLB': 'Club Room',
-    'SUI': 'Suite',
-    'RSI': 'Regency Suite',
-    'PSI': 'Presidential Suite',
     'ACC': 'Accessible Room',
     'CON': 'Connecting Room',
     'ADJ': 'Adjoining Room',
@@ -63,13 +84,15 @@ export const roomTypeMappings = {
   },
   // Hilton room codes
   'HIL': {
-    'STD': 'Standard Room',
+    'STDO': 'Standard Room',
+    'TOBR': 'Two Bedroom Suite',
+    'ONBR': 'One Bedroom Suite',
+    'STU': 'Studio',
     'DLX': 'Deluxe Room',
-    'SUP': 'Superior Room',
+    'SUI': 'Suite',
+    'JSU': 'Junior Suite',
     'EXE': 'Executive Room',
     'CLB': 'Club Room',
-    'SUI': 'Suite',
-    'PSI': 'Presidential Suite',
     'ACC': 'Accessible Room',
     'CON': 'Connecting Room',
     'ADJ': 'Adjoining Room',
@@ -83,30 +106,14 @@ export const roomTypeMappings = {
   },
   // Best Western room codes
   'BWH': {
-    'STD': 'Standard Room',
+    'STDO': 'Standard Room',
+    'TOBR': 'Two Bedroom Suite',
+    'ONBR': 'One Bedroom Suite',
+    'STU': 'Studio',
     'DLX': 'Deluxe Room',
-    'SUP': 'Superior Room',
-    'EXE': 'Executive Room',
     'SUI': 'Suite',
-    'ACC': 'Accessible Room',
-    'CON': 'Connecting Room',
-    'ADJ': 'Adjoining Room',
-    'OCV': 'Ocean View Room',
-    'CIV': 'City View Room',
-    'GV': 'Garden View Room',
-    'POV': 'Pool View Room',
-    'FAM': 'Family Room',
-    'HNE': 'Honeymoon Suite'
-  },
-  // IHG room codes
-  'IHG': {
-    'STD': 'Standard Room',
-    'DLX': 'Deluxe Room',
-    'SUP': 'Superior Room',
+    'JSU': 'Junior Suite',
     'EXE': 'Executive Room',
-    'CLB': 'Club Room',
-    'SUI': 'Suite',
-    'PSI': 'Presidential Suite',
     'ACC': 'Accessible Room',
     'CON': 'Connecting Room',
     'ADJ': 'Adjoining Room',
@@ -116,115 +123,22 @@ export const roomTypeMappings = {
     'POV': 'Pool View Room',
     'FAM': 'Family Room',
     'HNE': 'Honeymoon Suite',
-    'PEN': 'Penthouse Suite',
-    'KNG': 'King Room',
-    'QN': 'Queen Room',
-    'STD2': 'Standard Two Queen Room',
-    'DLX2': 'Deluxe Two Queen Room',
-    'JSU': 'Junior Suite',
-    'RSI': 'Regency Suite',
-    'COR': 'Corner Room',
-    'HGH': 'High Floor Room',
-    'LOW': 'Low Floor Room',
-    'SND': 'Standard Non-Smoking Room',
-    'SMS': 'Standard Smoking Room'
-  },
-  // Accenture room codes
-  'ACC': {
-    'STD': 'Standard Room',
-    'DLX': 'Deluxe Room',
-    'SUP': 'Superior Room',
-    'EXE': 'Executive Room',
-    'SUI': 'Suite',
-    'PSI': 'Presidential Suite',
-    'ACC': 'Accessible Room',
-    'OCV': 'Ocean View Room',
-    'CIV': 'City View Room',
-    'GV': 'Garden View Room',
-    'POV': 'Pool View Room',
-    'FAM': 'Family Room',
-    'HNE': 'Honeymoon Suite',
-    'PEN': 'Penthouse Suite',
-    'KNG': 'King Room',
-    'QN': 'Queen Room',
-    'STD2': 'Standard Two Queen Room',
-    'DLX2': 'Deluxe Two Queen Room',
-    'JSU': 'Junior Suite',
-    'RSI': 'Regency Suite',
-    'COR': 'Corner Room',
-    'HGH': 'High Floor Room',
-    'LOW': 'Low Floor Room'
-  },
-  // Wynn room codes
-  'WYN': {
-    'STD': 'Standard Room',
-    'DLX': 'Deluxe Room',
-    'SUP': 'Superior Room',
-    'EXE': 'Executive Room',
-    'SUI': 'Suite',
-    'PSI': 'Presidential Suite',
-    'ACC': 'Accessible Room',
-    'OCV': 'Ocean View Room',
-    'CIV': 'City View Room',
-    'GV': 'Garden View Room',
-    'POV': 'Pool View Room',
-    'FAM': 'Family Room',
-    'HNE': 'Honeymoon Suite',
-    'PEN': 'Penthouse Suite',
-    'KNG': 'King Room',
-    'QN': 'Queen Room',
-    'STD2': 'Standard Two Queen Room',
-    'DLX2': 'Deluxe Two Queen Room',
-    'JSU': 'Junior Suite',
-    'RSI': 'Regency Suite',
-    'COR': 'Corner Room',
-    'HGH': 'High Floor Room',
-    'LOW': 'Low Floor Room',
-    'SND': 'Standard Non-Smoking Room',
-    'SMS': 'Standard Smoking Room',
-    'VIL': 'Villa',
-    'RSD': 'Residence',
-    'TWR': 'Tower Room',
-    'SAL': 'Salon Suite',
-    'PAR': 'Parlor Suite'
-  },
-  // MGM room codes
-  'MGM': {
-    'STD': 'Standard Room',
-    'DLX': 'Deluxe Room',
-    'SUP': 'Superior Room',
-    'EXE': 'Executive Room',
-    'SUI': 'Suite',
-    'PSI': 'Presidential Suite',
-    'ACC': 'Accessible Room',
-    'OCV': 'Ocean View Room',
-    'CIV': 'City View Room',
-    'GV': 'Garden View Room',
-    'POV': 'Pool View Room',
-    'FAM': 'Family Room',
-    'HNE': 'Honeymoon Suite',
-    'PEN': 'Penthouse Suite',
-    'KNG': 'King Room',
-    'QN': 'Queen Room',
-    'STD2': 'Standard Two Queen Room',
-    'DLX2': 'Deluxe Two Queen Room',
-    'JSU': 'Junior Suite',
-    'RSI': 'Regency Suite',
-    'COR': 'Corner Room',
-    'HGH': 'High Floor Room',
-    'LOW': 'Low Floor Room',
-    'SND': 'Standard Non-Smoking Room',
-    'SMS': 'Standard Smoking Room',
-    'VIL': 'Villa',
-    'RSD': 'Residence',
-    'TWR': 'Tower Room',
-    'SAL': 'Salon Suite',
-    'PAR': 'Parlor Suite',
-    'SKY': 'Sky Suite',
-    'STR': 'Studio Room',
-    'LUX': 'Luxury Room',
-    'PHT': 'Penthouse',
-    'VPS': 'Villa Pool Suite'
+    // Ramada specific room types
+    'NQQ1': 'Standard Two Queen Room',
+    'NQQ2': 'Deluxe Two Queen Room',
+    'NQQ3': 'Premium Two Queen Room',
+    'NQQ4': 'Executive Two Queen Room',
+    'NQQ5': 'Suite Two Queen Room',
+    'NQQ6': 'Accessible Two Queen Room',
+    'NQQ7': 'Connecting Two Queen Room',
+    'NQQ8': 'Adjoining Two Queen Room',
+    'NQQ9': 'Family Two Queen Room',
+    'NQQ10': 'Honeymoon Two Queen Room',
+    'NQQ11': 'Penthouse Two Queen Room',
+    'NQQ12': 'Presidential Two Queen Room',
+    'NQQ13': 'Royal Two Queen Room',
+    'NQQ14': 'Luxury Two Queen Room',
+    'NQQ15': 'Grand Two Queen Room'
   }
 };
 
@@ -294,9 +208,17 @@ export const getFriendlyRoomName = (roomCode, hotelChain = null, format = 'full'
   // Try hotel chain specific mapping first
   if (hotelChain && roomTypeMappings[hotelChain] && roomTypeMappings[hotelChain][roomCode]) {
     friendlyName = roomTypeMappings[hotelChain][roomCode];
-  } else if (commonRoomTypes[roomCode]) {
-    friendlyName = commonRoomTypes[roomCode];
   } else {
+    // Try to find in any chain's mappings
+    for (const chain of Object.keys(roomTypeMappings)) {
+      if (roomTypeMappings[chain][roomCode]) {
+        friendlyName = roomTypeMappings[chain][roomCode];
+        break;
+      }
+    }
+  }
+  
+  if (!friendlyName) {
     return roomCode;
   }
   
@@ -315,7 +237,7 @@ export const getFriendlyRoomName = (roomCode, hotelChain = null, format = 'full'
 // Function to get all room types for a specific hotel chain with formatting options
 export const getHotelRoomTypes = (hotelChain, format = 'full') => {
   const roomTypes = !hotelChain || !roomTypeMappings[hotelChain] 
-    ? Object.entries(commonRoomTypes)
+    ? Object.entries(roomTypeMappings['MAR']) // Default to Marriott if no chain specified
     : Object.entries(roomTypeMappings[hotelChain]);
   
   return roomTypes.map(([code, name]) => ({
