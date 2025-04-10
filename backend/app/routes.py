@@ -4558,3 +4558,26 @@ def test_attachment_settings():
     except Exception as e:
         app.logger.error(f"Error testing attachment settings: {str(e)}")
         return jsonify({'msg': 'Failed to test attachment settings'}), 500
+
+@app.route('/api/settings/verify-scheduler', methods=['POST'])
+@jwt_required()
+@handle_errors
+def verify_scheduler():
+    """Verify and update scheduler settings"""
+    try:
+        # Only allow admin users to verify scheduler settings
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'admin':
+            return jsonify({"msg": "Unauthorized"}), 403
+
+        from app.scheduler import verify_scheduler_settings
+        result = verify_scheduler_settings()
+        
+        return jsonify(result), 200
+        
+    except ValueError as e:
+        logging.error(f"Validation error in verify_scheduler: {str(e)}")
+        return jsonify({"msg": str(e)}), 400
+    except Exception as e:
+        logging.error(f"Error verifying scheduler settings: {str(e)}")
+        return jsonify({"msg": "Internal server error", "error": str(e)}), 500

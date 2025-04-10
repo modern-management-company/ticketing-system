@@ -292,3 +292,87 @@ def send_daily_reports():
                 
     except Exception as e:
         logging.error(f"Error in send_daily_reports: {str(e)}") 
+
+def verify_scheduler_settings():
+    """Verify and update scheduler settings for executive managers"""
+    try:
+        global scheduler
+        if not scheduler:
+            logging.info("Scheduler not initialized, initializing now...")
+            init_scheduler()
+            return
+
+        # Get current settings
+        settings = EmailSettings.query.first()
+        if not settings:
+            logging.error("No email settings found in database")
+            raise ValueError("No email settings found in database")
+
+        logging.info(f"Current scheduler settings: enabled={settings.enable_daily_reports}, "
+                    f"hour={settings.daily_report_hour}, minute={settings.daily_report_minute}, "
+                    f"timezone={settings.daily_report_timezone}")
+
+        # Check if daily reports are enabled
+        if settings.enable_daily_reports:
+            # Get the current job
+            job = scheduler.get_job('daily_reports')
+            
+            # If job doesn't exist or settings have changed, update it
+            if not job:
+                logging.info("Daily report job not found, creating new job...")
+                update_daily_report_schedule(
+                    hour=settings.daily_report_hour,
+                    minute=settings.daily_report_minute,
+                    timezone=settings.daily_report_timezone,
+                    enabled=True
+                )
+            else:
+                # Check if settings have changed
+                current_hour = job.trigger.fields[4].value
+                current_minute = job.trigger.fields[5].value
+                current_timezone = job.trigger.fields[6].value
+                
+                if (current_hour != settings.daily_report_hour or
+                    current_minute != settings.daily_report_minute or
+                    current_timezone != settings.daily_report_timezone):
+                    logging.info("Scheduler settings have changed, updating job...")
+                    update_daily_report_schedule(
+                        hour=settings.daily_report_hour,
+                        minute=settings.daily_report_minute,
+                        timezone=settings.daily_report_timezone,
+                        enabled=True
+                    )
+                else:
+                    logging.info("Scheduler settings are up to date")
+        else:
+            # Remove the job if it exists and reports are disabled
+            if scheduler.get_job('daily_reports'):
+                logging.info("Daily reports are disabled, removing job...")
+                scheduler.remove_job('daily_reports')
+            else:
+                logging.info("Daily reports are disabled, no job to remove")
+
+        # Verify executive users are properly configured
+        executive_users = User.query.filter_by(is_active=True, group='Executive').all()
+        if not executive_users:
+            logging.warning("No active executive users found for daily reports")
+        else:
+            logging.info(f"Found {len(executive_users)} active executive users for daily reports")
+            for user in executive_users:
+                logging.info(f"Executive user: {user.email} (ID: {user.user_id})")
+
+        return {
+            "status": "success",
+            "message": "Scheduler settings verified and updated successfully",
+            "settings": {
+                "enabled": settings.enable_daily_reports,
+                "hour": settings.daily_report_hour,
+                "minute": settings.daily_report_minute,
+                "timezone": settings.daily_report_timezone,
+                "executive_users": len(executive_users)
+            }
+        }
+
+    except Exception as e:
+        logging.error(f"Error verifying scheduler settings: {str(e)}")
+        raise 
