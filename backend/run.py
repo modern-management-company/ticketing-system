@@ -25,19 +25,19 @@ logger = setup_run_logging()
 
 def initialize_scheduler():
     """Initialize the scheduler and verify settings"""
-    try:
-        logger.info("Initializing scheduler...")
-        init_scheduler()
-        logger.info("Scheduler initialized successfully")
-        
-        # Verify scheduler settings
-        logger.info("Verifying scheduler settings...")
-        with app.app_context():
+    with app.app_context():
+        try:
+            logger.info("Initializing scheduler...")
+            init_scheduler()
+            logger.info("Scheduler initialized successfully")
+            
+            # Verify scheduler settings
+            logger.info("Verifying scheduler settings...")
             verify_scheduler_settings()
-        logger.info("Scheduler settings verified successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize scheduler: {str(e)}", exc_info=True)
-        raise
+            logger.info("Scheduler settings verified successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize scheduler: {e}")
+            raise
 
 # Initialize scheduler when the app starts
 initialize_scheduler()

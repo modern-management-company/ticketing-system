@@ -9,29 +9,20 @@ import {
   Grid,
   Alert,
   CircularProgress,
-  Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem
+  Chip
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import apiClient from './apiClient';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import StorageIcon from '@mui/icons-material/Storage';
-import LockIcon from '@mui/icons-material/Lock';
 
 const AttachmentSettings = () => {
-  const { user } = useAuth();
+  const { auth } = useAuth();
   const [settings, setSettings] = useState({
+    storage_type: 'local',
     max_file_size: 16 * 1024 * 1024, // 16MB default
     allowed_extensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'gif'],
-    upload_folder: 'uploads',
-    property_id: ''
+    upload_folder: 'uploads'
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -39,38 +30,26 @@ const AttachmentSettings = () => {
   const [success, setSuccess] = useState('');
   const [testResult, setTestResult] = useState(null);
   const [newExtension, setNewExtension] = useState('');
-  const [showProDialog, setShowProDialog] = useState(false);
-  const [properties, setProperties] = useState([]);
-  const [loadingProperties, setLoadingProperties] = useState(false);
 
-  const isProUser = user?.subscription_plan === 'premium';
+  const isSuperAdmin = auth?.user?.role === 'super_admin';
 
   useEffect(() => {
-    fetchSettings();
-    if (isProUser) {
-      fetchProperties();
+    if (isSuperAdmin) {
+      fetchSettings();
+    } else {
+      setLoading(false);
     }
-  }, [isProUser]);
-
-  const fetchProperties = async () => {
-    try {
-      setLoadingProperties(true);
-      const response = await apiClient.get('/api/properties');
-      setProperties(response.data || []);
-    } catch (err) {
-      // Silently handle the error and set empty properties
-      setProperties([]);
-    } finally {
-      setLoadingProperties(false);
-    }
-  };
+  }, [isSuperAdmin]);
 
   const fetchSettings = async () => {
     try {
       const response = await apiClient.get('/api/settings/attachments');
-      setSettings(response.data);
+      if (response.data) {
+        setSettings(response.data);
+      }
       setLoading(false);
     } catch (err) {
+      console.error('Error fetching settings:', err);
       setError('Failed to load settings');
       setLoading(false);
     }
@@ -78,15 +57,6 @@ const AttachmentSettings = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
-    // Check if the change requires pro plan
-    if (name === 'max_file_size' && value > 16 * 1024 * 1024) {
-      if (!isProUser) {
-        setShowProDialog(true);
-        return;
-      }
-    }
-    
     setSettings(prev => ({
       ...prev,
       [name]: value
@@ -100,23 +70,27 @@ const AttachmentSettings = () => {
     setSuccess('');
 
     try {
-      if (!isProUser) {
-        setError('Pro plan required to manage attachment settings');
+      if (!isSuperAdmin) {
+        setError('Super admin access required to manage attachment settings');
         return;
       }
 
-      await apiClient.post('/api/settings/attachments', settings);
-      setSuccess('Settings saved successfully');
+      const response = await apiClient.post('/api/settings/attachments', settings);
+      if (response.data) {
+        setSuccess('Settings saved successfully');
+        setSettings(response.data.settings || settings);
+      }
     } catch (err) {
-      setError('Failed to save settings');
+      console.error('Error saving settings:', err);
+      setError(err.response?.data?.msg || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
   };
 
   const handleTestSettings = async () => {
-    if (!isProUser) {
-      setShowProDialog(true);
+    if (!isSuperAdmin) {
+      setError('Super admin access required to test settings');
       return;
     }
 
@@ -125,12 +99,13 @@ const AttachmentSettings = () => {
       const response = await apiClient.post('/api/settings/attachments/test', settings);
       setTestResult({
         success: true,
-        message: 'Connection test successful'
+        message: response.data?.msg || 'Connection test successful'
       });
     } catch (err) {
+      console.error('Error testing settings:', err);
       setTestResult({
         success: false,
-        message: err.response?.data?.error || 'Connection test failed'
+        message: err.response?.data?.msg || 'Connection test failed'
       });
     }
   };
@@ -178,8 +153,8 @@ const AttachmentSettings = () => {
       <Card>
         <CardContent>
           <Typography variant="h5" gutterBottom>
-            Attachment Settings
-            {!isProUser && <LockIcon sx={{ ml: 1, fontSize: '1rem' }} />}
+            Global Attachment Settings
+            {isSuperAdmin && <Typography variant="caption" color="success" sx={{ ml: 1 }}>(Super Admin Access)</Typography>}
           </Typography>
           
           {error && (
@@ -196,41 +171,6 @@ const AttachmentSettings = () => {
           
           <form onSubmit={handleSubmit}>
             <Grid container spacing={3}>
-              {/* Property Selection */}
-              {isProUser && (
-                <Grid item xs={12}>
-                  <FormControl fullWidth>
-                    <InputLabel>Property</InputLabel>
-                    <Select
-                      name="property_id"
-                      value={settings.property_id}
-                      onChange={handleChange}
-                      label="Property"
-                      disabled={loadingProperties}
-                    >
-                      {loadingProperties ? (
-                        <MenuItem value="" disabled>
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <CircularProgress size={20} />
-                            Loading properties...
-                          </Box>
-                        </MenuItem>
-                      ) : properties.length > 0 ? (
-                        properties.map((property) => (
-                          <MenuItem key={property.id} value={property.id}>
-                            {property.name}
-                          </MenuItem>
-                        ))
-                      ) : (
-                        <MenuItem value="" disabled>
-                          No properties available
-                        </MenuItem>
-                      )}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              )}
-
               {/* File Size Settings */}
               <Grid item xs={12}>
                 <TextField
@@ -240,8 +180,8 @@ const AttachmentSettings = () => {
                   label="Maximum File Size (bytes)"
                   value={settings.max_file_size}
                   onChange={handleChange}
-                  helperText={`Current limit: ${formatFileSize(settings.max_file_size)}${!isProUser ? ' (Upgrade to Pro for larger file sizes)' : ''}`}
-                  disabled={!isProUser}
+                  helperText={`Current limit: ${formatFileSize(settings.max_file_size)}`}
+                  disabled={!isSuperAdmin}
                 />
               </Grid>
 
@@ -258,12 +198,12 @@ const AttachmentSettings = () => {
                       onChange={(e) => setNewExtension(e.target.value)}
                       placeholder="Add extension (e.g., pdf)"
                       sx={{ mr: 1 }}
-                      disabled={!isProUser}
+                      disabled={!isSuperAdmin}
                     />
                     <Button
                       variant="outlined"
                       onClick={handleAddExtension}
-                      disabled={!newExtension || !isProUser}
+                      disabled={!newExtension || !isSuperAdmin}
                     >
                       Add
                     </Button>
@@ -276,7 +216,7 @@ const AttachmentSettings = () => {
                         onDelete={() => handleRemoveExtension(ext)}
                         color="primary"
                         variant="outlined"
-                        disabled={!isProUser}
+                        disabled={!isSuperAdmin}
                       />
                     ))}
                   </Box>
@@ -292,7 +232,7 @@ const AttachmentSettings = () => {
                   value={settings.upload_folder}
                   onChange={handleChange}
                   helperText="Relative path where files will be stored"
-                  disabled={!isProUser}
+                  disabled={!isSuperAdmin}
                 />
               </Grid>
 
@@ -303,7 +243,7 @@ const AttachmentSettings = () => {
                     variant="contained"
                     color="primary"
                     type="submit"
-                    disabled={saving || !isProUser}
+                    disabled={saving || !isSuperAdmin}
                     startIcon={<CloudUploadIcon />}
                   >
                     {saving ? 'Saving...' : 'Save Settings'}
@@ -312,7 +252,7 @@ const AttachmentSettings = () => {
                     variant="outlined"
                     onClick={handleTestSettings}
                     startIcon={<StorageIcon />}
-                    disabled={!isProUser}
+                    disabled={!isSuperAdmin}
                   >
                     Test Settings
                   </Button>
@@ -328,11 +268,11 @@ const AttachmentSettings = () => {
                 </Grid>
               )}
 
-              {/* Pro Plan Message */}
-              {!isProUser && (
+              {/* Access Message */}
+              {!isSuperAdmin && (
                 <Grid item xs={12}>
                   <Alert severity="info">
-                    Upgrade to Pro plan to manage attachment settings and enable file uploads for your properties.
+                    Super admin access required to manage attachment settings
                   </Alert>
                 </Grid>
               )}
@@ -340,27 +280,6 @@ const AttachmentSettings = () => {
           </form>
         </CardContent>
       </Card>
-
-      {/* Pro Plan Dialog */}
-      <Dialog open={showProDialog} onClose={() => setShowProDialog(false)}>
-        <DialogTitle>Pro Plan Required</DialogTitle>
-        <DialogContent>
-          <Typography>
-            This feature is only available with our Pro plan. Upgrade to access:
-          </Typography>
-          <ul>
-            <li>File Upload Management</li>
-            <li>Larger File Size Limits</li>
-            <li>Property-based Attachment Settings</li>
-          </ul>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowProDialog(false)}>Cancel</Button>
-          <Button onClick={() => window.location.href = '/pricing'} color="primary">
-            View Pricing
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

@@ -16,8 +16,6 @@ from sqlalchemy import or_
 from app.services.sms_service import SMSService
 from werkzeug.utils import secure_filename
 from app.services.file_storage_service import FileStorageService
-from app.services.s3_storage_service import S3StorageService
-from app.services.azure_storage_service import AzureStorageService
 import io
 
 def get_user_from_jwt():
@@ -4474,18 +4472,6 @@ def update_attachment_settings():
         settings.allowed_extensions = data.get('allowed_extensions', settings.allowed_extensions)
         settings.upload_folder = data.get('upload_folder', settings.upload_folder)
 
-        # Update S3 settings if provided
-        if settings.storage_type == 's3':
-            settings.s3_bucket_name = data.get('s3_bucket_name', settings.s3_bucket_name)
-            settings.s3_region = data.get('s3_region', settings.s3_region)
-            settings.s3_access_key = data.get('s3_access_key', settings.s3_access_key)
-            settings.s3_secret_key = data.get('s3_secret_key', settings.s3_secret_key)
-
-        # Update Azure settings if provided
-        elif settings.storage_type == 'azure':
-            settings.azure_account_name = data.get('azure_account_name', settings.azure_account_name)
-            settings.azure_account_key = data.get('azure_account_key', settings.azure_account_key)
-            settings.azure_container_name = data.get('azure_container_name', settings.azure_container_name)
 
         db.session.commit()
 
@@ -4528,21 +4514,6 @@ def test_attachment_settings():
         # Initialize appropriate storage service based on settings
         if settings.storage_type == 'local':
             storage_service = FileStorageService()
-        elif settings.storage_type == 's3':
-            # Initialize S3 service (to be implemented)
-            storage_service = S3StorageService(
-                bucket_name=settings.s3_bucket_name,
-                region=settings.s3_region,
-                access_key=settings.s3_access_key,
-                secret_key=settings.s3_secret_key
-            )
-        elif settings.storage_type == 'azure':
-            # Initialize Azure service (to be implemented)
-            storage_service = AzureStorageService(
-                account_name=settings.azure_account_name,
-                account_key=settings.azure_account_key,
-                container_name=settings.azure_container_name
-            )
         else:
             return jsonify({'msg': 'Invalid storage type'}), 400
 
