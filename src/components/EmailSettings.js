@@ -57,6 +57,7 @@ const EmailSettings = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [notificationTestResults, setNotificationTestResults] = useState([]);
   const [resendingReport, setResendingReport] = useState(false);
+  const [verifyingScheduler, setVerifyingScheduler] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -190,6 +191,22 @@ const EmailSettings = () => {
       setError(error.response?.data?.message || 'Failed to resend executive reports');
     } finally {
       setResendingReport(false);
+    }
+  };
+
+  const handleVerifyScheduler = async () => {
+    try {
+      setError(null);
+      setSuccess(null);
+      setVerifyingScheduler(true);
+
+      await apiClient.post('/api/settings/verify-scheduler');
+      setSuccess('Scheduler settings verified and updated successfully');
+    } catch (error) {
+      console.error('Failed to verify scheduler settings:', error);
+      setError(error.response?.data?.message || 'Failed to verify scheduler settings');
+    } finally {
+      setVerifyingScheduler(false);
     }
   };
 
@@ -400,6 +417,15 @@ const EmailSettings = () => {
                   startIcon={<SendIcon />}
                 >
                   {resendingReport ? 'Resending...' : 'Resend Report to Executives'}
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  onClick={handleVerifyScheduler}
+                  disabled={verifyingScheduler}
+                  startIcon={<SettingsIcon />}
+                >
+                  {verifyingScheduler ? 'Verifying...' : 'Verify Scheduler Settings'}
                 </Button>
               </Box>
             </Grid>

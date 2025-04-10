@@ -50,6 +50,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
 import { format } from 'date-fns';
+import LockIcon from '@mui/icons-material/Lock';
 
 const ViewTicket = () => {
   const { ticketId } = useParams();
@@ -91,6 +92,10 @@ const ViewTicket = () => {
   const [fileInputRef, setFileInputRef] = useState(null);
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showProDialog, setShowProDialog] = useState(false);
+
+  const isProUser = auth?.user?.subscription_plan === 'premium';
+  const canManageAttachments = isProUser && ticket?.property_id;
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
@@ -338,6 +343,11 @@ const ViewTicket = () => {
   };
 
   const handleFileUpload = async (event) => {
+    if (!canManageAttachments) {
+      setShowProDialog(true);
+      return;
+    }
+
     const file = event.target.files[0];
     if (!file) return;
 
@@ -364,6 +374,11 @@ const ViewTicket = () => {
   };
 
   const handleDeleteAttachment = async (attachmentId) => {
+    if (!canManageAttachments) {
+      setShowProDialog(true);
+      return;
+    }
+
     try {
       await apiClient.delete(`/tickets/${ticketId}/attachments/${attachmentId}`);
       setAttachments(attachments.filter(att => att.attachment_id !== attachmentId));
@@ -678,12 +693,15 @@ const ViewTicket = () => {
 
       <Paper sx={{ p: 2, mt: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">Attachments</Typography>
+          <Typography variant="h6">
+            Attachments
+            {!canManageAttachments && <LockIcon sx={{ ml: 1, fontSize: '1rem' }} />}
+          </Typography>
           <Button
             variant="outlined"
             startIcon={<AttachFileIcon />}
             onClick={() => fileInputRef?.click()}
-            disabled={uploadingFile}
+            disabled={uploadingFile || !canManageAttachments}
           >
             {uploadingFile ? 'Uploading...' : 'Add Attachment'}
           </Button>
@@ -712,20 +730,25 @@ const ViewTicket = () => {
                     <DownloadIcon />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="Delete">
-                  <IconButton
-                    edge="end"
-                    onClick={() => handleDeleteAttachment(attachment.attachment_id)}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </Tooltip>
+                {canManageAttachments && (
+                  <Tooltip title="Delete">
+                    <IconButton
+                      edge="end"
+                      onClick={() => handleDeleteAttachment(attachment.attachment_id)}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </ListItemSecondaryAction>
             </ListItem>
           ))}
           {attachments.length === 0 && (
             <ListItem>
-              <ListItemText primary="No attachments" />
+              <ListItemText 
+                primary="No attachments" 
+                secondary={!canManageAttachments ? "Upgrade to Pro plan to manage attachments" : ""}
+              />
             </ListItem>
           )}
         </List>
@@ -909,6 +932,27 @@ const ViewTicket = () => {
           <Button onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
           <Button onClick={confirmStatusChange} color="primary" variant="contained">
             Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Pro Plan Dialog */}
+      <Dialog open={showProDialog} onClose={() => setShowProDialog(false)}>
+        <DialogTitle>Pro Plan Required</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This feature is only available with our Pro plan. Upgrade to access:
+          </Typography>
+          <ul>
+            <li>File Upload Management</li>
+            <li>Attachment Management</li>
+            <li>Property-based File Storage</li>
+          </ul>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowProDialog(false)}>Cancel</Button>
+          <Button onClick={() => window.location.href = '/pricing'} color="primary">
+            View Pricing
           </Button>
         </DialogActions>
       </Dialog>

@@ -101,4 +101,29 @@ class FileStorageService:
         Returns:
             str: Full filesystem path
         """
-        return os.path.join(self.upload_folder, file_path) 
+        return os.path.join(self.upload_folder, file_path)
+
+    def get_ticket_files(self, ticket_id: int) -> list:
+        """
+        Get all files for a specific ticket
+        
+        Args:
+            ticket_id: ID of the ticket
+            
+        Returns:
+            list: List of file paths
+        """
+        try:
+            ticket_path = os.path.join(self.upload_folder, str(ticket_id))
+            if not os.path.exists(ticket_path):
+                return []
+                
+            files = []
+            for root, _, filenames in os.walk(ticket_path):
+                for filename in filenames:
+                    relative_path = os.path.relpath(os.path.join(root, filename), self.upload_folder)
+                    files.append(relative_path)
+            return files
+        except Exception as e:
+            current_app.logger.error(f"Error getting ticket files: {str(e)}")
+            return [] 
