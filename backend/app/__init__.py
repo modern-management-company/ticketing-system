@@ -1,17 +1,62 @@
-from flask import Flask, request, jsonify
-from flask_jwt_extended import JWTManager, get_jwt_identity, jwt_required
-from flask_cors import CORS
-from config import Config
-from datetime import timedelta
 import os
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager
+from flask_mail import Mail
+from flask_cors import CORS
+from config import config
 import logging
 from logging.handlers import RotatingFileHandler
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from config import Config
+from datetime import timedelta
 import json
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
 from app.extensions import db, migrate
 from app.scheduler import send_daily_reports
+
+db = SQLAlchemy()
+migrate = Migrate()
+jwt = JWTManager()
+mail = Mail()
+
+def create_app(config_name='default'):
+    app = Flask(__name__)
+    
+    # Load the appropriate configuration
+    if config_name == 'testing':
+        app.config.from_object(config['testing'])
+    else:
+        app.config.from_object(config['default'])
+
+    # Initialize extensions
+    db.init_app(app)
+    migrate.init_app(app, db)
+    jwt.init_app(app)
+    mail.init_app(app)
+    CORS(app)
+
+    # Set up logging
+    if not app.debug and not app.testing:
+        if not os.path.exists('logs'):
+            os.mkdir('logs')
+        file_handler = RotatingFileHandler('logs/ticketing.log', maxBytes=10240, backupCount=10)
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+        ))
+        file_handler.setLevel(logging.INFO)
+        app.logger.addHandler(file_handler)
+        app.logger.setLevel(logging.INFO)
+        app.logger.info('Ticketing System startup')
+
+    # Register blueprints
+    from app.routes import bp as main_bp
+    app.register_blueprint(main_bp)
+
+    return app
 
 # Configure logging
 def setup_logging(app):
@@ -77,7 +122,7 @@ app.config['JWT_HEADER_TYPE'] = 'Bearer'
 app.config['JWT_IDENTITY_CLAIM'] = 'identity'
 app.config['JWT_BLACKLIST_ENABLED'] = False
 app.config['EMAIL_PASSWORD'] = os.getenv('EMAIL_PASSWORD', '')
-jwt = JWTManager(app)
+jwt.init_app(app)
 
 # JWT error handlers
 @jwt.expired_token_loader
@@ -169,3 +214,6 @@ def init_scheduler():
 
 # Add this to your app initialization
 init_scheduler()
+
+# Create the app instance
+app = create_app(os.getenv('FLASK_ENV', 'default'))

@@ -1,16 +1,27 @@
 module.exports = {
-  transformIgnorePatterns: [
-    'node_modules/(?!(axios|@mui|@emotion|@babel/runtime|react-router-dom)/)'
-  ],
-  moduleNameMapper: {
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
-    '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$':
-      '<rootDir>/__mocks__/fileMock.js',
-    '^axios$': '<rootDir>/node_modules/axios/dist/axios.js'
-  },
-  setupFilesAfterEnv: ['<rootDir>/src/setupTests.js'],
   testEnvironment: 'jsdom',
+  setupFilesAfterEnv: ['<rootDir>/src/setupTests.js'],
+  moduleNameMapper: {
+    '\\.(css|less|sass|scss)$': '<rootDir>/__mocks__/styleMock.js',
+    '\\.(gif|ttf|eot|svg)$': '<rootDir>/__mocks__/fileMock.js'
+  },
   transform: {
     '^.+\\.(js|jsx)$': 'babel-jest'
+  },
+  transformIgnorePatterns: [
+    '/node_modules/(?!axios)/'
+  ],
+  collectCoverageFrom: [
+    'src/**/*.{js,jsx}',
+    '!src/index.js',
+    '!src/reportWebVitals.js'
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
+    }
   }
 }; 

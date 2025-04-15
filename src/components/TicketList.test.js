@@ -4,6 +4,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '../context/AuthContext';
 import TicketList from './TicketList';
 import '@testing-library/jest-dom';
+import { TicketProvider } from '../context/TicketContext';
+import { NotificationProvider } from '../context/NotificationContext';
 
 // Mock API client
 jest.mock('./apiClient', () => ({
@@ -182,9 +184,13 @@ const TestWrapper = ({ children }) => {
   return (
     <MockThemeProvider>
       <AuthProvider>
-        <BrowserRouter>
-          {children}
-        </BrowserRouter>
+        <TicketProvider>
+          <NotificationProvider>
+            <BrowserRouter>
+              {children}
+            </BrowserRouter>
+          </NotificationProvider>
+        </TicketProvider>
       </AuthProvider>
     </MockThemeProvider>
   );

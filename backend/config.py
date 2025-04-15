@@ -7,10 +7,10 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Secret key for session management
-    SECRET_KEY = os.environ.get('SECRET_KEY', '')
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev'
     
     # JWT configuration
-    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', '')
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'dev-jwt-secret'
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
     JWT_ERROR_MESSAGE_KEY = 'msg'
@@ -27,7 +27,7 @@ class Config:
     CORS_HEADERS = 'Content-Type'
     
     # File upload configuration
-    UPLOAD_FOLDER = 'uploads'
+    UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     
     # Logging configuration
@@ -64,4 +64,24 @@ class Config:
     TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
     TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
     TWILIO_FROM_NUMBER = os.environ.get('TWILIO_FROM_NUMBER', '')
-    ENABLE_SMS_NOTIFICATIONS = os.environ.get('ENABLE_SMS_NOTIFICATIONS', 'True').lower() == 'true' 
+    ENABLE_SMS_NOTIFICATIONS = os.environ.get('ENABLE_SMS_NOTIFICATIONS', 'True').lower() == 'true'
+
+class DevelopmentConfig(Config):
+    DEBUG = True
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dev.db')
+
+class TestingConfig(Config):
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    WTF_CSRF_ENABLED = False
+
+class ProductionConfig(Config):
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
+
+config = {
+    'development': DevelopmentConfig,
+    'testing': TestingConfig,
+    'production': ProductionConfig,
+    'default': DevelopmentConfig
+} 

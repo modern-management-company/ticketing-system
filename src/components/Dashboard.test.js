@@ -1,9 +1,11 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '../context/AuthContext';
 import Dashboard from './Dashboard';
 import '@testing-library/jest-dom';
+import { TicketProvider } from '../context/TicketContext';
+import { NotificationProvider } from '../context/NotificationContext';
 
 // Mock API client
 jest.mock('./apiClient', () => ({
@@ -126,9 +128,13 @@ const TestWrapper = ({ children }) => {
   return (
     <MockThemeProvider>
       <AuthProvider>
-        <BrowserRouter>
-          {children}
-        </BrowserRouter>
+        <TicketProvider>
+          <NotificationProvider>
+            <BrowserRouter>
+              {children}
+            </BrowserRouter>
+          </NotificationProvider>
+        </TicketProvider>
       </AuthProvider>
     </MockThemeProvider>
   );
@@ -267,5 +273,111 @@ describe('Dashboard Component', () => {
     await waitFor(() => {
       expect(getDashboardStats).toHaveBeenCalledWith({ property_id: 1 });
     });
+  });
+
+  test('renders recent tickets', async () => {
+    const { getDashboardStats, getRecentTickets } = require('../services/api');
+    getDashboardStats.mockResolvedValueOnce(mockDashboardStats);
+    getRecentTickets.mockResolvedValueOnce(mockRecentTickets);
+
+    render(
+      <TestWrapper>
+        <Dashboard />
+      </TestWrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Ticket 1')).toBeInTheDocument();
+      expect(screen.getByText('Test Ticket 2')).toBeInTheDocument();
+      expect(screen.getByText('high')).toBeInTheDocument();
+      expect(screen.getByText('medium')).toBeInTheDocument();
+    });
+  });
+
+  test('renders recent tasks', async () => {
+    const { getDashboardStats, getRecentTasks } = require('../services/api');
+    getDashboardStats.mockResolvedValueOnce(mockDashboardStats);
+    getRecentTasks.mockResolvedValueOnce(mockRecentTasks);
+
+    render(
+      <TestWrapper>
+        <Dashboard />
+      </TestWrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Task 1')).toBeInTheDocument();
+      expect(screen.getByText('Test Task 2')).toBeInTheDocument();
+      expect(screen.getByText('pending')).toBeInTheDocument();
+      expect(screen.getByText('completed')).toBeInTheDocument();
+    });
+  });
+
+  test('handles API errors', async () => {
+    const { getDashboardStats } = require('../services/api');
+    getDashboardStats.mockRejectedValueOnce(new Error('Failed to load stats'));
+
+    render(
+      <TestWrapper>
+        <Dashboard />
+      </TestWrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Error loading dashboard data')).toBeInTheDocument();
+    });
+  });
+
+  test('displays loading state', () => {
+    const { getDashboardStats } = require('../services/api');
+    getDashboardStats.mockImplementation(() => new Promise(() => {}));
+
+    render(
+      <TestWrapper>
+        <Dashboard />
+      </TestWrapper>
+    );
+
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+  });
+
+  test('navigates to tickets page', async () => {
+    const { getDashboardStats } = require('../services/api');
+    getDashboardStats.mockResolvedValueOnce(mockDashboardStats);
+
+    render(
+      <TestWrapper>
+        <Dashboard />
+      </TestWrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('10')).toBeInTheDocument();
+    });
+
+    const viewAllTicketsButton = screen.getByText('View All Tickets');
+    fireEvent.click(viewAllTicketsButton);
+
+    expect(window.location.pathname).toBe('/tickets');
+  });
+
+  test('navigates to tasks page', async () => {
+    const { getDashboardStats } = require('../services/api');
+    getDashboardStats.mockResolvedValueOnce(mockDashboardStats);
+
+    render(
+      <TestWrapper>
+        <Dashboard />
+      </TestWrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('8')).toBeInTheDocument();
+    });
+
+    const viewAllTasksButton = screen.getByText('View All Tasks');
+    fireEvent.click(viewAllTasksButton);
+
+    expect(window.location.pathname).toBe('/tasks');
   });
 }); 
