@@ -6,9 +6,11 @@ import {
   Typography,
   Container,
   Paper,
-  Stack
+  Stack,
+  Link
 } from '@mui/material';
 import LoginIcon from '@mui/icons-material/Login';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 
 const Welcome = () => {
   const navigate = useNavigate();
@@ -75,6 +77,20 @@ const Welcome = () => {
               }}
             >
               Sign In
+            </Button>
+
+            <Button
+              variant="outlined"
+              size="large"
+              startIcon={<LocalOfferIcon />}
+              onClick={() => navigate('/pricing')}
+              sx={{
+                px: 4,
+                py: 1.5,
+                fontSize: '1.2rem'
+              }}
+            >
+              View Pricing
             </Button>
 
             <Typography variant="body1" sx={{ mt: 2, color: 'text.secondary' }}>

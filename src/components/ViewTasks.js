@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import apiClient from "./apiClient"; 
 import {
   Box,
@@ -58,6 +58,7 @@ import RestoreIcon from '@mui/icons-material/Restore';
 
 const ViewTasks = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { auth } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
@@ -86,6 +87,7 @@ const ViewTasks = () => {
   const [viewMode, setViewMode] = useState('table');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [navigatingToTicket, setNavigatingToTicket] = useState(null);
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -104,6 +106,33 @@ const ViewTasks = () => {
       fetchTasks();
     }
   }, [selectedProperty]);
+
+  useEffect(() => {
+    if (location.state?.createTask) {
+      const { ticketId, propertyId } = location.state;
+      
+      // Set the selected property
+      if (propertyId) {
+        setSelectedProperty(propertyId);
+      }
+      
+      // Pre-populate form data
+      if (ticketId) {
+        setTaskForm(prev => ({
+          ...prev,
+          ticket_id: ticketId
+        }));
+        
+        // Open the dialog after a short delay
+        setTimeout(() => {
+          setOpenDialog(true);
+        }, 300);
+      }
+      
+      // Clear location state immediately
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const fetchTasks = async () => {
     try {
@@ -483,7 +512,13 @@ const ViewTasks = () => {
                 size="small"
                 color="secondary"
                 variant="outlined"
-                onClick={() => window.confirm(`View ticket #${task.ticket_id}?`) && navigate(`/tickets/${task.ticket_id}`)}
+                onClick={() => {
+                  if (navigatingToTicket !== task.ticket_id) {
+                    setNavigatingToTicket(task.ticket_id);
+                    navigate(`/tickets/${task.ticket_id}`);
+                  }
+                }}
+                sx={{ cursor: 'pointer' }}
               />
             ) : (
               <Typography variant="body2">N/A</Typography>
@@ -716,7 +751,14 @@ const ViewTasks = () => {
                 <TableBody>
                   {sortTasks(filteredTasks).map((task) => (
                     <TableRow key={task.task_id}>
-                      <TableCell>{task.task_id}</TableCell>
+                      <TableCell>
+                        <Button
+                          onClick={() => navigate(`/tasks/${task.task_id}`)}
+                          sx={{ textTransform: 'none', minWidth: 'auto' }}
+                        >
+                          {task.task_id}
+                        </Button>
+                      </TableCell>
                       <TableCell>{task.title}</TableCell>
                       <TableCell>
                         {task.room_info ? (
@@ -739,7 +781,13 @@ const ViewTasks = () => {
                             size="small"
                             color="secondary"
                             variant="outlined"
-                            onClick={() => window.confirm(`View ticket #${task.ticket_id}?`) && navigate(`/tickets/${task.ticket_id}`)}
+                            onClick={() => {
+                              if (navigatingToTicket !== task.ticket_id) {
+                                setNavigatingToTicket(task.ticket_id);
+                                navigate(`/tickets/${task.ticket_id}`);
+                              }
+                            }}
+                            sx={{ cursor: 'pointer' }}
                           />
                         ) : (
                           'N/A'

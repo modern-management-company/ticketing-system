@@ -1,9 +1,80 @@
 from datetime import datetime, timezone
-from app.models import User, Property, Ticket, Task, ServiceRequest
+from app.models import User, Property, Ticket, Task, ServiceRequest, EmailSettings
 from app.services.email_service import EmailService
 from app.extensions import db
 import logging
 import pytz
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+# Global scheduler instance
+scheduler = None
+
+def init_scheduler():
+    """Initialize the scheduler with default settings"""
+    global scheduler
+    try:
+        scheduler = BackgroundScheduler(timezone=pytz.timezone('America/New_York'))
+        
+        # Get settings from database or use defaults
+        settings = EmailSettings.query.first()
+        if settings and settings.enable_daily_reports:
+            scheduler.add_job(
+                send_daily_reports,
+                trigger=CronTrigger(
+                    hour=settings.daily_report_hour,
+                    minute=settings.daily_report_minute,
+                    timezone=settings.daily_report_timezone
+                ),
+                id='daily_reports',
+                name='Send daily property reports',
+                replace_existing=True,
+                misfire_grace_time=3600  # Allow job to run up to 1 hour late if server was down
+            )
+        
+        scheduler.start()
+        logging.info("Scheduler started successfully")
+        if settings and settings.enable_daily_reports:
+            logging.info("Next daily report run time: %s", 
+                scheduler.get_job('daily_reports').next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z"))
+            
+    except Exception as e:
+        logging.error(f"Failed to initialize scheduler: {str(e)}")
+        raise
+
+def update_daily_report_schedule(hour=18, minute=0, timezone='America/New_York', enabled=True):
+    """Update the daily report schedule"""
+    global scheduler
+    try:
+        if not scheduler:
+            logging.error("Scheduler not initialized")
+            return
+
+        if enabled:
+            # Add or update the job
+            scheduler.add_job(
+                send_daily_reports,
+                trigger=CronTrigger(
+                    hour=hour,
+                    minute=minute,
+                    timezone=timezone
+                ),
+                id='daily_reports',
+                name='Send daily property reports',
+                replace_existing=True,
+                misfire_grace_time=3600
+            )
+            logging.info("Daily report schedule updated. Next run time: %s",
+                scheduler.get_job('daily_reports').next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z"))
+        else:
+            # Remove the job if it exists
+            if scheduler.get_job('daily_reports'):
+                scheduler.remove_job('daily_reports')
+                logging.info("Daily report schedule disabled")
+
+    except Exception as e:
+        logging.error(f"Failed to update daily report schedule: {str(e)}")
+        raise
 
 def has_activity(report_data):
     """Check if there is any activity to report"""
@@ -221,3 +292,30 @@ def send_daily_reports():
                 
     except Exception as e:
         logging.error(f"Error in send_daily_reports: {str(e)}") 
+
+def verify_scheduler_settings():
+    """Verify and update scheduler settings"""
+    settings = EmailSettings.query.first()
+    if not settings:
+        logging.warning("⚠️ No email settings found in database. Scheduler email functionality may not work.")
+        return
+
+    # Verify email settings
+    if not settings.smtp_server or not settings.smtp_port or not settings.smtp_username or not settings.smtp_password:
+        logging.warning("⚠️ Incomplete email settings. Scheduler email functionality may not work.")
+        return
+
+    # Verify scheduler is running
+    if not scheduler.running:
+        logging.warning("⚠️ Scheduler is not running. Starting scheduler...")
+        scheduler.start()
+        logging.info("✅ Scheduler started successfully")
+
+    # Verify all jobs are properly scheduled
+    jobs = scheduler.get_jobs()
+    if not jobs:
+        logging.warning("⚠️ No jobs scheduled. Please check your scheduler configuration.")
+        return
+
+    logging.info("✅ Scheduler settings verified successfully")
+    return {"status": "success", "message": "Scheduler settings verified"}

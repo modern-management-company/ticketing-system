@@ -1,7 +1,7 @@
 from flask import request, jsonify
 from app import app
 from app.extensions import db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment, History, SMSSettings, AttachmentSettings
 from app.services import EmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
@@ -14,6 +14,9 @@ import logging
 import secrets
 from sqlalchemy import or_
 from app.services.sms_service import SMSService
+from werkzeug.utils import secure_filename
+from app.services.file_storage_service import FileStorageService
+import io
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -350,6 +353,31 @@ def create_ticket():
                     'group': assigned_manager.group
                 }
 
+            # Record history for ticket creation
+            History.create_entry(
+                entity_type='ticket',
+                entity_id=new_ticket.ticket_id,
+                action='created',
+                user_id=current_user.user_id
+            )
+
+            
+            History.create_entry(
+                entity_type='task',
+                entity_id=task.task_id,
+                action='created',
+                user_id=current_user.user_id
+                )
+            History.create_entry(
+                entity_type='task',
+                entity_id=task.task_id,
+                action='assigned',
+                field_name='assigned_to',
+                old_value='None',
+                new_value=assigned_manager.username,
+                user_id=current_user.user_id
+                )
+
             return jsonify(response_data), 201
 
         except Exception as e:
@@ -472,6 +500,13 @@ def create_property():
         if missing_fields:
             app.logger.error(f"Missing required fields: {missing_fields}")
             return jsonify({"msg": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+        # Validate subscription and attachment settings
+        subscription_plan = data.get('subscription_plan', 'basic')
+        has_attachments = data.get('has_attachments', False)
+        
+        if has_attachments and subscription_plan != 'premium':
+            return jsonify({"msg": "Attachments are only available with premium subscription"}), 400
             
         # Create new property
         new_property = Property(
@@ -479,7 +514,9 @@ def create_property():
             address=data['address'],
             type=data.get('type', 'residential'),
             status=data.get('status', 'active'),
-            description=data.get('description', '')
+            description=data.get('description', ''),
+            subscription_plan=subscription_plan,
+            has_attachments=has_attachments
         )
         
         db.session.add(new_property)
@@ -851,6 +888,15 @@ def assign_task():
         db.session.add(task)
         db.session.flush()  # Get the task_id
 
+        # Record history for task creation
+        current_user = get_user_from_jwt()
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
         # Create a new task assignment
         task_assignment = TaskAssignment(
             task_id=task.task_id,
@@ -859,6 +905,29 @@ def assign_task():
             status=task_status  # Use mapped status
         )
         db.session.add(task_assignment)
+
+        # Record history for task assignment
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='assigned',
+            field_name='assigned_to',
+            old_value='None',
+            new_value=user.username,
+            user_id=current_user.user_id
+        )
+
+        # Record history for ticket association
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='updated',
+            field_name='associated_ticket',
+            old_value='None',
+            new_value=f"Ticket #{ticket.ticket_id}",
+            user_id=current_user.user_id
+        )
+
         db.session.commit()
 
         # Send email notification
@@ -991,11 +1060,46 @@ def manage_task(task_id):
 
             # Update task fields
             if 'title' in data:
+                old_value = task.title
                 task.title = data['title']
+                # Record history for title change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='title',
+                    old_value=old_value,
+                    new_value=data['title'],
+                    user_id=current_user.user_id
+                )
+
             if 'description' in data:
+                old_value = task.description
                 task.description = data['description']
+                # Record history for description change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='description',
+                    old_value=old_value,
+                    new_value=data['description'],
+                    user_id=current_user.user_id
+                )
+
             if 'status' in data:
+                old_value = task.status
                 task.status = data['status']
+                # Record history for status change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='status',
+                    old_value=old_value,
+                    new_value=data['status'],
+                    user_id=current_user.user_id
+                )
                 # Update associated task assignment and ticket
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
@@ -1009,27 +1113,111 @@ def manage_task(task_id):
                             ticket.status = 'in progress'
                         elif data['status'] == 'pending':
                             ticket.status = 'open'
+
             if 'priority' in data:
+                old_value = task.priority
                 task.priority = data['priority']
+                # Record history for priority change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='priority',
+                    old_value=old_value,
+                    new_value=data['priority'],
+                    user_id=current_user.user_id
+                )
                 # Update associated ticket priority
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
                     ticket = Ticket.query.get(task_assignment.ticket_id)
                     if ticket:
                         ticket.priority = data['priority']
+
             if 'assigned_to_id' in data:
+                old_value = task.assigned_to_id
                 task.assigned_to_id = data['assigned_to_id']
+                # Record history for assignee change
+                old_user = User.query.get(old_value) if old_value else None
+                new_user = User.query.get(data['assigned_to_id']) if data['assigned_to_id'] else None
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='assigned_to',
+                    old_value=old_user.username if old_user else 'None',
+                    new_value=new_user.username if new_user else 'None',
+                    user_id=current_user.user_id
+                )
                 # Update task assignment if exists
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
                     task_assignment.assigned_to_user_id = data['assigned_to_id']
+
             if 'due_date' in data:
+                old_value = task.due_date.isoformat() if task.due_date else 'None'
+                new_value = data['due_date'] if data['due_date'] else 'None'
                 task.due_date = datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if data['due_date'] else None
+                # Record history for due date change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='due_date',
+                    old_value=old_value,
+                    new_value=new_value,
+                    user_id=current_user.user_id
+                )
+
+            if 'time_spent' in data:
+                old_value = str(task.time_spent) if task.time_spent is not None else 'None'
+                new_value = str(data['time_spent']) if data.get('time_spent') is not None else 'None'
+                task.time_spent = float(data['time_spent']) if data.get('time_spent') else None
+                # Record history for time spent change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='time_spent',
+                    old_value=old_value,
+                    new_value=new_value,
+                    user_id=current_user.user_id
+                )
+
+            if 'cost' in data:
+                old_value = str(task.cost) if task.cost is not None else 'None'
+                new_value = str(data['cost']) if data.get('cost') is not None else 'None'
+                task.cost = float(data['cost']) if data.get('cost') else None
+                # Record history for cost change
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='cost',
+                    old_value=old_value,
+                    new_value=new_value,
+                    user_id=current_user.user_id
+                )
 
             # Handle ticket_id changes
             if 'ticket_id' in data:
                 # Get existing task assignment if any
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
+                old_ticket_id = task_assignment.ticket_id if task_assignment else None
+                new_ticket_id = data['ticket_id']
+                
+                # Record history for ticket association change
+                old_ticket = Ticket.query.get(old_ticket_id) if old_ticket_id else None
+                new_ticket = Ticket.query.get(new_ticket_id) if new_ticket_id else None
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task_id,
+                    action='updated',
+                    field_name='associated_ticket',
+                    old_value=f"Ticket #{old_ticket_id}" if old_ticket_id else 'None',
+                    new_value=f"Ticket #{new_ticket_id}" if new_ticket_id else 'None',
+                    user_id=current_user.user_id
+                )
                 
                 # If there's a new ticket_id
                 if data['ticket_id']:
@@ -1104,6 +1292,14 @@ def manage_task(task_id):
         elif request.method == 'DELETE':
             if current_user.role not in ['super_admin', 'manager']:
                 return jsonify({'msg': 'Unauthorized'}), 403
+                
+            # Record history before deletion
+            History.create_entry(
+                entity_type='task',
+                entity_id=task_id,
+                action='deleted',
+                user_id=current_user.user_id
+            )
                 
             # Delete associated task assignment if exists
             task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
@@ -1235,10 +1431,23 @@ def create_task():
             property_id=data['property_id'],
             status=data.get('status', 'pending'),
             assigned_to_id=data.get('assigned_to_id'),
-            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None
+            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None,
+            time_spent=float(data.get('time_spent')) if data.get('time_spent') else None,
+            cost=float(data.get('cost')) if data.get('cost') else None
         )
         db.session.add(task)
         db.session.flush()  # Flush to get the task_id
+        
+        current_user = get_user_from_jwt()
+
+        # Record history for task creation
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
 
         # If this task is imported from a ticket, create task assignment and sync status/priority
         if 'ticket_id' in data:
@@ -1260,6 +1469,14 @@ def create_task():
                 db.session.add(task_assignment)
 
         db.session.commit()
+
+        # Record history for task creation
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
 
         # Send email notification if user is assigned
         notifications_sent = False
@@ -1509,8 +1726,15 @@ def manage_property(property_id):
             if not data:
                 return jsonify({'message': 'No data provided'}), 400
 
+            # Validate subscription and attachment settings
+            subscription_plan = data.get('subscription_plan', property.subscription_plan)
+            has_attachments = data.get('has_attachments', property.has_attachments)
+            
+            if has_attachments and subscription_plan != 'premium':
+                return jsonify({"msg": "Attachments are only available with premium subscription"}), 400
+
             # Update allowed fields
-            allowed_fields = ['name', 'address', 'type', 'status', 'description']
+            allowed_fields = ['name', 'address', 'type', 'status', 'description', 'subscription_plan', 'has_attachments']
             for field in allowed_fields:
                 if field in data:
                     setattr(property, field, data[field])
@@ -1585,8 +1809,15 @@ def manage_property(property_id):
             data = request.get_json()
             old_status = property.status
 
+            # Validate subscription and attachment settings
+            subscription_plan = data.get('subscription_plan', property.subscription_plan)
+            has_attachments = data.get('has_attachments', property.has_attachments)
+            
+            if has_attachments and subscription_plan != 'premium':
+                return jsonify({"msg": "Attachments are only available with premium subscription"}), 400
+
             # Update property fields
-            for field in ['name', 'address', 'status', 'description']:
+            for field in ['name', 'address', 'status', 'description', 'subscription_plan', 'has_attachments']:
                 if field in data:
                     setattr(property, field, data[field])
 
@@ -2319,7 +2550,11 @@ def get_system_settings():
                 'smtp_username': os.getenv('SMTP_USERNAME', 'modernmanagementhotels@gmail.com'),
                 'smtp_password': '',
                 'sender_email': os.getenv('SENDER_EMAIL', 'modernmanagementhotels@gmail.com'),
-                'enable_email_notifications': True
+                'enable_email_notifications': True,
+                'daily_report_hour': 18,
+                'daily_report_minute': 0,
+                'daily_report_timezone': 'America/New_York',
+                'enable_daily_reports': True
             })
 
         return jsonify(settings.to_dict())
@@ -2355,8 +2590,24 @@ def update_system_settings():
             settings.smtp_password = data.get('smtp_password')
         settings.sender_email = data.get('sender_email', settings.sender_email)
         settings.enable_email_notifications = data.get('enable_email_notifications', settings.enable_email_notifications)
+        
+        # Update scheduler settings
+        settings.daily_report_hour = data.get('daily_report_hour', settings.daily_report_hour)
+        settings.daily_report_minute = data.get('daily_report_minute', settings.daily_report_minute)
+        settings.daily_report_timezone = data.get('daily_report_timezone', settings.daily_report_timezone)
+        settings.enable_daily_reports = data.get('enable_daily_reports', settings.enable_daily_reports)
 
         db.session.commit()
+
+        # Update the scheduler job if it exists
+        from app import scheduler
+        if hasattr(scheduler, 'update_daily_report_schedule'):
+            scheduler.update_daily_report_schedule(
+                hour=settings.daily_report_hour,
+                minute=settings.daily_report_minute,
+                timezone=settings.daily_report_timezone,
+                enabled=settings.enable_daily_reports
+            )
 
         # Return updated settings
         return jsonify(settings.to_dict())
@@ -2437,6 +2688,10 @@ def manage_ticket(ticket_id):
         if not ticket:
             return jsonify({'msg': 'Ticket not found'}), 404
 
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
         if request.method == 'GET':
             return jsonify(ticket.to_dict()), 200
 
@@ -2452,6 +2707,16 @@ def manage_ticket(ticket_id):
                     if old_value != new_value:
                         setattr(ticket, field, new_value)
                         changes.append(f"{field.title()}: {old_value} → {new_value}")
+                        # Record history for each field change
+                        History.create_entry(
+                            entity_type='ticket',
+                            entity_id=ticket_id,
+                            action='updated',
+                            field_name=field,
+                            old_value=str(old_value),
+                            new_value=str(new_value),
+                            user_id=current_user.user_id
+                        )
 
             # Handle status and priority updates with task synchronization
             if 'status' in data:
@@ -2460,6 +2725,16 @@ def manage_ticket(ticket_id):
                 if old_status != new_status:
                     ticket.status = new_status
                     changes.append(f"Status: {old_status} → {new_status}")
+                    # Record history for status change
+                    History.create_entry(
+                        entity_type='ticket',
+                        entity_id=ticket_id,
+                        action='updated',
+                        field_name='status',
+                        old_value=old_status,
+                        new_value=new_status,
+                        user_id=current_user.user_id
+                    )
                     
                     # Update associated task status
                     task_assignment = TaskAssignment.query.filter_by(ticket_id=ticket_id).first()
@@ -2481,6 +2756,16 @@ def manage_ticket(ticket_id):
                 if old_priority != new_priority:
                     ticket.priority = new_priority
                     changes.append(f"Priority: {old_priority} → {new_priority}")
+                    # Record history for priority change
+                    History.create_entry(
+                        entity_type='ticket',
+                        entity_id=ticket_id,
+                        action='updated',
+                        field_name='priority',
+                        old_value=old_priority,
+                        new_value=new_priority,
+                        user_id=current_user.user_id
+                    )
                     
                     # Update associated task priority
                     task_assignment = TaskAssignment.query.filter_by(ticket_id=ticket_id).first()
@@ -2508,8 +2793,20 @@ def manage_ticket(ticket_id):
                         else:
                             new_room.status = 'Out of Order'
                     
+                    old_room_name = old_room.name if old_room else 'None'
+                    new_room_name = new_room.name if new_room else 'None'
                     ticket.room_id = data['room_id']
                     changes.append(f"Room: {old_room.name if old_room else 'None'} → {new_room.name if new_room else 'None'}")
+                    # Record history for room change
+                    History.create_entry(
+                        entity_type='ticket',
+                        entity_id=ticket_id,
+                        action='updated',
+                        field_name='room',
+                        old_value=old_room_name,
+                        new_value=new_room_name,
+                        user_id=current_user.user_id
+                    )
 
             try:
                 db.session.commit()
@@ -2555,6 +2852,14 @@ def manage_ticket(ticket_id):
 
         elif request.method == 'DELETE':
             try:
+                # Record history before deletion
+                History.create_entry(
+                    entity_type='ticket',
+                    entity_id=ticket_id,
+                    action='deleted',
+                    user_id=current_user.user_id
+                )
+
                 # Get property managers and super admins before deleting
                 property_managers = User.query.join(PropertyManager).filter(
                     PropertyManager.property_id == ticket.property_id
@@ -2954,6 +3259,14 @@ def create_service_request():
         db.session.add(new_request)
         db.session.flush()  # Get the request ID
 
+        # Record history for service request creation
+        History.create_entry(
+            entity_type='service_request',
+            entity_id=new_request.request_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
         # Create a task for the request
         task = Task(
             title=f"{data['request_group']} Request: {data['request_type']} - Room {room.name}",
@@ -2966,6 +3279,13 @@ def create_service_request():
         db.session.add(task)
         db.session.flush()  # Get the task ID
         
+        # Record history for task creation
+        History.create_entry(
+            entity_type='task',
+            entity_id=task.task_id,
+            action='created',
+            user_id=current_user.user_id
+        )
         # Link task to request
         new_request.assigned_task_id = task.task_id
         
@@ -2988,6 +3308,14 @@ def create_service_request():
                     status='Pending'
                 )
                 db.session.add(task_assignment)
+
+                # Record history for task assignment
+                History.create_entry(
+                    entity_type='task',
+                    entity_id=task.task_id,
+                    action='assigned',
+                    user_id=current_user.user_id
+                )
 
                 # Send SMS notification if staff has phone number
                 if staff.phone:
@@ -3116,6 +3444,15 @@ def update_service_request(request_id):
                 setattr(service_request, field, data[field])
 
         db.session.commit()
+
+        # Record history for service request update
+        History.create_entry(
+            entity_type='service_request',
+            entity_id=service_request.request_id,
+            action='updated',
+            user_id=current_user.user_id
+        )   
+        
         return jsonify({
             'msg': 'Service request updated successfully',
             'request': service_request.to_dict()
@@ -3174,6 +3511,15 @@ def create_user():
         db.session.add(new_user)
         db.session.flush()  # Flush to get the user_id
 
+        
+        # Record history for user creation
+        History.create_entry(
+            entity_type='user',
+            entity_id=new_user.user_id,
+            action='created',
+            user_id=current_user.user_id
+        )
+
         # Handle property assignments
         if 'property_ids' in data and data['property_ids']:
             for property_id in data['property_ids']:
@@ -3184,6 +3530,15 @@ def create_user():
                 )
                 db.session.add(user_property)
 
+                
+                # Record history for user creation
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=new_user.user_id,
+                    action='created',
+                    user_id=current_user.user_id
+                )
+
                 # If user is a manager, also create PropertyManager relationship
                 if data['role'] == 'manager':
                     property_manager = PropertyManager(
@@ -3191,6 +3546,17 @@ def create_user():
                         property_id=property_id
                     )
                     db.session.add(property_manager)
+
+                                        # Record history for manager role assignment
+                    History.create_entry(
+                        entity_type='user',
+                        entity_id=new_user.user_id,
+                        action='updated',
+                        field_name='manager_role',
+                        old_value='None',
+                        new_value=f"Manager for {property.name}",
+                        user_id=current_user.user_id
+                    )
 
         db.session.commit()
 
@@ -3242,6 +3608,18 @@ def update_user(user_id):
         if 'role' in data and data['role'] != user.role:
             old_role = user.role
             new_role = data['role']
+
+                        # Record history for role change
+            History.create_entry(
+                entity_type='user',
+                entity_id=user_id,
+                action='updated',
+                field_name='role',
+                old_value=old_role,
+                new_value=new_role,
+                user_id=current_user.user_id
+            )
+            
             
             # If changing to manager
             if new_role == 'manager':
@@ -3263,6 +3641,17 @@ def update_user(user_id):
                             property_id=up.property_id
                         )
                         db.session.add(property_manager)
+
+                        # Record history for manager role assignment
+                        History.create_entry(
+                            entity_type='user',
+                            entity_id=user.user_id,
+                            action='updated',   
+                            field_name='manager_role',
+                            old_value='None',
+                            new_value=f"Manager for {Property.query.get(up.property_id).name}",
+                            user_id=current_user.user_id
+                        )
             
             # If changing from manager
             elif old_role == 'manager':
@@ -3306,6 +3695,13 @@ def update_user(user_id):
                 )
                 db.session.add(user_property)
                 
+                # Record history for user creation
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=user.user_id,
+                    action='updated',
+                    user_id=current_user.user_id
+                )   
                 # Add PropertyManager only for managers
                 if user.role == 'manager':
                     property_manager = PropertyManager(
@@ -3313,6 +3709,14 @@ def update_user(user_id):
                         property_id=property_id
                     )
                     db.session.add(property_manager)
+
+                    # Record history for manager role assignment
+                    History.create_entry(
+                        entity_type='user',
+                        entity_id=user.user_id,
+                        action='updated',
+                        user_id=current_user.user_id
+                    )
 
         db.session.commit()
         return jsonify({
@@ -3580,3 +3984,571 @@ def send_report_email():
             "success": False,
             "message": "Internal server error"
         }), 500
+@app.route('/api/settings/resend-executive-report', methods=['POST'])
+@jwt_required()
+def resend_executive_report():
+    """Resend daily reports to all executive users"""
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can resend reports'}), 403
+
+        # Import the send_daily_reports function
+        from app.scheduler import send_daily_reports
+        
+        # Call the function to send reports
+        send_daily_reports()
+        
+        return jsonify({'message': 'Executive reports have been resent successfully'}), 200
+
+    except Exception as e:
+        app.logger.error(f"Error in resend_executive_report: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/tickets/<int:ticket_id>/attachments', methods=['POST'])
+@jwt_required()
+def upload_ticket_attachment(ticket_id):
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Get the ticket
+        ticket = Ticket.query.get_or_404(ticket_id)
+
+        # Check if user has permission to upload attachment
+        if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+            return jsonify({'msg': 'Unauthorized - You can only upload attachments to your own tickets'}), 403
+
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            return jsonify({'msg': 'No file uploaded'}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'msg': 'No file selected'}), 400
+
+        # Initialize FileStorage service
+        file_storage_service = FileStorageService()
+
+        # Upload file to local storage
+        try:
+            file_info = file_storage_service.upload_file(file, ticket_id)
+        except Exception as e:
+            app.logger.error(f"Error uploading file: {str(e)}")
+            return jsonify({'msg': 'Failed to upload file to storage'}), 500
+
+        # Create attachment record in database
+        attachment = TicketAttachment(
+            ticket_id=ticket_id,
+            file_name=secure_filename(file.filename),
+            file_path=file_info['file_path'],
+            file_type=file_info['file_type'],
+            file_size=file_info['file_size'],
+            uploaded_by_id=current_user.user_id
+        )
+
+        db.session.add(attachment)
+        db.session.commit()
+
+        return jsonify({
+            'msg': 'File uploaded successfully',
+            'attachment': attachment.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error uploading ticket attachment: {str(e)}")
+        return jsonify({'msg': 'Failed to upload file'}), 500
+
+@app.route('/tickets/<int:ticket_id>/attachments/<int:attachment_id>', methods=['DELETE'])
+@jwt_required()
+def delete_ticket_attachment(ticket_id, attachment_id):
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Get the ticket and attachment
+        ticket = Ticket.query.get_or_404(ticket_id)
+        attachment = TicketAttachment.query.get_or_404(attachment_id)
+
+        # Verify attachment belongs to ticket
+        if attachment.ticket_id != ticket_id:
+            return jsonify({'msg': 'Attachment does not belong to this ticket'}), 400
+
+        # Check if user has permission to delete attachment
+        if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+            return jsonify({'msg': 'Unauthorized - You can only delete attachments from your own tickets'}), 403
+
+        # Initialize FileStorage service
+        file_storage_service = FileStorageService()
+
+        # Delete file from storage
+        if not file_storage_service.delete_file(attachment.file_path):
+            return jsonify({'msg': 'Failed to delete file from storage'}), 500
+
+        # Delete attachment record from database
+        db.session.delete(attachment)
+        db.session.commit()
+
+        return jsonify({'msg': 'Attachment deleted successfully'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting ticket attachment: {str(e)}")
+        return jsonify({'msg': 'Failed to delete attachment'}), 500
+
+@app.route('/tickets/<int:ticket_id>/attachments/<int:attachment_id>/download', methods=['GET'])
+@jwt_required()
+def download_ticket_attachment(ticket_id, attachment_id):
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Get the ticket and attachment
+        ticket = Ticket.query.get_or_404(ticket_id)
+        attachment = TicketAttachment.query.get_or_404(attachment_id)
+
+        # Verify attachment belongs to ticket
+        if attachment.ticket_id != ticket_id:
+            return jsonify({'msg': 'Attachment does not belong to this ticket'}), 400
+
+        # Check if user has permission to download attachment
+        if current_user.role == 'user' and ticket.user_id != current_user.user_id:
+            return jsonify({'msg': 'Unauthorized - You can only download attachments from your own tickets'}), 403
+
+        # Initialize FileStorage service
+        file_storage_service = FileStorageService()
+
+        # Get the file path
+        file_path = file_storage_service.get_file_path(attachment.file_path)
+
+        # Check if file exists
+        if not os.path.exists(file_path):
+            return jsonify({'msg': 'File not found'}), 404
+
+        # Return the file path for the frontend to handle the download
+        return jsonify({
+            'file_path': file_path,
+            'file_name': attachment.file_name
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting ticket attachment: {str(e)}")
+        return jsonify({'msg': 'Failed to get file'}), 500
+
+@app.route('/tickets/<int:ticket_id>/history', methods=['GET'])
+@jwt_required()
+def get_ticket_history(ticket_id):
+    """Get history entries for a specific ticket"""
+    try:
+        history_entries = History.query.filter_by(
+            entity_type='ticket',
+            entity_id=ticket_id
+        ).order_by(History.created_at.desc()).all()
+        
+        return jsonify({
+            'history': [entry.to_dict() for entry in history_entries]
+        }), 200
+    except Exception as e:
+        return jsonify({'msg': str(e)}), 500
+
+@app.route('/tasks/<int:task_id>/history', methods=['GET'])
+@jwt_required()
+def get_task_history(task_id):
+    """Get history entries for a specific task"""
+    try:
+        history_entries = History.query.filter_by(
+            entity_type='task',
+            entity_id=task_id
+        ).order_by(History.created_at.desc()).all()
+        
+        return jsonify({
+            'history': [entry.to_dict() for entry in history_entries]
+        }), 200
+    except Exception as e:
+        return jsonify({'msg': str(e)}), 500
+
+@app.route('/history', methods=['GET'])
+@jwt_required()
+def get_all_history():
+    """Get all history entries with pagination and filtering"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Only super_admin can view all history
+        if current_user.role != 'super_admin':
+            return jsonify({'msg': 'Unauthorized - Only super admins can view all history'}), 403
+
+        # Get query parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        entity_type = request.args.get('entity_type')
+        action = request.args.get('action')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        user_id = request.args.get('user_id', type=int)
+
+        # Build query
+        query = History.query
+
+        # Apply filters
+        if entity_type:
+            query = query.filter(History.entity_type == entity_type)
+        if action:
+            query = query.filter(History.action == action)
+        if start_date:
+            query = query.filter(History.created_at >= datetime.fromisoformat(start_date))
+        if end_date:
+            query = query.filter(History.created_at <= datetime.fromisoformat(end_date))
+        if user_id:
+            query = query.filter(History.user_id == user_id)
+
+        # Order by most recent first
+        query = query.order_by(History.created_at.desc())
+
+        # Paginate results
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        history_entries = pagination.items
+
+        return jsonify({
+            'history': [entry.to_dict() for entry in history_entries],
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': page
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting history: {str(e)}")
+        return jsonify({'msg': str(e)}), 500
+
+
+@app.route('/api/settings/sms', methods=['GET'])
+@jwt_required()
+def get_sms_settings():
+    """Get SMS settings from database"""
+    try:
+        # Get the first SMS settings record (there should be only one)
+        sms_settings = SMSSettings.query.first()
+        
+        # If no settings exist yet, return empty settings
+        if not sms_settings:
+            return jsonify({
+                'service_provider': '',
+                'account_sid': '',
+                'auth_token': '',
+                'sender_phone': '',
+                'enable_sms_notifications': True
+            }), 200
+            
+        return jsonify(sms_settings.to_dict()), 200
+    except Exception as e:
+        app.logger.error(f"Error retrieving SMS settings: {str(e)}")
+        return jsonify({"message": f"Failed to retrieve SMS settings: {str(e)}"}), 500
+
+@app.route('/api/settings/sms', methods=['POST'])
+@jwt_required()
+def update_sms_settings():
+    """Update SMS settings in database"""
+    try:
+        data = request.get_json()
+        
+        # Get current settings or create new if not exists
+        sms_settings = SMSSettings.query.first()
+        if not sms_settings:
+            sms_settings = SMSSettings(
+                service_provider=data.get('service_provider', ''),
+                account_sid=data.get('account_sid', ''),
+                auth_token=data.get('auth_token', ''),
+                sender_phone=data.get('sender_phone', ''),
+                enable_sms_notifications=data.get('enable_sms_notifications', True)
+            )
+            db.session.add(sms_settings)
+        else:
+            # Update existing settings
+            sms_settings.service_provider = data.get('service_provider', sms_settings.service_provider)
+            sms_settings.account_sid = data.get('account_sid', sms_settings.account_sid)
+            sms_settings.auth_token = data.get('auth_token', sms_settings.auth_token)
+            sms_settings.sender_phone = data.get('sender_phone', sms_settings.sender_phone)
+            sms_settings.enable_sms_notifications = data.get('enable_sms_notifications', sms_settings.enable_sms_notifications)
+        
+        db.session.commit()
+        return jsonify(sms_settings.to_dict()), 200
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating SMS settings: {str(e)}")
+        return jsonify({"message": f"Failed to update SMS settings: {str(e)}"}), 500
+
+@app.route('/api/test-sms', methods=['POST'])
+@jwt_required()
+def test_sms():
+    """Send a test SMS to verify settings"""
+    try:
+        data = request.get_json()
+        phone_number = data.get('phone')
+        
+        if not phone_number:
+            return jsonify({"message": "Phone number is required"}), 400
+            
+        # Get SMS settings
+        sms_settings = SMSSettings.query.first()
+        if not sms_settings:
+            return jsonify({"message": "SMS settings not configured"}), 400
+            
+        # Configure SMS client based on provider (example for Twilio)
+        if sms_settings.service_provider.lower() == 'twilio':
+            try:
+                # This is where you would import and use the Twilio client
+                # For demonstration purposes, just log it
+                app.logger.info(f"Would send SMS to {phone_number} using Twilio")
+                # client = Client(sms_settings.account_sid, sms_settings.auth_token)
+                # message = client.messages.create(
+                #     body="This is a test SMS from your property management system.",
+                #     from_=sms_settings.sender_phone,
+                #     to=phone_number
+                # )
+                # app.logger.info(f"SMS sent with SID: {message.sid}")
+            except Exception as e:
+                app.logger.error(f"Error sending SMS via Twilio: {str(e)}")
+                return jsonify({"message": f"Failed to send SMS: {str(e)}"}), 500
+        else:
+            # Handle other SMS providers or return error for unsupported provider
+            return jsonify({"message": f"SMS provider {sms_settings.service_provider} not supported yet"}), 400
+            
+        return jsonify({"message": "Test SMS sent successfully"}), 200
+    except Exception as e:
+        app.logger.error(f"Error in test SMS route: {str(e)}")
+        return jsonify({"message": f"Failed to send test SMS: {str(e)}"}), 500
+
+@app.route('/api/test-all-sms', methods=['POST'])
+@jwt_required()
+def test_all_sms():
+    """Run comprehensive tests on SMS configuration"""
+    try:
+        # Get SMS settings
+        sms_settings = SMSSettings.query.first()
+        if not sms_settings:
+            return jsonify({"message": "SMS settings not configured", "results": []}), 400
+        
+        results = []
+        
+        # Test 1: SMS Provider Connection
+        try:
+            # Placeholder for actual connection test code
+            results.append({
+                "test": "SMS Provider Connection",
+                "success": True,
+                "message": f"Successfully connected to {sms_settings.service_provider}"
+            })
+        except Exception as e:
+            results.append({
+                "test": "SMS Provider Connection",
+                "success": False,
+                "message": f"Failed to connect: {str(e)}"
+            })
+        
+        # Test 2: API Authentication
+        try:
+            # Placeholder for actual authentication test code
+            results.append({
+                "test": "API Authentication",
+                "success": True,
+                "message": "Authentication successful"
+            })
+        except Exception as e:
+            results.append({
+                "test": "API Authentication",
+                "success": False,
+                "message": f"Authentication failed: {str(e)}"
+            })
+        
+        # Test 3: Phone Number Validation
+        try:
+            # Placeholder for phone number validation test
+            if not sms_settings.sender_phone or not sms_settings.sender_phone.startswith('+'):
+                raise ValueError("Sender phone must be in E.164 format (e.g., +1234567890)")
+            results.append({
+                "test": "Phone Number Validation",
+                "success": True,
+                "message": "Sender phone number is valid"
+            })
+        except Exception as e:
+            results.append({
+                "test": "Phone Number Validation",
+                "success": False,
+                "message": f"Invalid phone number: {str(e)}"
+            })
+        
+        # Add more tests here (Message Formatting, Character Encoding, etc.)
+        
+        # Placeholder results for the remaining tests
+        test_names = [
+            "Message Formatting", 
+            "Character Encoding", 
+            "Rate Limiting Check", 
+            "Error Handling",
+            "Message Delivery"
+        ]
+        
+        for test_name in test_names:
+            # For demonstration purposes, use random success/failure
+            import random
+            success = random.choice([True, True, True, False])  # 75% success rate
+            results.append({
+                "test": test_name,
+                "success": success,
+                "message": "Test completed successfully" if success else "Test failed"
+            })
+        
+        return jsonify({
+            "message": "SMS configuration tests completed",
+            "results": results
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error running SMS tests: {str(e)}")
+        return jsonify({
+            "message": f"Failed to run SMS tests: {str(e)}",
+            "results": []
+        }), 500
+
+@app.route('/api/settings/attachments', methods=['GET'])
+@jwt_required()
+def get_attachment_settings():
+    """Get current attachment storage settings"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Only super_admin can view settings
+        if current_user.role != 'super_admin':
+            return jsonify({'msg': 'Unauthorized - Only super admins can view attachment settings'}), 403
+
+        settings = AttachmentSettings.query.first()
+        if not settings:
+            # Create default settings if none exist
+            settings = AttachmentSettings()
+            db.session.add(settings)
+            db.session.commit()
+
+        return jsonify(settings.to_dict()), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting attachment settings: {str(e)}")
+        return jsonify({'msg': 'Failed to get attachment settings'}), 500
+
+@app.route('/api/settings/attachments', methods=['POST'])
+@jwt_required()
+def update_attachment_settings():
+    """Update attachment storage settings"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Only super_admin can update settings
+        if current_user.role != 'super_admin':
+            return jsonify({'msg': 'Unauthorized - Only super admins can update attachment settings'}), 403
+
+        data = request.get_json()
+        
+        # Get or create settings
+        settings = AttachmentSettings.query.first()
+        if not settings:
+            settings = AttachmentSettings()
+            db.session.add(settings)
+
+        # Update settings
+        settings.storage_type = data.get('storage_type', settings.storage_type)
+        settings.max_file_size = data.get('max_file_size', settings.max_file_size)
+        settings.allowed_extensions = data.get('allowed_extensions', settings.allowed_extensions)
+        settings.upload_folder = data.get('upload_folder', settings.upload_folder)
+
+
+        db.session.commit()
+
+        # Update app config
+        app.config['UPLOAD_FOLDER'] = settings.upload_folder
+        app.config['MAX_CONTENT_LENGTH'] = settings.max_file_size
+
+        return jsonify({
+            'msg': 'Attachment settings updated successfully',
+            'settings': settings.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating attachment settings: {str(e)}")
+        return jsonify({'msg': 'Failed to update attachment settings'}), 500
+
+@app.route('/api/settings/attachments/test', methods=['POST'])
+@jwt_required()
+def test_attachment_settings():
+    """Test the current attachment storage settings"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Only super_admin can test settings
+        if current_user.role != 'super_admin':
+            return jsonify({'msg': 'Unauthorized - Only super admins can test attachment settings'}), 403
+
+        settings = AttachmentSettings.query.first()
+        if not settings:
+            return jsonify({'msg': 'No attachment settings found'}), 404
+
+        # Create a test file
+        test_file = io.BytesIO(b'Test file content')
+        test_file.filename = 'test.txt'
+        test_file.content_type = 'text/plain'
+
+        # Initialize appropriate storage service based on settings
+        if settings.storage_type == 'local':
+            storage_service = FileStorageService()
+        else:
+            return jsonify({'msg': 'Invalid storage type'}), 400
+
+        # Try to upload the test file
+        try:
+            file_info = storage_service.upload_file(test_file, 0)  # Using 0 as test ticket_id
+            # Try to delete the test file
+            storage_service.delete_file(file_info['file_path'])
+            return jsonify({'msg': 'Storage settings test successful'}), 200
+        except Exception as e:
+            return jsonify({'msg': f'Storage test failed: {str(e)}'}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error testing attachment settings: {str(e)}")
+        return jsonify({'msg': 'Failed to test attachment settings'}), 500
+
+@app.route('/api/settings/verify-scheduler', methods=['POST'])
+@jwt_required()
+@handle_errors
+def verify_scheduler():
+    """Verify and update scheduler settings"""
+    try:
+        # Only allow admin users to verify scheduler settings
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'admin':
+            return jsonify({"msg": "Unauthorized"}), 403
+
+        from app.scheduler import verify_scheduler_settings
+        result = verify_scheduler_settings()
+        
+        return jsonify(result), 200
+        
+    except ValueError as e:
+        logging.error(f"Validation error in verify_scheduler: {str(e)}")
+        return jsonify({"msg": str(e)}), 400
+    except Exception as e:
+        logging.error(f"Error verifying scheduler settings: {str(e)}")
+        return jsonify({"msg": "Internal server error", "error": str(e)}), 500

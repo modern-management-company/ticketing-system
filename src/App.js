@@ -22,14 +22,20 @@ import Dashboard from "./components/Dashboard";
 import ManageUsers from './components/ManageUsers';
 import ViewTasks from './components/ViewTasks';
 import ViewTickets from './components/ViewTickets';
+import ViewTicket from './components/ViewTicket';
 import ViewRooms from './components/ViewRooms';
 import PropertyManagement from './components/PropertyManagement';
 import Unauthorized from './components/Unauthorized';
 import Reports from './components/Reports';
 import HomeOverview from './components/HomeOverview';
 import EmailSettings from './components/EmailSettings';
+import SMSSettings from './components/SMSSettings';
+import AttachmentSettings from './components/AttachmentSettings';
 import ServiceRequests from './components/ServiceRequests';
 import Welcome from './components/Welcome';
+import ViewTask from './components/ViewTask';
+import HistoryView from './components/HistoryView';
+import Pricing from './components/Pricing';
 
 const App = () => {
   return (
@@ -61,6 +67,11 @@ const App = () => {
                 <RegisterUser isAdminRegistration={true} />
               </ProtectedRoute>
             } />
+            <Route path="/pricing" element={
+              <ProtectedRoute requiresAuth={false} redirectTo="/home">
+                <Pricing />
+              </ProtectedRoute>
+            } />
             
             <Route path="/unauthorized" element={<Unauthorized />} />
             
@@ -81,6 +92,12 @@ const App = () => {
               <Route path="/tickets" element={
                 <ProtectedRoute>
                   <ViewTickets />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/tickets/:ticketId" element={
+                <ProtectedRoute>
+                  <ViewTicket />
                 </ProtectedRoute>
               } />
               
@@ -108,6 +125,12 @@ const App = () => {
                 </ProtectedRoute>
               } />
               
+              <Route path="/tasks/:taskId" element={
+                <ProtectedRoute>
+                  <ViewTask />
+                </ProtectedRoute>
+              } />
+              
               <Route path="/admin">
                 <Route path="properties" element={
                   <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
@@ -122,6 +145,21 @@ const App = () => {
                 <Route path="email-settings" element={
                   <ProtectedRoute allowedRoles={['super_admin']}>
                     <EmailSettings />
+                  </ProtectedRoute>
+                } />
+                <Route path="history" element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <HistoryView />
+                  </ProtectedRoute>
+                } />
+                <Route path="sms-settings" element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <SMSSettings />
+                  </ProtectedRoute>
+                } />
+                <Route path="attachment-settings" element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <AttachmentSettings />
                   </ProtectedRoute>
                 } />
               </Route>

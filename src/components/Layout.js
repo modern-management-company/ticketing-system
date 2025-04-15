@@ -33,6 +33,9 @@ import {
   Home as HomeIcon,
   Email as EmailIcon,
   CleaningServices as HousekeepingIcon,
+  History as HistoryIcon,
+  Sms as SmsIcon,
+  AttachFile as AttachFileIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -110,10 +113,25 @@ const Layout = () => {
         path: '/admin/users',
       },
       {
+        text: 'History',
+        icon: <HistoryIcon />,
+        path: '/admin/history',
+      },
+      {
         text: 'Email Settings',
         icon: <EmailIcon />,
         path: '/admin/email-settings',
-      }
+      },
+      {
+        text: 'SMS Settings',
+        icon: <SmsIcon />,
+        path: '/admin/sms-settings',
+      },
+      {
+        text: 'Attachment Settings',
+        icon: <AttachFileIcon />,
+        path: '/admin/attachment-settings',
+      }      
     ];
 
     switch (auth.user.role) {

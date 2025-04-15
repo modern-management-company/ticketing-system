@@ -22,3 +22,6 @@ flask-cors
 flask_migrate
 twilio==8.12.0
 apscheduler==3.11.0
+supabase==2.3.4
+boto3==1.26.137
+azure-storage-blob==12.16.0

@@ -2,6 +2,7 @@ from app import app
 import logging
 import os
 from datetime import datetime
+from app.scheduler import init_scheduler, verify_scheduler_settings
 
 # Configure logging
 def setup_run_logging():
@@ -21,6 +22,25 @@ def setup_run_logging():
     return logging.getLogger(__name__)
 
 logger = setup_run_logging()
+
+def initialize_scheduler():
+    """Initialize the scheduler and verify settings"""
+    with app.app_context():
+        try:
+            logger.info("Initializing scheduler...")
+            init_scheduler()
+            logger.info("Scheduler initialized successfully")
+            
+            # Verify scheduler settings
+            logger.info("Verifying scheduler settings...")
+            verify_scheduler_settings()
+            logger.info("Scheduler settings verified successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize scheduler: {e}")
+            raise
+
+# Initialize scheduler when the app starts
+initialize_scheduler()
 
 # Drop all tables and recreate them on startup
 # with app.app_context():
