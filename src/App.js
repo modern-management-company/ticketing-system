@@ -26,6 +26,7 @@ import ViewTickets from './components/ViewTickets';
 import ViewTicket from './components/ViewTicket';
 import ViewRooms from './components/ViewRooms';
 import PropertyManagement from './components/PropertyManagement';
+import TeamManagement from './components/TeamManagement';
 import Unauthorized from './components/Unauthorized';
 import Reports from './components/Reports';
 import HomeOverview from './components/HomeOverview';
@@ -183,6 +184,18 @@ const App = () => {
               <Route path="/tasks/:taskId" element={
                 <ProtectedRoute>
                   <ViewTask />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/team" element={
+                <ProtectedRoute allowedRoles={['manager', 'general_manager', 'super_admin']}>
+                  <TeamManagement />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/properties" element={
+                <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
+                  <PropertyManagement />
                 </ProtectedRoute>
               } />
             </Route>

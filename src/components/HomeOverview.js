@@ -31,7 +31,8 @@ import {
   People as PeopleIcon,
   Assessment as ReportIcon,
   MeetingRoom as RoomIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  PeopleAlt as TeamIcon
 } from '@mui/icons-material';
 
 const HomeOverview = () => {
@@ -121,6 +122,12 @@ const HomeOverview = () => {
           subtitle: 'Manage your entire property management system',
           description: 'Monitor system performance, manage users, and oversee all properties.'
         };
+      case 'general_manager':
+        return {
+          title: 'General Manager Dashboard',
+          subtitle: 'Manage your team and tickets',
+          description: 'Oversee your team, handle tickets, and monitor service requests.'
+        };
       case 'manager':
         return {
           title: 'Property Manager Dashboard',
@@ -181,6 +188,18 @@ const HomeOverview = () => {
           value: overview.stats.totalRooms,
           icon: <RoomIcon color="primary" />,
           action: () => navigate('/rooms')
+        }
+      ];
+    }
+
+    if (auth?.user?.role === 'general_manager') {
+      return [
+        ...baseStats,
+        {
+          title: 'Team Members',
+          value: overview.stats.totalUsers,
+          icon: <TeamIcon color="primary" />,
+          action: () => navigate('/team')
         }
       ];
     }
@@ -262,6 +281,18 @@ const HomeOverview = () => {
           title: 'View Reports',
           icon: <ReportIcon />,
           action: () => navigate('/reports'),
+          variant: 'outlined'
+        }
+      ];
+    }
+
+    if (auth?.user?.role === 'general_manager') {
+      return [
+        ...baseActions,
+        {
+          title: 'Manage Team',
+          icon: <TeamIcon />,
+          action: () => navigate('/team'),
           variant: 'outlined'
         }
       ];

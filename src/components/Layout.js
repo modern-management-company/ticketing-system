@@ -36,6 +36,8 @@ import {
   History as HistoryIcon,
   Sms as SmsIcon,
   AttachFile as AttachFileIcon,
+  Apartment as ApartmentIcon,
+  PeopleAlt as TeamIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -100,18 +102,56 @@ const Layout = () => {
         path: '/reports',
       }
     ];
+    
+    // General Manager only needs Team access
+    const generalManagerItems = [
+      {
+        text: 'Team',
+        icon: <TeamIcon />,
+        path: '/team',
+        description: 'Manage property managers and staff'
+      }
+    ];
 
-    // Add management console link for managers and super_admins
-    if (auth.user.role === 'manager' || auth.user.role === 'super_admin') {
+    // Add management console link for property managers
+    if (auth.user.role === 'manager') {
       managerItems.push({
         text: 'Management Console',
         icon: <SettingsIcon />,
         path: '/manage',
-        description: 'Access management features'
+        description: 'Access property management features'
       });
     }
 
-    return auth.user.role === 'user' ? baseItems : [...baseItems, ...managerItems];
+    // Add management console link for super_admins
+    if (auth.user.role === 'super_admin') {
+      managerItems.push({
+        text: 'Management Console',
+        icon: <SettingsIcon />,
+        path: '/manage',
+        description: 'Access system administration'
+      });
+      
+      managerItems.push({
+        text: 'Properties',
+        icon: <PropertyIcon />,
+        path: '/properties'
+      });
+      
+      managerItems.push({
+        text: 'Users',
+        icon: <UsersIcon />,
+        path: '/users'
+      });
+    }
+
+    if (auth.user.role === 'general_manager') {
+      return [...baseItems, ...generalManagerItems];
+    } else if (auth.user.role === 'manager' || auth.user.role === 'super_admin') {
+      return [...baseItems, ...managerItems];
+    } else {
+      return baseItems;
+    }
   };
 
   const drawer = (
@@ -119,6 +159,7 @@ const Layout = () => {
       <Toolbar>
         <Typography variant="h6" noWrap>
           {auth.user.role === 'super_admin' ? 'Admin Panel' :
+           auth.user.role === 'general_manager' ? 'General Manager Panel' :
            auth.user.role === 'manager' ? 'Manager Panel' : 'User Panel'}
         </Typography>
       </Toolbar>
@@ -167,7 +208,7 @@ const Layout = () => {
           Logged in as: {auth.user.username}
         </Typography>
         <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
-          Role: {auth.user.role}
+          Role: {auth.user.role === 'general_manager' ? 'General Manager' : auth.user.role}
         </Typography>
         {auth.user.group && (
           <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
@@ -219,6 +260,9 @@ const Layout = () => {
               if (path[1] === 'rooms') return 'Rooms';
               if (path[1] === 'requests') return 'Service Requests';
               if (path[1] === 'reports') return 'Reports';
+              if (path[1] === 'properties') return 'Properties';
+              if (path[1] === 'team') return 'Team Management';
+              if (path[1] === 'performance') return 'Performance Metrics';
               
               return path[1].charAt(0).toUpperCase() + path[1].slice(1);
             })()}
