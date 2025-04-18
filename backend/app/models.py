@@ -544,3 +544,59 @@ class AttachmentSettings(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
+class GeneralSettings(db.Model):
+    __tablename__ = 'general_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    system_name = db.Column(db.String(100), default='Ticketing System')
+    company_name = db.Column(db.String(100), default='Demo Company')
+    timezone = db.Column(db.String(50), default='UTC')
+    date_format = db.Column(db.String(20), default='MM/DD/YYYY')
+    enable_notifications = db.Column(db.Boolean, default=True)
+    maintenance_mode = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        """Convert general settings object to dictionary"""
+        return {
+            'id': self.id,
+            'systemName': self.system_name,
+            'companyName': self.company_name,
+            'timezone': self.timezone,
+            'dateFormat': self.date_format,
+            'enableNotifications': self.enable_notifications,
+            'maintenanceMode': self.maintenance_mode,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+class SecuritySettings(db.Model):
+    __tablename__ = 'security_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    two_factor_auth = db.Column(db.Boolean, default=False)
+    password_expiration = db.Column(db.Integer, default=90)
+    min_password_length = db.Column(db.Integer, default=8)
+    session_timeout = db.Column(db.Integer, default=30)
+    max_login_attempts = db.Column(db.Integer, default=5)
+    ip_restriction = db.Column(db.Boolean, default=False)
+    allowed_ips = db.Column(db.Text, nullable=True)
+    log_level = db.Column(db.String(20), default='warning')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        """Convert security settings object to dictionary"""
+        return {
+            'id': self.id,
+            'twoFactorAuth': self.two_factor_auth,
+            'passwordExpiration': self.password_expiration,
+            'minPasswordLength': self.min_password_length,
+            'sessionTimeout': self.session_timeout,
+            'maxLoginAttempts': self.max_login_attempts,
+            'ipRestriction': self.ip_restriction,
+            'allowedIPs': self.allowed_ips,
+            'logLevel': self.log_level,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }

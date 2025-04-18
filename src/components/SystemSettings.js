@@ -8,13 +8,10 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
-import EmailSettings from './EmailSettings';
-import SMSSettings from './SMSSettings';
-import AttachmentSettings from './AttachmentSettings';
 import SettingsIcon from '@mui/icons-material/Settings';
-import EmailIcon from '@mui/icons-material/Email';
-import SmsIcon from '@mui/icons-material/Sms';
-import AttachFileIcon from '@mui/icons-material/AttachFile';
+import SecurityIcon from '@mui/icons-material/Security';
+import GeneralSettings from './GeneralSettings';
+import SecuritySettings from './SecuritySettings';
 
 const SystemSettings = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -68,37 +65,26 @@ const SystemSettings = () => {
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab
-            icon={<EmailIcon />}
-            label="Email Settings"
+            icon={<SettingsIcon />}
+            label="General Settings"
             sx={{ minHeight: 72 }}
           />
           <Tab
-            icon={<SmsIcon />}
-            label="SMS Settings"
-            sx={{ minHeight: 72 }}
-          />
-          <Tab
-            icon={<AttachFileIcon />}
-            label="Attachment Settings"
+            icon={<SecurityIcon />}
+            label="Security Settings"
             sx={{ minHeight: 72 }}
           />
         </Tabs>
 
         <Box sx={{ p: 3 }}>
           {activeTab === 0 && (
-            <EmailSettings
+            <GeneralSettings
               onError={handleError}
               onSuccess={handleSuccess}
             />
           )}
           {activeTab === 1 && (
-            <SMSSettings
-              onError={handleError}
-              onSuccess={handleSuccess}
-            />
-          )}
-          {activeTab === 2 && (
-            <AttachmentSettings
+            <SecuritySettings
               onError={handleError}
               onSuccess={handleSuccess}
             />

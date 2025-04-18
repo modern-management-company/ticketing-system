@@ -1,7 +1,7 @@
 from flask import request, jsonify
 from app import app
 from app.extensions import db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment, History, SMSSettings, AttachmentSettings, UserPropertyRole
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment, History, SMSSettings, AttachmentSettings, UserPropertyRole, GeneralSettings, SecuritySettings
 from app.services import EmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
@@ -5087,3 +5087,125 @@ def get_managed_properties_for_user():
         'status': prop.status,
         'type': prop.type
     } for prop in properties]), 200
+
+# General Settings Routes
+@app.route('/api/settings/general', methods=['GET'])
+@jwt_required()
+def get_general_settings():
+    """Get general system settings"""
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can view general settings'}), 403
+
+        settings = GeneralSettings.query.first()
+        if not settings:
+            settings = GeneralSettings()
+            db.session.add(settings)
+            db.session.commit()
+
+        return jsonify(settings.to_dict())
+
+    except Exception as e:
+        app.logger.error(f"Error in get_general_settings: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/settings/general', methods=['POST'])
+@jwt_required()
+def update_general_settings():
+    """Update general system settings"""
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can update general settings'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        settings = GeneralSettings.query.first()
+        if not settings:
+            settings = GeneralSettings()
+            db.session.add(settings)
+
+        # Update settings
+        settings.system_name = data.get('systemName', settings.system_name)
+        settings.company_name = data.get('companyName', settings.company_name)
+        settings.timezone = data.get('timezone', settings.timezone)
+        settings.date_format = data.get('dateFormat', settings.date_format)
+        settings.enable_notifications = data.get('enableNotifications', settings.enable_notifications)
+        settings.maintenance_mode = data.get('maintenanceMode', settings.maintenance_mode)
+
+        db.session.commit()
+
+        # Return updated settings
+        return jsonify(settings.to_dict())
+
+    except Exception as e:
+        app.logger.error(f"Error in update_general_settings: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': 'Internal server error'}), 500
+
+# Security Settings Routes
+@app.route('/api/settings/security', methods=['GET'])
+@jwt_required()
+def get_security_settings():
+    """Get security system settings"""
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can view security settings'}), 403
+
+        settings = SecuritySettings.query.first()
+        if not settings:
+            settings = SecuritySettings()
+            db.session.add(settings)
+            db.session.commit()
+
+        return jsonify(settings.to_dict())
+
+    except Exception as e:
+        app.logger.error(f"Error in get_security_settings: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/settings/security', methods=['POST'])
+@jwt_required()
+def update_security_settings():
+    """Update security system settings"""
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can update security settings'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        settings = SecuritySettings.query.first()
+        if not settings:
+            settings = SecuritySettings()
+            db.session.add(settings)
+
+        # Update settings
+        settings.two_factor_auth = data.get('twoFactorAuth', settings.two_factor_auth)
+        settings.password_expiration = data.get('passwordExpiration', settings.password_expiration)
+        settings.min_password_length = data.get('minPasswordLength', settings.min_password_length)
+        settings.session_timeout = data.get('sessionTimeout', settings.session_timeout)
+        settings.max_login_attempts = data.get('maxLoginAttempts', settings.max_login_attempts)
+        settings.ip_restriction = data.get('ipRestriction', settings.ip_restriction)
+        settings.allowed_ips = data.get('allowedIPs', settings.allowed_ips)
+        settings.log_level = data.get('logLevel', settings.log_level)
+
+        db.session.commit()
+
+        # Return updated settings
+        return jsonify(settings.to_dict())
+
+    except Exception as e:
+        app.logger.error(f"Error in update_security_settings: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': 'Internal server error'}), 500

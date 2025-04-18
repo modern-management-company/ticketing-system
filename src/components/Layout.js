@@ -131,18 +131,6 @@ const Layout = () => {
         path: '/manage',
         description: 'Access system administration'
       });
-      
-      managerItems.push({
-        text: 'Properties',
-        icon: <PropertyIcon />,
-        path: '/properties'
-      });
-      
-      managerItems.push({
-        text: 'Users',
-        icon: <UsersIcon />,
-        path: '/users'
-      });
     }
 
     if (auth.user.role === 'general_manager') {
