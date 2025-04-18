@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import { AuthProvider } from './context/AuthContext';
 import Layout from './components/Layout';
+import ManagementLayout from './components/ManagementLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import {
   CssBaseline,
@@ -76,6 +77,50 @@ const App = () => {
             
             <Route path="/unauthorized" element={<Unauthorized />} />
             
+            {/* Management Console Routes */}
+            <Route path="/manage" element={
+              <ProtectedRoute allowedRoles={['manager', 'super_admin']} redirectTo="/unauthorized">
+                <ManagementLayout />
+              </ProtectedRoute>
+            }>
+              <Route path="properties" element={
+                <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
+                  <PropertyManagement />
+                </ProtectedRoute>
+              } />
+              <Route path="users" element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <ManageUsers />
+                </ProtectedRoute>
+              } />
+              <Route path="history" element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <HistoryView />
+                </ProtectedRoute>
+              } />
+              <Route path="system-settings" element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <SystemSettings />
+                </ProtectedRoute>
+              } />
+              <Route path="email-settings" element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <EmailSettings />
+                </ProtectedRoute>
+              } />
+              <Route path="sms-settings" element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <SMSSettings />
+                </ProtectedRoute>
+              } />
+              <Route path="attachment-settings" element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <AttachmentSettings />
+                </ProtectedRoute>
+              } />
+              <Route index element={<Navigate to="properties" replace />} />
+            </Route>
+            
             {/* Protected routes */}
             <Route element={<Layout />}>
               <Route path="/home" element={
@@ -131,29 +176,6 @@ const App = () => {
                   <ViewTask />
                 </ProtectedRoute>
               } />
-              
-              <Route path="/admin">
-                <Route path="properties" element={
-                  <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
-                    <PropertyManagement />
-                  </ProtectedRoute>
-                } />
-                <Route path="users" element={
-                  <ProtectedRoute allowedRoles={['super_admin']}>
-                    <ManageUsers />
-                  </ProtectedRoute>
-                } />
-                <Route path="history" element={
-                  <ProtectedRoute allowedRoles={['super_admin']}>
-                    <HistoryView />
-                  </ProtectedRoute>
-                } />
-                <Route path="system-settings" element={
-                  <ProtectedRoute allowedRoles={['super_admin']}>
-                    <SystemSettings />
-                  </ProtectedRoute>
-                } />
-              </Route>
             </Route>
             
             {/* Redirect any unknown routes to /home if authenticated, / if not */}

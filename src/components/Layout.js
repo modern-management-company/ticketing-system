@@ -64,7 +64,7 @@ const Layout = () => {
       {
         text: 'Home',
         icon: <HomeIcon />,
-        path: '/',
+        path: '/home',
       },
       {
         text: 'Dashboard',
@@ -101,37 +101,17 @@ const Layout = () => {
       }
     ];
 
-    const adminItems = [
-      {
-        text: 'Properties',
-        icon: <PropertyIcon />,
-        path: '/admin/properties',
-      },
-      {
-        text: 'Users',
-        icon: <UsersIcon />,
-        path: '/admin/users',
-      },
-      {
-        text: 'History',
-        icon: <HistoryIcon />,
-        path: '/admin/history',
-      },
-      {
-        text: 'System Settings',
+    // Add management console link for managers and super_admins
+    if (auth.user.role === 'manager' || auth.user.role === 'super_admin') {
+      managerItems.push({
+        text: 'Management Console',
         icon: <SettingsIcon />,
-        path: '/admin/system-settings',
-      }      
-    ];
-
-    switch (auth.user.role) {
-      case 'super_admin':
-        return [...baseItems, ...managerItems, ...adminItems];
-      case 'manager':
-        return [...baseItems, ...managerItems];
-      default:
-        return baseItems;
+        path: '/manage',
+        description: 'Access management features'
+      });
     }
+
+    return auth.user.role === 'user' ? baseItems : [...baseItems, ...managerItems];
   };
 
   const drawer = (
@@ -230,8 +210,18 @@ const Layout = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div">
-            {location.pathname.split('/').pop().charAt(0).toUpperCase() + 
-             location.pathname.split('/').pop().slice(1)}
+            {(() => {
+              const path = location.pathname.split('/');
+              if (path[1] === 'home') return 'Home';
+              if (path[1] === 'dashboard') return 'Dashboard';
+              if (path[1] === 'tickets') return path.length > 2 ? `Ticket Details` : 'Tickets';
+              if (path[1] === 'tasks') return path.length > 2 ? `Task Details` : 'Tasks';
+              if (path[1] === 'rooms') return 'Rooms';
+              if (path[1] === 'requests') return 'Service Requests';
+              if (path[1] === 'reports') return 'Reports';
+              
+              return path[1].charAt(0).toUpperCase() + path[1].slice(1);
+            })()}
           </Typography>
         </Toolbar>
       </AppBar>
