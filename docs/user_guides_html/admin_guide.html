@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modern Management Ticketing System</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+      color: #0366d6;
+    }
+    h1 { font-size: 2em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h3 { font-size: 1.25em; }
+    pre {
+      background-color: #f6f8fa;
+      border-radius: 3px;
+      padding: 16px;
+      overflow: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    code {
+      background-color: rgba(27, 31, 35, 0.05);
+      border-radius: 3px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      padding: 0.2em 0.4em;
+    }
+    pre code {
+      background-color: transparent;
+      padding: 0;
+    }
+    a {
+      color: #0366d6;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1em 0;
+    }
+    table th, table td {
+      border: 1px solid #dfe2e5;
+      padding: 6px 13px;
+    }
+    table th {
+      background-color: #f6f8fa;
+      font-weight: 600;
+    }
+    nav.toc {
+      background-color: #f6f8fa;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+    nav.toc h4 {
+      margin-top: 0;
+    }
+    .back-to-top {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #0366d6;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <nav class="toc">
+    <h4>Documentation Contents</h4>
+    <ul>
+      <li><a href="admin_guide.html">Admin Guide</a></li>
+      <li><a href="api_reference.html">Api Reference</a></li>
+      <li><a href="general_manager_guide.html">General Manager Guide</a></li>
+      <li><a href="guest_guide.html">Guest Guide</a></li>
+      <li><a href="installation.html">Installation</a></li>
+      <li><a href="manager_guide.html">Manager Guide</a></li>
+      <li><a href="super_admin_guide.html">Super Admin Guide</a></li>
+      <li><a href="system_overview.html">System Overview</a></li>
+      <li><a href="user_guide.html">User Guide</a></li>
+    </ul>
+  </nav>
+<h1>Administrator Guide</h1>
+<p>This guide provides comprehensive instructions for system administrators of the Modern Management Ticketing System, covering all aspects of system configuration, management, and maintenance.</p>
+<h2>Role Overview</h2>
+<p>As a system administrator, you are responsible for:</p>
+<ul>
+<li>System setup and configuration</li>
+<li>User account management</li>
+<li>Security and permissions</li>
+<li>Data management and reporting</li>
+<li>System maintenance and updates</li>
+<li>Integration management</li>
+<li>Training and support for staff</li>
+</ul>
+<h2>System Architecture Overview</h2>
+<p>The Modern Management Ticketing System consists of:</p>
+<ul>
+<li><strong>Web Application</strong>: Main interface for all users</li>
+<li><strong>Mobile Application</strong>: Native apps for iOS and Android</li>
+<li><strong>API Layer</strong>: RESTful services for integration</li>
+<li><strong>Database</strong>: Stores all system data and configurations</li>
+<li><strong>Notification System</strong>: Manages all alerts and communications</li>
+<li><strong>File Storage</strong>: Secure document and media storage</li>
+<li><strong>Authentication System</strong>: Manages user access and security</li>
+</ul>
+<h2>Initial Setup</h2>
+<h3>System Requirements</h3>
+<ul>
+<li><p><strong>Server Requirements</strong>:</p>
+<ul>
+<li>Modern web server with HTTPS support</li>
+<li>Database server (MySQL/PostgreSQL/MongoDB)</li>
+<li>Minimum 4GB RAM, 2 CPU cores</li>
+<li>100GB+ storage (scalable based on document storage needs)</li>
+<li>Regular backup system</li>
+</ul>
+</li>
+<li><p><strong>Client Requirements</strong>:</p>
+<ul>
+<li>Modern web browser (Chrome, Firefox, Safari, Edge)</li>
+<li>Mobile devices running iOS 12+ or Android 8+</li>
+<li>Minimum 2Mbps internet connection</li>
+</ul>
+</li>
+</ul>
+<h3>Installation Process</h3>
+<ol>
+<li><p><strong>Database Setup</strong>:</p>
+<ul>
+<li>Create database with appropriate collation</li>
+<li>Run initial schema scripts</li>
+<li>Set up database user with appropriate permissions</li>
+</ul>
+</li>
+<li><p><strong>Application Deployment</strong>:</p>
+<ul>
+<li>Deploy application files to web server</li>
+<li>Configure web server settings (HTTPS, caching, etc.)</li>
+<li>Set application environment variables</li>
+</ul>
+</li>
+<li><p><strong>Initial Configuration</strong>:</p>
+<ul>
+<li>Access admin portal with default credentials</li>
+<li>Complete organization profile</li>
+<li>Set security parameters</li>
+<li>Configure email/SMS gateway settings</li>
+</ul>
+</li>
+</ol>
+<h2>System Configuration</h2>
+<h3>Organization Settings</h3>
+<ol>
+<li><p><strong>Profile Configuration</strong>:</p>
+<ul>
+<li>Navigate to Admin &gt; Organization Settings</li>
+<li>Complete organization profile</li>
+<li>Upload organization logo</li>
+<li>Set business hours and time zone</li>
+<li>Configure regional settings (date format, currency, etc.)</li>
+</ul>
+</li>
+<li><p><strong>Workflow Configuration</strong>:</p>
+<ul>
+<li>Define ticket status lifecycle</li>
+<li>Create custom fields</li>
+<li>Set up approval workflows</li>
+<li>Configure SLA parameters</li>
+<li>Create custom ticket types</li>
+</ul>
+</li>
+</ol>
+<h3>User Management</h3>
+<ol>
+<li><p><strong>User Roles</strong>:</p>
+<ul>
+<li>Access Admin &gt; Roles</li>
+<li>Review default roles (Admin, Manager, Staff, Guest)</li>
+<li>Create custom roles as needed</li>
+<li>Configure permissions for each role</li>
+</ul>
+</li>
+<li><p><strong>Adding Users</strong>:</p>
+<ul>
+<li>Navigate to Admin &gt; Users &gt; Add User</li>
+<li>Enter user details</li>
+<li>Assign appropriate role</li>
+<li>Set department/group associations</li>
+<li>Enable/disable specific permissions</li>
+<li>Trigger welcome email</li>
+</ul>
+</li>
+<li><p><strong>Bulk User Management</strong>:</p>
+<ul>
+<li>Use CSV template to import multiple users</li>
+<li>Review import validation results</li>
+<li>Confirm and complete import</li>
+<li>Trigger welcome emails</li>
+</ul>
+</li>
+<li><p><strong>User Groups</strong>:</p>
+<ul>
+<li>Create departments and teams</li>
+<li>Assign users to groups</li>
+<li>Configure group-specific settings</li>
+<li>Set up group administrators</li>
+</ul>
+</li>
+</ol>
+<h3>Security Configuration</h3>
+<ol>
+<li><p><strong>Authentication Settings</strong>:</p>
+<ul>
+<li>Configure password complexity requirements</li>
+<li>Set session timeout parameters</li>
+<li>Enable/configure two-factor authentication</li>
+<li>Set up SSO integration (if applicable)</li>
+</ul>
+</li>
+<li><p><strong>Permission Management</strong>:</p>
+<ul>
+<li>Review and adjust role-based permissions</li>
+<li>Configure field-level security</li>
+<li>Set up data visibility rules</li>
+<li>Establish workflow approval authorities</li>
+</ul>
+</li>
+<li><p><strong>Audit Settings</strong>:</p>
+<ul>
+<li>Configure system audit logging</li>
+<li>Set up admin activity alerts</li>
+<li>Define sensitive action notifications</li>
+<li>Configure audit report recipients</li>
+</ul>
+</li>
+</ol>
+<h3>Notification Configuration</h3>
+<ol>
+<li><p><strong>Email Templates</strong>:</p>
+<ul>
+<li>Configure system email templates</li>
+<li>Set up custom notifications</li>
+<li>Design email layout and branding</li>
+<li>Configure HTML and plain text versions</li>
+</ul>
+</li>
+<li><p><strong>Notification Rules</strong>:</p>
+<ul>
+<li>Create event-based notification rules</li>
+<li>Configure recipient criteria</li>
+<li>Set up escalation notifications</li>
+<li>Configure reminder notifications</li>
+</ul>
+</li>
+<li><p><strong>SMS/Mobile Notifications</strong>:</p>
+<ul>
+<li>Configure SMS gateway settings</li>
+<li>Set up mobile push notification parameters</li>
+<li>Configure notification priorities</li>
+<li>Set notification delivery windows</li>
+</ul>
+</li>
+</ol>
+<h2>Data Management</h2>
+<h3>Ticket Field Configuration</h3>
+<ol>
+<li><p><strong>Standard Fields</strong>:</p>
+<ul>
+<li>Customize labels for standard fields</li>
+<li>Set required/optional status</li>
+<li>Configure field visibility by role</li>
+<li>Set field dependencies</li>
+</ul>
+</li>
+<li><p><strong>Custom Fields</strong>:</p>
+<ul>
+<li>Create new custom fields</li>
+<li>Configure field types (text, number, select, date, etc.)</li>
+<li>Set validation rules</li>
+<li>Configure field visibility conditions</li>
+</ul>
+</li>
+<li><p><strong>Field Layout</strong>:</p>
+<ul>
+<li>Organize fields into logical sections</li>
+<li>Set display order</li>
+<li>Configure conditional visibility</li>
+<li>Optimize layout for different devices</li>
+</ul>
+</li>
+</ol>
+<h3>Workflow Management</h3>
+<ol>
+<li><p><strong>Status Configuration</strong>:</p>
+<ul>
+<li>Define custom ticket statuses</li>
+<li>Configure status transitions</li>
+<li>Set up automated status changes</li>
+<li>Configure status-based notifications</li>
+</ul>
+</li>
+<li><p><strong>Approval Workflows</strong>:</p>
+<ul>
+<li>Create multi-level approval processes</li>
+<li>Configure approval conditions</li>
+<li>Set up delegation rules</li>
+<li>Configure approval notifications</li>
+</ul>
+</li>
+<li><p><strong>SLA Configuration</strong>:</p>
+<ul>
+<li>Define service level agreements</li>
+<li>Set response and resolution timeframes</li>
+<li>Configure priority-based SLAs</li>
+<li>Set up SLA violation alerts</li>
+</ul>
+</li>
+</ol>
+<h3>Reporting System</h3>
+<ol>
+<li><p><strong>Standard Reports</strong>:</p>
+<ul>
+<li>Configure default reports</li>
+<li>Set scheduled report generation</li>
+<li>Configure report recipients</li>
+<li>Set up report formats (PDF, Excel, etc.)</li>
+</ul>
+</li>
+<li><p><strong>Custom Reports</strong>:</p>
+<ul>
+<li>Create custom report definitions</li>
+<li>Configure data sources and filters</li>
+<li>Design report layouts</li>
+<li>Set up automated distribution</li>
+</ul>
+</li>
+<li><p><strong>Dashboards</strong>:</p>
+<ul>
+<li>Configure role-based dashboards</li>
+<li>Set up key performance indicators</li>
+<li>Configure chart and graph widgets</li>
+<li>Design executive dashboards</li>
+</ul>
+</li>
+</ol>
+<h2>System Maintenance</h2>
+<h3>Backup and Recovery</h3>
+<ol>
+<li><p><strong>Backup Configuration</strong>:</p>
+<ul>
+<li>Set up automated database backups</li>
+<li>Configure file attachment backups</li>
+<li>Set retention policies</li>
+<li>Test restoration procedures</li>
+</ul>
+</li>
+<li><p><strong>Disaster Recovery</strong>:</p>
+<ul>
+<li>Document recovery procedures</li>
+<li>Establish recovery time objectives</li>
+<li>Configure system redundancy (if applicable)</li>
+<li>Schedule recovery tests</li>
+</ul>
+</li>
+</ol>
+<h3>System Updates</h3>
+<ol>
+<li><p><strong>Update Process</strong>:</p>
+<ul>
+<li>Review release notes</li>
+<li>Schedule maintenance windows</li>
+<li>Back up system before updates</li>
+<li>Apply updates in test environment first</li>
+<li>Follow update procedure for production</li>
+</ul>
+</li>
+<li><p><strong>Patch Management</strong>:</p>
+<ul>
+<li>Configure security patch notifications</li>
+<li>Establish patch review process</li>
+<li>Document patch application procedures</li>
+<li>Maintain update history</li>
+</ul>
+</li>
+</ol>
+<h3>Performance Monitoring</h3>
+<ol>
+<li><p><strong>System Monitoring</strong>:</p>
+<ul>
+<li>Configure performance monitoring tools</li>
+<li>Set up performance alerts</li>
+<li>Monitor database performance</li>
+<li>Track application response times</li>
+</ul>
+</li>
+<li><p><strong>Capacity Planning</strong>:</p>
+<ul>
+<li>Monitor storage utilization</li>
+<li>Track user concurrency</li>
+<li>Plan for growth requirements</li>
+<li>Schedule infrastructure reviews</li>
+</ul>
+</li>
+</ol>
+<h2>Integration Management</h2>
+<h3>API Configuration</h3>
+<ol>
+<li><p><strong>API Setup</strong>:</p>
+<ul>
+<li>Enable/disable API access</li>
+<li>Generate and manage API keys</li>
+<li>Configure API rate limits</li>
+<li>Document API endpoints</li>
+</ul>
+</li>
+<li><p><strong>Webhook Configuration</strong>:</p>
+<ul>
+<li>Set up outgoing webhooks</li>
+<li>Configure webhook events</li>
+<li>Set retry parameters</li>
+<li>Monitor webhook delivery</li>
+</ul>
+</li>
+</ol>
+<h3>Third-Party Integrations</h3>
+<ol>
+<li><p><strong>Email Integration</strong>:</p>
+<ul>
+<li>Configure inbound email processing</li>
+<li>Set up email-to-ticket conversion</li>
+<li>Configure email routing rules</li>
+<li>Set up attachment handling</li>
+</ul>
+</li>
+<li><p><strong>Calendar Integration</strong>:</p>
+<ul>
+<li>Configure calendar sync settings</li>
+<li>Set up appointment creation</li>
+<li>Configure availability management</li>
+<li>Set up reminder notifications</li>
+</ul>
+</li>
+<li><p><strong>Authentication Integration</strong>:</p>
+<ul>
+<li>Configure LDAP/Active Directory integration</li>
+<li>Set up SSO providers</li>
+<li>Manage OAuth applications</li>
+<li>Configure identity mapping</li>
+</ul>
+</li>
+</ol>
+<h2>Advanced Features</h2>
+<h3>Automation Engine</h3>
+<ol>
+<li><p><strong>Automation Rules</strong>:</p>
+<ul>
+<li>Create condition-based automation rules</li>
+<li>Configure automated assignments</li>
+<li>Set up automatic categorization</li>
+<li>Create auto-response rules</li>
+</ul>
+</li>
+<li><p><strong>Scheduled Tasks</strong>:</p>
+<ul>
+<li>Configure recurring tasks</li>
+<li>Set up data cleanup jobs</li>
+<li>Create scheduled reports</li>
+<li>Configure system health checks</li>
+</ul>
+</li>
+</ol>
+<h3>Knowledge Base Management</h3>
+<ol>
+<li><p><strong>Knowledge Base Structure</strong>:</p>
+<ul>
+<li>Configure categories and subcategories</li>
+<li>Set up knowledge base permissions</li>
+<li>Create article templates</li>
+<li>Configure search indexing</li>
+</ul>
+</li>
+<li><p><strong>Content Workflow</strong>:</p>
+<ul>
+<li>Set up content approval workflows</li>
+<li>Configure content review schedules</li>
+<li>Set up feedback mechanisms</li>
+<li>Configure article suggestions</li>
+</ul>
+</li>
+</ol>
+<h2>Troubleshooting Guide</h2>
+<h3>Common Issues</h3>
+<ol>
+<li><p><strong>Authentication Problems</strong>:</p>
+<ul>
+<li>Check LDAP/SSO connectivity</li>
+<li>Verify user permissions</li>
+<li>Check for account lockouts</li>
+<li>Review password policies</li>
+</ul>
+</li>
+<li><p><strong>Performance Issues</strong>:</p>
+<ul>
+<li>Check database query performance</li>
+<li>Verify server resource utilization</li>
+<li>Review active sessions</li>
+<li>Check file storage availability</li>
+</ul>
+</li>
+<li><p><strong>Email Problems</strong>:</p>
+<ul>
+<li>Verify SMTP server connectivity</li>
+<li>Check email template configuration</li>
+<li>Review bounce notifications</li>
+<li>Test email delivery</li>
+</ul>
+</li>
+</ol>
+<h3>System Logs</h3>
+<ol>
+<li><p><strong>Accessing Logs</strong>:</p>
+<ul>
+<li>How to access application logs</li>
+<li>Database log review</li>
+<li>Server log locations</li>
+<li>Error log interpretation</li>
+</ul>
+</li>
+<li><p><strong>Log Analysis</strong>:</p>
+<ul>
+<li>Common error patterns</li>
+<li>Performance bottleneck identification</li>
+<li>Security incident indicators</li>
+<li>User experience issues</li>
+</ul>
+</li>
+</ol>
+<h2>Support Resources</h2>
+<ol>
+<li><p><strong>Documentation</strong>:</p>
+<ul>
+<li>Official documentation location</li>
+<li>Release notes archive</li>
+<li>API documentation</li>
+<li>Knowledge base articles</li>
+</ul>
+</li>
+<li><p><strong>Support Channels</strong>:</p>
+<ul>
+<li>Vendor support contact information</li>
+<li>Support ticket submission process</li>
+<li>Emergency support procedures</li>
+<li>User community resources</li>
+</ul>
+</li>
+<li><p><strong>Training Resources</strong>:</p>
+<ul>
+<li>Administrator training materials</li>
+<li>User training templates</li>
+<li>Video tutorials</li>
+<li>Best practices documentation</li>
+</ul>
+</li>
+</ol>
+
+  <a href="#" class="back-to-top">Back to Top</a>
+  <script>
+    // Add IDs to all headers for linking
+    document.querySelectorAll('h2, h3, h4, h5, h6').forEach(header => {
+      if (!header.id) {
+        const id = header.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        header.id = id;
+      }
+    });
+    
+    // Create TOC for the current page
+    const toc = document.createElement('div');
+    toc.innerHTML = '<h4>Table of Contents</h4><ul></ul>';
+    const tocList = toc.querySelector('ul');
+    
+    document.querySelectorAll('h2, h3').forEach(header => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = '#' + header.id;
+      a.textContent = header.textContent;
+      li.style.marginLeft = (header.tagName === 'H3' ? '20px' : '0');
+      li.appendChild(a);
+      tocList.appendChild(li);
+    });
+    
+    // Insert TOC after the nav element
+    const nav = document.querySelector('nav.toc');
+    nav.after(toc);
+  </script>
+</body>
+</html>

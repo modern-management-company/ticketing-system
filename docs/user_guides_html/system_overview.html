@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modern Management Ticketing System</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+      color: #0366d6;
+    }
+    h1 { font-size: 2em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h3 { font-size: 1.25em; }
+    pre {
+      background-color: #f6f8fa;
+      border-radius: 3px;
+      padding: 16px;
+      overflow: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    code {
+      background-color: rgba(27, 31, 35, 0.05);
+      border-radius: 3px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      padding: 0.2em 0.4em;
+    }
+    pre code {
+      background-color: transparent;
+      padding: 0;
+    }
+    a {
+      color: #0366d6;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1em 0;
+    }
+    table th, table td {
+      border: 1px solid #dfe2e5;
+      padding: 6px 13px;
+    }
+    table th {
+      background-color: #f6f8fa;
+      font-weight: 600;
+    }
+    nav.toc {
+      background-color: #f6f8fa;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+    nav.toc h4 {
+      margin-top: 0;
+    }
+    .back-to-top {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #0366d6;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <nav class="toc">
+    <h4>Documentation Contents</h4>
+    <ul>
+      <li><a href="admin_guide.html">Admin Guide</a></li>
+      <li><a href="api_reference.html">Api Reference</a></li>
+      <li><a href="general_manager_guide.html">General Manager Guide</a></li>
+      <li><a href="guest_guide.html">Guest Guide</a></li>
+      <li><a href="installation.html">Installation</a></li>
+      <li><a href="manager_guide.html">Manager Guide</a></li>
+      <li><a href="super_admin_guide.html">Super Admin Guide</a></li>
+      <li><a href="system_overview.html">System Overview</a></li>
+      <li><a href="user_guide.html">User Guide</a></li>
+    </ul>
+  </nav>
+<h1>System Overview</h1>
+<p>This document provides a high-level overview of the Modern Management Ticketing System architecture and components.</p>
+<h2>System Architecture</h2>
+<p>The Modern Management Ticketing System is built using a modern, scalable architecture with the following key components:</p>
+<h3>Frontend Layer</h3>
+<ul>
+<li><strong>Web Application</strong>: React-based single-page application built with Create React App<ul>
+<li>Runs on Node.js during development (default port 3000)</li>
+<li>Compiled into static files for production</li>
+<li>Communicates with backend via HTTP REST API calls (JSON)</li>
+<li>In production, deployed as a static site (e.g., on Vercel)</li>
+</ul>
+</li>
+<li><strong>Mobile Applications</strong>: Native iOS and Android applications using React Native</li>
+<li><strong>Responsive Design</strong>: Adapts to different screen sizes and devices</li>
+</ul>
+<h3>API Layer</h3>
+<ul>
+<li><strong>RESTful API</strong>: Flask application (Python) providing JSON-based API endpoints for all ticketing operations</li>
+<li><strong>API Gateway</strong>: Handles routing, authentication, and rate limiting</li>
+<li><strong>WebSockets</strong>: Real-time updates for ticket status changes and notifications</li>
+<li><strong>Authentication</strong>: JWT-based authentication using flask_jwt_extended</li>
+<li><strong>CORS Support</strong>: Built-in cross-origin request support via flask_cors</li>
+</ul>
+<h3>Backend Services</h3>
+<ul>
+<li><strong>Authentication Service</strong>: Manages user authentication and session handling</li>
+<li><strong>Ticketing Service</strong>: Core business logic for ticket management<ul>
+<li>Creating and managing tickets</li>
+<li>Auto-assigning tickets to managers based on category-to-department mapping</li>
+<li>Tracking ticket status and history</li>
+</ul>
+</li>
+<li><strong>Notification Service</strong>: Handles email, SMS, and push notifications<ul>
+<li>Email notifications via SMTP (configurable)</li>
+<li>SMS notifications via Twilio (configurable)</li>
+</ul>
+</li>
+<li><strong>Reporting Service</strong>: Generates reports and analytics</li>
+<li><strong>Integration Service</strong>: Connects with external systems (email, calendar, etc.)</li>
+</ul>
+<h3>Database Layer</h3>
+<ul>
+<li><strong>Primary Database</strong>: PostgreSQL for transactional data<ul>
+<li>SQLAlchemy ORM models define the schema</li>
+<li>Models for User, Property, Room, Ticket, Task, etc.</li>
+<li>Association tables for PropertyManager, UserProperty, TaskAssignment</li>
+</ul>
+</li>
+<li><strong>Search Engine</strong>: Elasticsearch for advanced search capabilities</li>
+<li><strong>Caching Layer</strong>: Redis for performance optimization</li>
+</ul>
+<h3>Storage Layer</h3>
+<ul>
+<li><strong>File Storage</strong>: Supabase storage for ticket attachment files<ul>
+<li>Configured via SUPABASE_URL, SUPABASE_KEY, and SUPABASE_BUCKET_NAME</li>
+</ul>
+</li>
+<li><strong>CDN</strong>: Content delivery network for static assets</li>
+</ul>
+<h3>Background Scheduler</h3>
+<ul>
+<li><strong>APScheduler</strong>: Handles scheduled background tasks<ul>
+<li>Daily summary jobs (e.g., sending daily report emails to executives)</li>
+<li>The schedule (e.g., daily at 6PM) is configurable via the EmailSettings table</li>
+</ul>
+</li>
+</ul>
+<h3>Infrastructure</h3>
+<ul>
+<li><strong>Containerization</strong>: Docker for application packaging</li>
+<li><strong>Orchestration</strong>: Kubernetes for container management</li>
+<li><strong>Logging</strong>: ELK stack (Elasticsearch, Logstash, Kibana)</li>
+<li><strong>Monitoring</strong>: Prometheus and Grafana</li>
+</ul>
+<h2>Data Flow</h2>
+<ol>
+<li><strong>User Interface</strong>: Users interact with the system through web or mobile interfaces</li>
+<li><strong>API Gateway</strong>: All requests pass through the API gateway for authentication and routing</li>
+<li><strong>Backend Services</strong>: Business logic processes the requests<ul>
+<li>Authenticates users via JWT</li>
+<li>Processes ticket, property, room, and task data</li>
+<li>Assigns tickets to appropriate managers/staff</li>
+<li>Sends notifications for important events</li>
+</ul>
+</li>
+<li><strong>Database</strong>: Data is stored and retrieved as needed via SQLAlchemy ORM</li>
+<li><strong>Storage</strong>: Files and media are stored in Supabase storage</li>
+<li><strong>External Systems</strong>: Integrations with email (SMTP), SMS (Twilio), and other services</li>
+</ol>
+<h2>Security Architecture</h2>
+<ul>
+<li><strong>Authentication</strong>: JWT-based authentication with OAuth 2.0 support<ul>
+<li>Token expiry and refresh mechanisms</li>
+<li>Secure storage of credentials</li>
+</ul>
+</li>
+<li><strong>Authorization</strong>: Role-based access control (RBAC) with fine-grained permissions<ul>
+<li>Super Admin: Access to all system features and data</li>
+<li>Manager: Access to managed properties and related tickets/tasks</li>
+<li>Staff: Access to assigned properties and tickets</li>
+<li>Guest/Tenant: Limited access to their own tickets</li>
+</ul>
+</li>
+<li><strong>Data Encryption</strong>: TLS for data in transit, encryption for sensitive data at rest</li>
+<li><strong>API Security</strong>: Rate limiting, input validation, and security headers</li>
+<li><strong>Audit Logging</strong>: Comprehensive logging of security-relevant events via History model</li>
+</ul>
+<h2>Deployment Models</h2>
+<p>The system supports multiple deployment models:</p>
+<ul>
+<li><strong>Cloud-Hosted SaaS</strong>: Fully managed service in our cloud environment<ul>
+<li>Frontend on static hosting (Vercel)</li>
+<li>Backend on PaaS (Render, Heroku)</li>
+<li>Database as a service</li>
+</ul>
+</li>
+<li><strong>Private Cloud</strong>: Dedicated deployment in customer&#39;s cloud environment</li>
+<li><strong>On-Premises</strong>: Traditional installation in customer&#39;s data center</li>
+<li><strong>Hybrid</strong>: Combination of cloud and on-premises components</li>
+</ul>
+<h2>Code Structure</h2>
+<p>The application is organized into two main components:</p>
+<h3>Backend (Flask API)</h3>
+<pre><code>backend/
+├── app/               # Flask application package
+│   ├── __init__.py    # Initialize Flask app, extensions, JWT, CORS
+│   ├── models.py      # SQLAlchemy ORM models for all entities
+│   ├── routes.py      # All Flask route definitions for the API endpoints
+│   ├── services/      # Helper modules for external services
+│   │   ├── email_service.py        # Email notifications
+│   │   ├── sms_service.py          # SMS via Twilio
+│   │   └── supabase_service.py     # File storage
+│   └── scheduler.py   # Background job scheduling
+├── config.py          # Configuration (reads env variables)
+├── requirements.txt   # Python dependencies
+└── run.py             # WSGI entry point
+</code></pre>
+<h3>Frontend (React App)</h3>
+<pre><code>src/
+├── components/        # React components (UI pages and widgets)
+├── context/           # React Context providers (for global state)
+├── hooks/             # Custom React hooks
+├── config/            # Frontend config
+├── App.js             # Main React App component
+└── index.js           # Entry point for React
+</code></pre>
+<h2>API Documentation</h2>
+<p>The system exposes a comprehensive RESTful API for all operations. Key endpoints include:</p>
+<h3>Authentication</h3>
+<ul>
+<li><code>POST /login</code> - User login</li>
+<li><code>POST /register</code> - Register a new user</li>
+<li><code>GET /verify-token</code> - Verify JWT token</li>
+</ul>
+<h3>Ticket Management</h3>
+<ul>
+<li><code>GET /tickets</code> - List tickets accessible to the user</li>
+<li><code>POST /tickets</code> - Create a new support ticket</li>
+<li><code>PATCH /tickets/{ticket_id}</code> - Update ticket status</li>
+</ul>
+<h3>Property Management</h3>
+<ul>
+<li><code>GET /properties</code> - List properties</li>
+<li><code>POST /properties</code> - Create a new property</li>
+<li><code>GET /properties/{property_id}/rooms</code> - List rooms in a property</li>
+<li><code>POST /properties/{property_id}/rooms</code> - Add a room to a property</li>
+<li><code>PUT/PATCH /properties/{property_id}/rooms/{room_id}</code> - Update room details</li>
+</ul>
+<h3>Task Assignment</h3>
+<ul>
+<li><code>POST /assign-task</code> - Assign a ticket to a user</li>
+<li><code>GET /tasks</code> - List tasks for the current user</li>
+</ul>
+<h2>System Requirements</h2>
+<h3>Server Requirements</h3>
+<ul>
+<li><strong>CPU</strong>: Minimum 4 cores, recommended 8+ cores</li>
+<li><strong>Memory</strong>: Minimum 8GB RAM, recommended 16GB+</li>
+<li><strong>Storage</strong>: Minimum 100GB SSD, scales with usage</li>
+<li><strong>Network</strong>: 1Gbps network interface, public internet access</li>
+</ul>
+<h3>Client Requirements</h3>
+<ul>
+<li><strong>Web Browsers</strong>: Chrome, Firefox, Safari, Edge (latest 2 versions)</li>
+<li><strong>Mobile Devices</strong>: iOS 12+ or Android 8+</li>
+<li><strong>Internet Connection</strong>: Minimum 2Mbps</li>
+</ul>
+<h2>Integration Capabilities</h2>
+<p>The system provides integration with:</p>
+<ul>
+<li><strong>Email Systems</strong>: SMTP/IMAP for email processing</li>
+<li><strong>Calendar Services</strong>: Google Calendar, Microsoft Outlook</li>
+<li><strong>Authentication Systems</strong>: LDAP, Active Directory, SAML</li>
+<li><strong>Messaging Platforms</strong>: Twilio for SMS, Slack, Microsoft Teams</li>
+<li><strong>Property Management Systems</strong>: Various PMS integrations</li>
+<li><strong>Accounting Software</strong>: QuickBooks, Xero, etc.</li>
+<li><strong>Storage Services</strong>: Supabase for file storage</li>
+<li><strong>Custom Integrations</strong>: REST API and webhooks</li>
+</ul>
+<h2>Performance Characteristics</h2>
+<ul>
+<li><strong>Response Time</strong>: &lt; 500ms for typical operations</li>
+<li><strong>Throughput</strong>: Capable of handling 100+ concurrent users per server instance</li>
+<li><strong>Availability</strong>: 99.9% uptime target (SaaS offering)</li>
+<li><strong>Recovery Time</strong>: &lt; 1 hour RTO, &lt; 15 minutes RPO</li>
+</ul>
+<h2>Backup and Disaster Recovery</h2>
+<ul>
+<li><strong>Database Backups</strong>: Automated daily backups with point-in-time recovery</li>
+<li><strong>File Backups</strong>: Regular backups of uploaded files and documents</li>
+<li><strong>Geo-Redundancy</strong>: Multiple region deployment options (SaaS)</li>
+<li><strong>Failover</strong>: Automated failover capabilities for high availability</li>
+</ul>
+<h2>Environment Configuration</h2>
+<p>The application requires several environment variables for proper configuration:</p>
+<ul>
+<li><strong>Database</strong>: <code>DATABASE_URL</code> - SQLAlchemy database URL</li>
+<li><strong>Security</strong>: <code>SECRET_KEY</code>, <code>JWT_SECRET_KEY</code> - Secrets for Flask session and JWT</li>
+<li><strong>Email</strong>: <code>SMTP_SERVER</code>, <code>SMTP_PORT</code>, <code>SMTP_USERNAME</code>, <code>SMTP_PASSWORD</code>, <code>SENDER_EMAIL</code></li>
+<li><strong>Notifications</strong>: <code>ENABLE_EMAIL_NOTIFICATIONS</code>, <code>ENABLE_SMS_NOTIFICATIONS</code></li>
+<li><strong>SMS (Twilio)</strong>: <code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>, <code>TWILIO_FROM_NUMBER</code></li>
+<li><strong>File Storage</strong>: <code>SUPABASE_URL</code>, <code>SUPABASE_KEY</code>, <code>SUPABASE_BUCKET_NAME</code></li>
+</ul>
+
+  <a href="#" class="back-to-top">Back to Top</a>
+  <script>
+    // Add IDs to all headers for linking
+    document.querySelectorAll('h2, h3, h4, h5, h6').forEach(header => {
+      if (!header.id) {
+        const id = header.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        header.id = id;
+      }
+    });
+    
+    // Create TOC for the current page
+    const toc = document.createElement('div');
+    toc.innerHTML = '<h4>Table of Contents</h4><ul></ul>';
+    const tocList = toc.querySelector('ul');
+    
+    document.querySelectorAll('h2, h3').forEach(header => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = '#' + header.id;
+      a.textContent = header.textContent;
+      li.style.marginLeft = (header.tagName === 'H3' ? '20px' : '0');
+      li.appendChild(a);
+      tocList.appendChild(li);
+    });
+    
+    // Insert TOC after the nav element
+    const nav = document.querySelector('nav.toc');
+    nav.after(toc);
+  </script>
+</body>
+</html>

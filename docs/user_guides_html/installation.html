@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modern Management Ticketing System</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+      color: #0366d6;
+    }
+    h1 { font-size: 2em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h3 { font-size: 1.25em; }
+    pre {
+      background-color: #f6f8fa;
+      border-radius: 3px;
+      padding: 16px;
+      overflow: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    code {
+      background-color: rgba(27, 31, 35, 0.05);
+      border-radius: 3px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      padding: 0.2em 0.4em;
+    }
+    pre code {
+      background-color: transparent;
+      padding: 0;
+    }
+    a {
+      color: #0366d6;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1em 0;
+    }
+    table th, table td {
+      border: 1px solid #dfe2e5;
+      padding: 6px 13px;
+    }
+    table th {
+      background-color: #f6f8fa;
+      font-weight: 600;
+    }
+    nav.toc {
+      background-color: #f6f8fa;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+    nav.toc h4 {
+      margin-top: 0;
+    }
+    .back-to-top {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #0366d6;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <nav class="toc">
+    <h4>Documentation Contents</h4>
+    <ul>
+      <li><a href="admin_guide.html">Admin Guide</a></li>
+      <li><a href="api_reference.html">Api Reference</a></li>
+      <li><a href="general_manager_guide.html">General Manager Guide</a></li>
+      <li><a href="guest_guide.html">Guest Guide</a></li>
+      <li><a href="installation.html">Installation</a></li>
+      <li><a href="manager_guide.html">Manager Guide</a></li>
+      <li><a href="super_admin_guide.html">Super Admin Guide</a></li>
+      <li><a href="system_overview.html">System Overview</a></li>
+      <li><a href="user_guide.html">User Guide</a></li>
+    </ul>
+  </nav>
+<h1>Installation Guide</h1>
+<p>This guide provides detailed step-by-step instructions for installing and configuring the Modern Management Ticketing System.</p>
+<h2>Prerequisites</h2>
+<p>Before beginning the installation, ensure you have:</p>
+<h3>System Requirements</h3>
+<ul>
+<li><p><strong>Operating System</strong>:</p>
+<ul>
+<li>Linux: Ubuntu 20.04+ / CentOS 8+ / Debian 11+</li>
+<li>Windows Server 2019+</li>
+<li>MacOS (development only)</li>
+</ul>
+</li>
+<li><p><strong>Hardware Requirements</strong>:</p>
+<ul>
+<li>Minimum: 4GB RAM, 2 CPU cores, 100GB storage</li>
+<li>Recommended: 8GB RAM, 4 CPU cores, 200GB+ SSD storage</li>
+<li>Production: 16GB RAM, 8 CPU cores, 500GB+ SSD storage with redundancy</li>
+</ul>
+</li>
+<li><p><strong>Software Requirements</strong>:</p>
+<ul>
+<li>Web Server: Nginx 1.18+ or Apache 2.4+</li>
+<li>Database: PostgreSQL 12+ or MySQL 8.0+</li>
+<li>Runtime: Node.js 16+ and PHP 8.0+</li>
+<li>Docker &amp; Docker Compose (optional for containerized deployment)</li>
+</ul>
+</li>
+<li><p><strong>Network Requirements</strong>:</p>
+<ul>
+<li>Outbound email (SMTP) access</li>
+<li>Outbound SMS gateway access (if using SMS features)</li>
+<li>HTTPS certificate (Let&#39;s Encrypt or commercial)</li>
+<li>Static IP address recommended</li>
+</ul>
+</li>
+</ul>
+<h3>Required Access</h3>
+<ul>
+<li>Root/administrator access to the server</li>
+<li>Database administration credentials</li>
+<li>Domain name configured to point to your server</li>
+<li>SMTP server credentials</li>
+</ul>
+<h2>Installation Methods</h2>
+<p>Choose one of the following installation methods:</p>
+<h3>Method 1: Standard Installation</h3>
+<p>Follow these instructions for a traditional installation directly on a server.</p>
+<h4>Step 1: Prepare the Server</h4>
+<ol>
+<li><p>Update your system packages:</p>
+<p><strong>For Ubuntu/Debian:</strong></p>
+<pre><code class="language-bash">sudo apt update
+sudo apt upgrade -y
+</code></pre>
+<p><strong>For CentOS/RHEL:</strong></p>
+<pre><code class="language-bash">sudo dnf update -y
+</code></pre>
+</li>
+<li><p>Install required dependencies:</p>
+<p><strong>For Ubuntu/Debian:</strong></p>
+<pre><code class="language-bash">sudo apt install -y nginx postgresql php8.0-fpm php8.0-pgsql php8.0-mbstring \
+php8.0-xml php8.0-curl php8.0-zip php8.0-gd php8.0-bcmath \
+nodejs npm curl unzip git
+</code></pre>
+<p><strong>For CentOS/RHEL:</strong></p>
+<pre><code class="language-bash">sudo dnf install -y nginx postgresql-server php php-pgsql php-mbstring \
+php-xml php-curl php-zip php-gd php-bcmath nodejs npm curl unzip git
+</code></pre>
+</li>
+<li><p>Configure PostgreSQL:</p>
+<pre><code class="language-bash">sudo systemctl enable postgresql
+sudo systemctl start postgresql
+sudo -u postgres createuser -P ticketing_user
+# Enter a secure password when prompted
+sudo -u postgres createdb -O ticketing_user ticketing_db
+</code></pre>
+</li>
+</ol>
+<h4>Step 2: Download and Prepare Application Files</h4>
+<ol>
+<li><p>Download the application:</p>
+<pre><code class="language-bash">cd /var/www
+sudo mkdir ticketing
+sudo chown $(whoami):$(whoami) ticketing
+cd ticketing
+curl -LO https://example.com/downloads/ticketing-system-latest.zip
+unzip ticketing-system-latest.zip
+rm ticketing-system-latest.zip
+</code></pre>
+</li>
+<li><p>Install application dependencies:</p>
+<pre><code class="language-bash"># Backend dependencies
+cd backend
+composer install --no-dev --optimize-autoloader
+
+# Frontend dependencies
+cd ../frontend
+npm install
+npm run build
+</code></pre>
+</li>
+</ol>
+<h4>Step 3: Configure the Application</h4>
+<ol>
+<li><p>Create environment configuration:</p>
+<pre><code class="language-bash">cd /var/www/ticketing/backend
+cp .env.example .env
+</code></pre>
+</li>
+<li><p>Edit the <code>.env</code> file with your specific settings:</p>
+<pre><code class="language-bash">nano .env
+</code></pre>
+<p>Update the following values:</p>
+<pre><code>APP_NAME=&quot;Modern Management Ticketing System&quot;
+APP_URL=https://your-domain.com
+
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=ticketing_db
+DB_USERNAME=ticketing_user
+DB_PASSWORD=your_secure_password
+
+MAIL_HOST=your_smtp_server
+MAIL_PORT=587
+MAIL_USERNAME=your_smtp_username
+MAIL_PASSWORD=your_smtp_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=no-reply@your-domain.com
+
+# Set application encryption key
+</code></pre>
+</li>
+<li><p>Generate application keys:</p>
+<pre><code class="language-bash">php artisan key:generate
+</code></pre>
+</li>
+<li><p>Run database migrations:</p>
+<pre><code class="language-bash">php artisan migrate --seed
+</code></pre>
+</li>
+<li><p>Set proper permissions:</p>
+<pre><code class="language-bash">sudo chown -R www-data:www-data /var/www/ticketing
+sudo chmod -R 755 /var/www/ticketing/storage
+sudo chmod -R 755 /var/www/ticketing/bootstrap/cache
+</code></pre>
+</li>
+</ol>
+<h4>Step 4: Configure Web Server</h4>
+<ol>
+<li><p>Create Nginx configuration:</p>
+<pre><code class="language-bash">sudo nano /etc/nginx/sites-available/ticketing
+</code></pre>
+<p>Add the following configuration:</p>
+<pre><code class="language-nginx">server {
+    listen 80;
+    server_name your-domain.com;
+    root /var/www/ticketing/public;
+
+    add_header X-Frame-Options &quot;SAMEORIGIN&quot;;
+    add_header X-Content-Type-Options &quot;nosniff&quot;;
+
+    index index.php;
+
+    charset utf-8;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    error_page 404 /index.php;
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/var/run/php/php8.0-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+</code></pre>
+</li>
+<li><p>Enable the site:</p>
+<pre><code class="language-bash">sudo ln -s /etc/nginx/sites-available/ticketing /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+</code></pre>
+</li>
+<li><p>Configure HTTPS with Let&#39;s Encrypt:</p>
+<pre><code class="language-bash">sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
+</code></pre>
+</li>
+</ol>
+<h4>Step 5: Configure Background Jobs</h4>
+<ol>
+<li><p>Set up cron job for scheduled tasks:</p>
+<pre><code class="language-bash">sudo crontab -e
+</code></pre>
+<p>Add the following line:</p>
+<pre><code>* * * * * cd /var/www/ticketing &amp;&amp; php artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1
+</code></pre>
+</li>
+<li><p>Set up queue worker as a service:</p>
+<pre><code class="language-bash">sudo nano /etc/systemd/system/ticketing-queue.service
+</code></pre>
+<p>Add the following:</p>
+<pre><code>[Unit]
+Description=Ticketing System Queue Worker
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/ticketing
+ExecStart=/usr/bin/php artisan queue:work --sleep=3 --tries=3
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+</code></pre>
+<p>Enable and start the service:</p>
+<pre><code class="language-bash">sudo systemctl enable ticketing-queue
+sudo systemctl start ticketing-queue
+</code></pre>
+</li>
+</ol>
+<h3>Method 2: Docker Installation</h3>
+<p>For containerized deployment using Docker:</p>
+<ol>
+<li><p>Ensure Docker and Docker Compose are installed:</p>
+<pre><code class="language-bash">curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo curl -L &quot;https://github.com/docker/compose/releases/download/v2.12.2/docker-compose-$(uname -s)-$(uname -m)&quot; -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+</code></pre>
+</li>
+<li><p>Download the Docker Compose configuration:</p>
+<pre><code class="language-bash">mkdir ticketing-system &amp;&amp; cd ticketing-system
+curl -O https://example.com/downloads/docker-compose.yml
+curl -O https://example.com/downloads/.env.example
+mv .env.example .env
+</code></pre>
+</li>
+<li><p>Edit the <code>.env</code> file with your configuration:</p>
+<pre><code class="language-bash">nano .env
+</code></pre>
+</li>
+<li><p>Run the application:</p>
+<pre><code class="language-bash">docker-compose up -d
+</code></pre>
+</li>
+<li><p>Initialize the database:</p>
+<pre><code class="language-bash">docker-compose exec app php artisan migrate --seed
+</code></pre>
+</li>
+</ol>
+<h2>Post-Installation Steps</h2>
+<p>After completing the installation, follow these steps to finish setting up the system:</p>
+<h3>Initial Configuration</h3>
+<ol>
+<li><p>Access the system at <a href="https://your-domain.com">https://your-domain.com</a></p>
+</li>
+<li><p>Log in with the default administrator account:</p>
+<ul>
+<li>Email: <a href="mailto:admin@example.com">admin@example.com</a></li>
+<li>Password: ChangeMe123!</li>
+</ul>
+</li>
+<li><p>Change the default password immediately.</p>
+</li>
+<li><p>Complete the following initial setup:</p>
+<ul>
+<li>Update organization profile</li>
+<li>Configure email templates</li>
+<li>Set up user roles and permissions</li>
+<li>Create property records</li>
+<li>Configure workflow settings</li>
+</ul>
+</li>
+</ol>
+<h3>Security Recommendations</h3>
+<ol>
+<li><p>Update the server&#39;s firewall:</p>
+<pre><code class="language-bash">sudo ufw allow &#39;Nginx Full&#39;
+sudo ufw allow 22/tcp
+sudo ufw enable
+</code></pre>
+</li>
+<li><p>Set up regular backups:</p>
+<pre><code class="language-bash"># Create backup script
+sudo nano /usr/local/bin/backup-ticketing.sh
+</code></pre>
+<p>Add the following:</p>
+<pre><code class="language-bash">#!/bin/bash
+TIMESTAMP=$(date +&quot;%Y%m%d%H%M%S&quot;)
+BACKUP_DIR=&quot;/var/backups/ticketing&quot;
+
+# Create backup directory if it doesn&#39;t exist
+mkdir -p $BACKUP_DIR
+
+# Backup database
+pg_dump ticketing_db -U ticketing_user -h localhost &gt; $BACKUP_DIR/db_$TIMESTAMP.sql
+
+# Backup application files
+tar -czf $BACKUP_DIR/files_$TIMESTAMP.tar.gz -C /var/www ticketing
+
+# Remove backups older than 7 days
+find $BACKUP_DIR -type f -name &quot;*.sql&quot; -mtime +7 -delete
+find $BACKUP_DIR -type f -name &quot;*.tar.gz&quot; -mtime +7 -delete
+</code></pre>
+<p>Set permissions and create cron job:</p>
+<pre><code class="language-bash">sudo chmod +x /usr/local/bin/backup-ticketing.sh
+sudo crontab -e
+</code></pre>
+<p>Add:</p>
+<pre><code>0 2 * * * /usr/local/bin/backup-ticketing.sh
+</code></pre>
+</li>
+<li><p>Set up monitoring (optional but recommended):</p>
+<pre><code class="language-bash"># Install monitoring agent (example for Netdata)
+bash &lt;(curl -Ss https://my-netdata.io/kickstart.sh)
+</code></pre>
+</li>
+</ol>
+<h2>Troubleshooting</h2>
+<h3>Common Issues</h3>
+<ol>
+<li><p><strong>Database Connection Errors</strong></p>
+<ul>
+<li>Verify database credentials in <code>.env</code> file</li>
+<li>Check PostgreSQL is running: <code>sudo systemctl status postgresql</code></li>
+<li>Ensure the database and user are created properly</li>
+</ul>
+</li>
+<li><p><strong>Web Server Issues</strong></p>
+<ul>
+<li>Check Nginx configuration: <code>sudo nginx -t</code></li>
+<li>Review Nginx error logs: <code>sudo tail -f /var/log/nginx/error.log</code></li>
+<li>Verify permissions: <code>sudo chown -R www-data:www-data /var/www/ticketing</code></li>
+</ul>
+</li>
+<li><p><strong>Application Errors</strong></p>
+<ul>
+<li>Check application logs: <code>tail -f /var/www/ticketing/storage/logs/laravel.log</code></li>
+<li>Verify PHP version: <code>php -v</code></li>
+<li>Ensure all PHP extensions are installed</li>
+</ul>
+</li>
+</ol>
+<h3>Getting Help</h3>
+<p>If you encounter issues during installation, you can:</p>
+<ul>
+<li>Check the detailed troubleshooting guide in our knowledge base</li>
+<li>Contact technical support at <a href="mailto:support@example.com">support@example.com</a></li>
+<li>Visit our community forums at <a href="https://community.example.com">https://community.example.com</a></li>
+</ul>
+<h2>Upgrading</h2>
+<p>For instructions on upgrading to newer versions, please refer to the <a href="./upgrade_guide.md">Upgrade Guide</a>.</p>
+<h2>Next Steps</h2>
+<p>After installation, refer to the following resources:</p>
+<ul>
+<li><a href="./admin_guide.md">Administrator Guide</a> - Complete administration guide</li>
+<li><a href="./user_guide.md">User Guide</a> - End-user instructions</li>
+<li><a href="./api_reference.md">API Reference</a> - For developers integrating with the system</li>
+</ul>
+
+  <a href="#" class="back-to-top">Back to Top</a>
+  <script>
+    // Add IDs to all headers for linking
+    document.querySelectorAll('h2, h3, h4, h5, h6').forEach(header => {
+      if (!header.id) {
+        const id = header.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        header.id = id;
+      }
+    });
+    
+    // Create TOC for the current page
+    const toc = document.createElement('div');
+    toc.innerHTML = '<h4>Table of Contents</h4><ul></ul>';
+    const tocList = toc.querySelector('ul');
+    
+    document.querySelectorAll('h2, h3').forEach(header => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = '#' + header.id;
+      a.textContent = header.textContent;
+      li.style.marginLeft = (header.tagName === 'H3' ? '20px' : '0');
+      li.appendChild(a);
+      tocList.appendChild(li);
+    });
+    
+    // Insert TOC after the nav element
+    const nav = document.querySelector('nav.toc');
+    nav.after(toc);
+  </script>
+</body>
+</html>

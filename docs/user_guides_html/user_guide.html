@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modern Management Ticketing System</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+      color: #0366d6;
+    }
+    h1 { font-size: 2em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h3 { font-size: 1.25em; }
+    pre {
+      background-color: #f6f8fa;
+      border-radius: 3px;
+      padding: 16px;
+      overflow: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    code {
+      background-color: rgba(27, 31, 35, 0.05);
+      border-radius: 3px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      padding: 0.2em 0.4em;
+    }
+    pre code {
+      background-color: transparent;
+      padding: 0;
+    }
+    a {
+      color: #0366d6;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1em 0;
+    }
+    table th, table td {
+      border: 1px solid #dfe2e5;
+      padding: 6px 13px;
+    }
+    table th {
+      background-color: #f6f8fa;
+      font-weight: 600;
+    }
+    nav.toc {
+      background-color: #f6f8fa;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+    nav.toc h4 {
+      margin-top: 0;
+    }
+    .back-to-top {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #0366d6;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <nav class="toc">
+    <h4>Documentation Contents</h4>
+    <ul>
+      <li><a href="admin_guide.html">Admin Guide</a></li>
+      <li><a href="api_reference.html">Api Reference</a></li>
+      <li><a href="general_manager_guide.html">General Manager Guide</a></li>
+      <li><a href="guest_guide.html">Guest Guide</a></li>
+      <li><a href="installation.html">Installation</a></li>
+      <li><a href="manager_guide.html">Manager Guide</a></li>
+      <li><a href="super_admin_guide.html">Super Admin Guide</a></li>
+      <li><a href="system_overview.html">System Overview</a></li>
+      <li><a href="user_guide.html">User Guide</a></li>
+    </ul>
+  </nav>
+<h1>Regular User Guide</h1>
+<p>This guide provides comprehensive instructions for regular users (staff members) using the Modern Management Ticketing System, focusing on ticket and task management.</p>
+<h2>Role Overview</h2>
+<p>As a staff member, you are responsible for handling tickets and tasks assigned to you within your property. Your key responsibilities include:</p>
+<ul>
+<li>Receiving and completing assigned tickets</li>
+<li>Managing your daily tasks</li>
+<li>Updating ticket and task statuses</li>
+<li>Communicating with property managers and guests</li>
+<li>Logging maintenance and service activities</li>
+</ul>
+<h2>Navigation Overview</h2>
+<p>As a regular user, you primarily interact with the Main Application for day-to-day operations.</p>
+<h2>Main Application Components</h2>
+<h3>Dashboard</h3>
+<p>Your personalized dashboard provides an overview of your tasks and tickets.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>My Tickets</strong>: Shows tickets assigned to you</li>
+<li><strong>My Tasks</strong>: Displays your pending and today&#39;s tasks</li>
+<li><strong>Recent Activity</strong>: Timeline of your recent activities</li>
+<li><strong>Announcements</strong>: Important messages from management</li>
+<li><strong>Quick Actions</strong>: Shortcuts to common functions</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Review your assigned tickets in the &quot;My Tickets&quot; panel</li>
+<li>Check &quot;My Tasks&quot; to see tasks due today</li>
+<li>Use quick filters to sort by priority or due date</li>
+<li>View recent activity to track your progress</li>
+<li>Access quick actions for common operations</li>
+</ol>
+<h3>Tickets</h3>
+<p>View and manage tickets assigned to you.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Ticket List</strong>: View all tickets assigned to you</li>
+<li><strong>Status Updates</strong>: Update ticket progress</li>
+<li><strong>Communication</strong>: Add notes and updates to tickets</li>
+<li><strong>Attachments</strong>: Add photos or documents to tickets</li>
+<li><strong>Filters</strong>: Sort and filter tickets by various parameters</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Tickets&quot; in the main navigation</li>
+<li>View your assigned tickets sorted by default by priority</li>
+<li>To update a ticket:<ul>
+<li>Click on the ticket to open details</li>
+<li>Review ticket information and requirements</li>
+<li>Add progress notes as you work</li>
+<li>Update the status (In Progress, Waiting, Completed)</li>
+<li>Add any attachments (photos, documents)</li>
+<li>Click &quot;Update&quot;</li>
+</ul>
+</li>
+<li>To search for specific tickets:<ul>
+<li>Use the search bar at the top</li>
+<li>Apply filters (status, date, priority)</li>
+<li>Sort by columns (click column headers)</li>
+</ul>
+</li>
+<li>To communicate about a ticket:<ul>
+<li>Open the ticket</li>
+<li>Scroll to the &quot;Comments&quot; section</li>
+<li>Add your comment or question</li>
+<li>Tag specific users with @ if needed</li>
+<li>Click &quot;Add Comment&quot;</li>
+</ul>
+</li>
+</ol>
+<h3>Tasks</h3>
+<p>Manage your daily and scheduled tasks.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Task List</strong>: View all tasks assigned to you</li>
+<li><strong>Status Updates</strong>: Mark tasks as in progress or complete</li>
+<li><strong>Time Tracking</strong>: Record time spent on tasks</li>
+<li><strong>Recurring Tasks</strong>: View regularly scheduled duties</li>
+<li><strong>Calendar View</strong>: See tasks in a calendar format</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Tasks&quot; in the main navigation</li>
+<li>View your task list sorted by due date</li>
+<li>To start a task:<ul>
+<li>Click on the task</li>
+<li>Review task details and instructions</li>
+<li>Click &quot;Start Task&quot; to change status to &quot;In Progress&quot;</li>
+<li>The system will begin tracking time (if enabled)</li>
+</ul>
+</li>
+<li>To complete a task:<ul>
+<li>Open the task</li>
+<li>Add completion notes if required</li>
+<li>Upload any completion evidence if required</li>
+<li>Click &quot;Complete Task&quot;</li>
+<li>Add time spent if manual time tracking is used</li>
+</ul>
+</li>
+<li>To view upcoming tasks:<ul>
+<li>Click the &quot;Calendar&quot; tab</li>
+<li>Navigate between days/weeks</li>
+<li>Click on dates to see scheduled tasks</li>
+</ul>
+</li>
+</ol>
+<h3>Calendar</h3>
+<p>View your schedule and plan your day.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Day/Week/Month Views</strong>: Different timeline perspectives</li>
+<li><strong>Task Integration</strong>: See tasks on your calendar</li>
+<li><strong>Event Display</strong>: View property events</li>
+<li><strong>Time Blocking</strong>: Visual representation of your schedule</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Calendar&quot; in the main navigation</li>
+<li>Choose your preferred view (Day/Week/Month)</li>
+<li>Hover over items to see details</li>
+<li>Click on an item to open full details</li>
+<li>Use the &quot;Today&quot; button to return to current date</li>
+<li>Use arrows to navigate between time periods</li>
+</ol>
+<h3>Messages</h3>
+<p>Communicate with managers and colleagues.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Inbox</strong>: Receive messages from managers and colleagues</li>
+<li><strong>Notifications</strong>: Get alerts for new messages</li>
+<li><strong>Quick Replies</strong>: Respond to messages efficiently</li>
+<li><strong>Attachments</strong>: Share files with team members</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Messages&quot; in the main navigation</li>
+<li>View your inbox with unread messages highlighted</li>
+<li>Click on a message to read the full content</li>
+<li>To reply:<ul>
+<li>Use the reply box at the bottom</li>
+<li>Type your message</li>
+<li>Add attachments if needed</li>
+<li>Click &quot;Send&quot;</li>
+</ul>
+</li>
+<li>To create a new message:<ul>
+<li>Click &quot;New Message&quot;</li>
+<li>Select recipient(s) from the dropdown</li>
+<li>Enter subject and message</li>
+<li>Add attachments if needed</li>
+<li>Click &quot;Send&quot;</li>
+</ul>
+</li>
+</ol>
+<h2>Mobile Application</h2>
+<p>Access the system on the go using the mobile app.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Mobile Dashboard</strong>: Simplified view of your work</li>
+<li><strong>Push Notifications</strong>: Real-time alerts for new tickets</li>
+<li><strong>Photo Uploads</strong>: Take and attach photos directly</li>
+<li><strong>Quick Updates</strong>: Update task status on the move</li>
+<li><strong>Offline Mode</strong>: Limited functionality when offline</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Download the app from your device&#39;s app store</li>
+<li>Log in with your regular credentials</li>
+<li>Enable notifications when prompted</li>
+<li>Use the bottom navigation bar to access sections</li>
+<li>For photo attachments:<ul>
+<li>Open a ticket or task</li>
+<li>Tap the &quot;Add Photo&quot; button</li>
+<li>Either take a new photo or select from gallery</li>
+<li>Add a caption if needed</li>
+<li>Tap &quot;Upload&quot;</li>
+</ul>
+</li>
+</ol>
+<h2>Best Practices for Regular Users</h2>
+<ol>
+<li><p><strong>Ticket Management</strong>:</p>
+<ul>
+<li>Update ticket status regularly as you progress</li>
+<li>Add detailed notes about actions taken</li>
+<li>Take before and after photos when applicable</li>
+<li>Respond promptly to questions in ticket comments</li>
+<li>Notify your manager about any unexpected complications</li>
+</ul>
+</li>
+<li><p><strong>Task Efficiency</strong>:</p>
+<ul>
+<li>Start each day by reviewing your scheduled tasks</li>
+<li>Prioritize tasks by due date and priority level</li>
+<li>Update task status as soon as you begin and complete</li>
+<li>Report any obstacles that prevent task completion</li>
+<li>Record accurate time spent on tasks if required</li>
+</ul>
+</li>
+<li><p><strong>Communication</strong>:</p>
+<ul>
+<li>Check messages at the beginning and end of your shift</li>
+<li>Respond promptly to urgent messages</li>
+<li>Be clear and concise in your communications</li>
+<li>Include location details and relevant context</li>
+<li>Use appropriate channels for different types of communication</li>
+</ul>
+</li>
+<li><p><strong>Mobile App Usage</strong>:</p>
+<ul>
+<li>Ensure your device has sufficient battery for your shift</li>
+<li>Sync data when on Wi-Fi when possible</li>
+<li>Take clear, well-lit photos for documentation</li>
+<li>Be aware of data usage if using cellular network</li>
+<li>Log out completely when sharing devices</li>
+</ul>
+</li>
+<li><p><strong>Time Management</strong>:</p>
+<ul>
+<li>Use the calendar to plan your day</li>
+<li>Allow buffer time between tasks when possible</li>
+<li>Update expected completion times if circumstances change</li>
+<li>Track time accurately for reporting purposes</li>
+<li>Communicate delays proactively</li>
+</ul>
+</li>
+</ol>
+<h2>Troubleshooting Common Issues</h2>
+<h3>Login Problems</h3>
+<ul>
+<li>Ensure your username and password are correct</li>
+<li>Check caps lock is not enabled</li>
+<li>Clear browser cache or app cache</li>
+<li>Verify your account is active with your manager</li>
+<li>Use the &quot;Forgot Password&quot; option if needed</li>
+</ul>
+<h3>Mobile App Issues</h3>
+<ul>
+<li>Ensure your app is updated to the latest version</li>
+<li>Check your device has adequate storage space</li>
+<li>Try force closing and reopening the app</li>
+<li>Check your internet connection</li>
+<li>Reinstall the app if persistent problems occur</li>
+</ul>
+<h3>Ticket Update Problems</h3>
+<ul>
+<li>Verify you have internet connectivity</li>
+<li>Check that you have the correct permissions</li>
+<li>Ensure all required fields are completed</li>
+<li>Try refreshing the page or restarting the app</li>
+<li>Contact your manager if updates consistently fail</li>
+</ul>
+<h3>Attachment Upload Issues</h3>
+<ul>
+<li>Check file size (must be under 10MB)</li>
+<li>Verify supported file types (jpg, png, pdf, doc)</li>
+<li>Ensure stable internet connection</li>
+<li>Reduce photo resolution if size is the issue</li>
+<li>Try uploading one file at a time</li>
+</ul>
+
+  <a href="#" class="back-to-top">Back to Top</a>
+  <script>
+    // Add IDs to all headers for linking
+    document.querySelectorAll('h2, h3, h4, h5, h6').forEach(header => {
+      if (!header.id) {
+        const id = header.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        header.id = id;
+      }
+    });
+    
+    // Create TOC for the current page
+    const toc = document.createElement('div');
+    toc.innerHTML = '<h4>Table of Contents</h4><ul></ul>';
+    const tocList = toc.querySelector('ul');
+    
+    document.querySelectorAll('h2, h3').forEach(header => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = '#' + header.id;
+      a.textContent = header.textContent;
+      li.style.marginLeft = (header.tagName === 'H3' ? '20px' : '0');
+      li.appendChild(a);
+      tocList.appendChild(li);
+    });
+    
+    // Insert TOC after the nav element
+    const nav = document.querySelector('nav.toc');
+    nav.after(toc);
+  </script>
+</body>
+</html>

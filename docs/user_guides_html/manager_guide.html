@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modern Management Ticketing System</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+      color: #0366d6;
+    }
+    h1 { font-size: 2em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h3 { font-size: 1.25em; }
+    pre {
+      background-color: #f6f8fa;
+      border-radius: 3px;
+      padding: 16px;
+      overflow: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    code {
+      background-color: rgba(27, 31, 35, 0.05);
+      border-radius: 3px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      padding: 0.2em 0.4em;
+    }
+    pre code {
+      background-color: transparent;
+      padding: 0;
+    }
+    a {
+      color: #0366d6;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1em 0;
+    }
+    table th, table td {
+      border: 1px solid #dfe2e5;
+      padding: 6px 13px;
+    }
+    table th {
+      background-color: #f6f8fa;
+      font-weight: 600;
+    }
+    nav.toc {
+      background-color: #f6f8fa;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+    nav.toc h4 {
+      margin-top: 0;
+    }
+    .back-to-top {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #0366d6;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <nav class="toc">
+    <h4>Documentation Contents</h4>
+    <ul>
+      <li><a href="admin_guide.html">Admin Guide</a></li>
+      <li><a href="api_reference.html">Api Reference</a></li>
+      <li><a href="general_manager_guide.html">General Manager Guide</a></li>
+      <li><a href="guest_guide.html">Guest Guide</a></li>
+      <li><a href="installation.html">Installation</a></li>
+      <li><a href="manager_guide.html">Manager Guide</a></li>
+      <li><a href="super_admin_guide.html">Super Admin Guide</a></li>
+      <li><a href="system_overview.html">System Overview</a></li>
+      <li><a href="user_guide.html">User Guide</a></li>
+    </ul>
+  </nav>
+<h1>Property Manager User Guide</h1>
+<p>This guide provides comprehensive instructions for Property Managers using the Modern Management Ticketing System, focusing on single property management and team oversight.</p>
+<h2>Role Overview</h2>
+<p>As a Property Manager, you are responsible for overseeing a specific property and managing its associated team, tickets, and tasks. Your key responsibilities include:</p>
+<ul>
+<li>Managing a single property and its rooms</li>
+<li>Supervising staff assigned to your property</li>
+<li>Creating and assigning tickets and tasks</li>
+<li>Monitoring performance and generating reports</li>
+<li>Resolving escalated issues from regular users</li>
+</ul>
+<h2>Navigation Overview</h2>
+<p>As a Property Manager, you have access to two main interfaces:</p>
+<ol>
+<li><strong>Main Application</strong>: Day-to-day operations</li>
+<li><strong>Management Console</strong>: Limited property and user administration</li>
+</ol>
+<h2>Main Application Components</h2>
+<h3>Dashboard</h3>
+<p>Your dashboard provides a comprehensive overview of your property&#39;s current status.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Property Summary</strong>: Overview of your property&#39;s performance metrics</li>
+<li><strong>Ticket Status</strong>: Quick view of open, in-progress, and resolved tickets</li>
+<li><strong>Task Tracking</strong>: Monitor pending and completed tasks</li>
+<li><strong>Staff Performance</strong>: Track staff metrics and activities</li>
+<li><strong>Recent Activity</strong>: Timeline of recent updates and changes</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Review the KPI cards at the top for critical metrics</li>
+<li>Check the &quot;Ticket Status&quot; panel to identify bottlenecks</li>
+<li>Review &quot;Tasks Due Today&quot; to prioritize work</li>
+<li>Monitor the &quot;Staff Activity&quot; panel to track team performance</li>
+<li>Use the &quot;Quick Actions&quot; buttons for common operations</li>
+</ol>
+<h3>Tickets Management</h3>
+<p>Create, assign, and monitor tickets for your property.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Ticket Creation</strong>: Create new tickets for various issues</li>
+<li><strong>Assignment</strong>: Assign tickets to specific staff members</li>
+<li><strong>Tracking</strong>: Monitor ticket progress and status</li>
+<li><strong>Filtering</strong>: Sort and filter tickets by various parameters</li>
+<li><strong>Communication</strong>: Add notes and communicate within tickets</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Tickets&quot; in the main navigation</li>
+<li>To create a new ticket:<ul>
+<li>Click &quot;Create Ticket&quot;</li>
+<li>Select the ticket type</li>
+<li>Fill in details (description, location, priority)</li>
+<li>Assign to a staff member if applicable</li>
+<li>Add attachments if needed</li>
+<li>Click &quot;Create&quot;</li>
+</ul>
+</li>
+<li>To manage existing tickets:<ul>
+<li>Use filters to find relevant tickets</li>
+<li>Click on a ticket to view details</li>
+<li>Update status using the dropdown menu</li>
+<li>Add comments for additional information</li>
+<li>Reassign if necessary</li>
+</ul>
+</li>
+<li>To resolve a ticket:<ul>
+<li>Open the ticket</li>
+<li>Add resolution details</li>
+<li>Change status to &quot;Resolved&quot;</li>
+<li>Click &quot;Update&quot;</li>
+</ul>
+</li>
+</ol>
+<h3>Task Management</h3>
+<p>Create and assign tasks to your team members.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Task Creation</strong>: Create new tasks for staff</li>
+<li><strong>Assignment</strong>: Assign tasks to specific team members</li>
+<li><strong>Scheduling</strong>: Set due dates and time estimates</li>
+<li><strong>Tracking</strong>: Monitor task progress and completion</li>
+<li><strong>Recurring Tasks</strong>: Set up recurring maintenance tasks</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Tasks&quot; in the main navigation</li>
+<li>To create a new task:<ul>
+<li>Click &quot;Create Task&quot;</li>
+<li>Enter task details (title, description)</li>
+<li>Select assignee from your team</li>
+<li>Set priority and due date</li>
+<li>Add any attachments or references</li>
+<li>Click &quot;Create&quot;</li>
+</ul>
+</li>
+<li>To manage existing tasks:<ul>
+<li>Use filters to find specific tasks</li>
+<li>Click on a task to view details</li>
+<li>Update status as needed</li>
+<li>Add comments for clarification</li>
+</ul>
+</li>
+<li>To set up recurring tasks:<ul>
+<li>Create a new task</li>
+<li>Enable &quot;Recurring&quot; option</li>
+<li>Set frequency (daily, weekly, monthly)</li>
+<li>Define end conditions if applicable</li>
+<li>Click &quot;Create&quot;</li>
+</ul>
+</li>
+</ol>
+<h3>Staff Management</h3>
+<p>Oversee and manage your property&#39;s staff.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Staff Overview</strong>: View all staff assigned to your property</li>
+<li><strong>Workload Tracking</strong>: Monitor work distribution</li>
+<li><strong>Performance Metrics</strong>: Track staff performance</li>
+<li><strong>Schedule Viewing</strong>: See staff availability</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Staff&quot; in the main navigation</li>
+<li>View the staff list with current status and workload</li>
+<li>Click on a staff member to view their detailed performance</li>
+<li>Use the &quot;Workload Distribution&quot; view to ensure balanced assignments</li>
+<li>Check the &quot;Performance&quot; tab to review metrics</li>
+</ol>
+<h3>Reports</h3>
+<p>Generate and view reports for your property.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Standard Reports</strong>: Access pre-configured reports</li>
+<li><strong>Custom Reports</strong>: Create tailored reports for your needs</li>
+<li><strong>Scheduled Reports</strong>: Set up automatic report generation</li>
+<li><strong>Export Options</strong>: Save reports in various formats</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Reports&quot; in the main navigation</li>
+<li>Select from report templates:<ul>
+<li>Ticket Performance</li>
+<li>Staff Productivity</li>
+<li>Task Completion</li>
+<li>Property Utilization</li>
+</ul>
+</li>
+<li>Set parameters (date range, staff members, etc.)</li>
+<li>Click &quot;Generate Report&quot;</li>
+<li>View on screen or export to PDF/Excel</li>
+<li>To schedule recurring reports:<ul>
+<li>Configure your report</li>
+<li>Click &quot;Schedule&quot;</li>
+<li>Set frequency and recipients</li>
+<li>Click &quot;Save Schedule&quot;</li>
+</ul>
+</li>
+</ol>
+<h2>Management Console Components</h2>
+<h3>Property Management</h3>
+<p>Manage your assigned property and its details.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Property Details</strong>: View and update property information</li>
+<li><strong>Room Management</strong>: Add, edit, and deactivate rooms</li>
+<li><strong>Service Configuration</strong>: Manage available services</li>
+<li><strong>Amenities Management</strong>: Update property amenities</li>
+</ul>
+<p><strong>Step-by-Step Guide</strong>:</p>
+<ol>
+<li>Navigate to the Management Console</li>
+<li>Select &quot;Property&quot; from the sidebar</li>
+<li>To update property details:<ul>
+<li>Click the &quot;Edit&quot; button</li>
+<li>Update relevant information</li>
+<li>Click &quot;Save&quot;</li>
+</ul>
+</li>
+<li>To manage rooms:<ul>
+<li>Select the &quot;Rooms&quot; tab</li>
+<li>View the list of rooms</li>
+<li>Click &quot;Add Room&quot; to create a new room</li>
+<li>Click on a room to edit its details</li>
+<li>Toggle the status switch to activate/deactivate rooms</li>
+</ul>
+</li>
+<li>To manage services:<ul>
+<li>Select the &quot;Services&quot; tab</li>
+<li>Enable/disable available services</li>
+<li>Configure service settings</li>
+<li>Click &quot;Save Changes&quot;</li>
+</ul>
+</li>
+</ol>
+<h3>User Management</h3>
+<p>Manage users assigned to your property.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>User Overview</strong>: View all users for your property</li>
+<li><strong>User Creation</strong>: Add new users to your property</li>
+<li><strong>Permission Management</strong>: Set user access levels</li>
+<li><strong>Account Management</strong>: Reset passwords, deactivate accounts</li>
+</ul>
+<p><strong>Step-by-Step Guide</strong>:</p>
+<ol>
+<li>Navigate to the Management Console</li>
+<li>Select &quot;Users&quot; from the sidebar</li>
+<li>To add a new user:<ul>
+<li>Click &quot;Add User&quot;</li>
+<li>Fill in required details (name, email, contact)</li>
+<li>Set appropriate access level</li>
+<li>Select specific permissions if applicable</li>
+<li>Click &quot;Create User&quot;</li>
+</ul>
+</li>
+<li>To edit an existing user:<ul>
+<li>Find the user in the list</li>
+<li>Click the &quot;Edit&quot; icon</li>
+<li>Update necessary information</li>
+<li>Click &quot;Save Changes&quot;</li>
+</ul>
+</li>
+<li>To reset a user&#39;s password:<ul>
+<li>Find the user in the list</li>
+<li>Click the &quot;Reset Password&quot; option</li>
+<li>Either set a new password or send reset link</li>
+<li>Click &quot;Reset&quot;</li>
+</ul>
+</li>
+<li>To deactivate a user:<ul>
+<li>Find the user in the list</li>
+<li>Click the &quot;Deactivate&quot; option</li>
+<li>Confirm the action</li>
+</ul>
+</li>
+</ol>
+<h2>Advanced Features for Property Managers</h2>
+<h3>Bulk Operations</h3>
+<p><strong>How to Perform Bulk Actions</strong>:</p>
+<ol>
+<li>Navigate to the relevant section (Tickets, Tasks, etc.)</li>
+<li>Use the checkboxes to select multiple items</li>
+<li>Click the &quot;Bulk Actions&quot; dropdown</li>
+<li>Select the action to perform</li>
+<li>Configure any required settings</li>
+<li>Click &quot;Apply&quot;</li>
+</ol>
+<h3>Escalation Management</h3>
+<p><strong>How to Escalate Issues</strong>:</p>
+<ol>
+<li>Open the ticket that needs escalation</li>
+<li>Click the &quot;Escalate&quot; button</li>
+<li>Select the escalation level (General Manager/Admin)</li>
+<li>Provide reason for escalation</li>
+<li>Click &quot;Submit Escalation&quot;</li>
+</ol>
+<h3>Calendar View</h3>
+<p><strong>How to Use the Calendar View</strong>:</p>
+<ol>
+<li>Navigate to &quot;Calendar&quot; in the main navigation</li>
+<li>View tasks and scheduled events by day/week/month</li>
+<li>Click on a day to see detailed activities</li>
+<li>Add new events by clicking on the desired time slot</li>
+<li>Drag and drop to reschedule items</li>
+</ol>
+<h2>Best Practices for Property Managers</h2>
+<ol>
+<li><p><strong>Daily Operations</strong>:</p>
+<ul>
+<li>Begin each day by reviewing the dashboard</li>
+<li>Check tickets that need immediate attention</li>
+<li>Review tasks due today</li>
+<li>Monitor staff workload and adjust as needed</li>
+</ul>
+</li>
+<li><p><strong>Ticket Management</strong>:</p>
+<ul>
+<li>Prioritize tickets by impact and urgency</li>
+<li>Set clear expectations for resolution times</li>
+<li>Document all actions taken</li>
+<li>Follow up with resolved tickets to ensure satisfaction</li>
+</ul>
+</li>
+<li><p><strong>Staff Oversight</strong>:</p>
+<ul>
+<li>Distribute workload evenly among staff</li>
+<li>Monitor performance metrics regularly</li>
+<li>Provide timely feedback on task completion</li>
+<li>Identify training opportunities based on performance</li>
+</ul>
+</li>
+<li><p><strong>Reporting and Analysis</strong>:</p>
+<ul>
+<li>Generate weekly performance reports</li>
+<li>Identify recurring issues for proactive resolution</li>
+<li>Use data to make informed staffing decisions</li>
+<li>Share key metrics with your team</li>
+</ul>
+</li>
+<li><p><strong>Property Maintenance</strong>:</p>
+<ul>
+<li>Create preventative maintenance schedules</li>
+<li>Regularly update room statuses</li>
+<li>Document all property changes</li>
+<li>Keep service offerings current</li>
+</ul>
+</li>
+</ol>
+<h2>Troubleshooting Common Issues</h2>
+<h3>Ticket Assignment Problems</h3>
+<ul>
+<li>Verify staff member availability</li>
+<li>Check that user has appropriate permissions</li>
+<li>Ensure the ticket type matches staff responsibilities</li>
+<li>Confirm the property assignment is correct</li>
+</ul>
+<h3>User Access Issues</h3>
+<ul>
+<li>Verify user account is active</li>
+<li>Check permission settings</li>
+<li>Confirm property assignment</li>
+<li>Make sure user has completed initial login setup</li>
+</ul>
+<h3>Report Generation Errors</h3>
+<ul>
+<li>Check that date ranges are valid</li>
+<li>Verify data exists for the selected parameters</li>
+<li>Clear browser cache if old data persists</li>
+<li>Contact support if consistent errors occur</li>
+</ul>
+
+  <a href="#" class="back-to-top">Back to Top</a>
+  <script>
+    // Add IDs to all headers for linking
+    document.querySelectorAll('h2, h3, h4, h5, h6').forEach(header => {
+      if (!header.id) {
+        const id = header.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        header.id = id;
+      }
+    });
+    
+    // Create TOC for the current page
+    const toc = document.createElement('div');
+    toc.innerHTML = '<h4>Table of Contents</h4><ul></ul>';
+    const tocList = toc.querySelector('ul');
+    
+    document.querySelectorAll('h2, h3').forEach(header => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = '#' + header.id;
+      a.textContent = header.textContent;
+      li.style.marginLeft = (header.tagName === 'H3' ? '20px' : '0');
+      li.appendChild(a);
+      tocList.appendChild(li);
+    });
+    
+    // Insert TOC after the nav element
+    const nav = document.querySelector('nav.toc');
+    nav.after(toc);
+  </script>
+</body>
+</html>

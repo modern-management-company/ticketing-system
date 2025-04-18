@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modern Management Ticketing System</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+      color: #0366d6;
+    }
+    h1 { font-size: 2em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h3 { font-size: 1.25em; }
+    pre {
+      background-color: #f6f8fa;
+      border-radius: 3px;
+      padding: 16px;
+      overflow: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    code {
+      background-color: rgba(27, 31, 35, 0.05);
+      border-radius: 3px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      padding: 0.2em 0.4em;
+    }
+    pre code {
+      background-color: transparent;
+      padding: 0;
+    }
+    a {
+      color: #0366d6;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1em 0;
+    }
+    table th, table td {
+      border: 1px solid #dfe2e5;
+      padding: 6px 13px;
+    }
+    table th {
+      background-color: #f6f8fa;
+      font-weight: 600;
+    }
+    nav.toc {
+      background-color: #f6f8fa;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+    nav.toc h4 {
+      margin-top: 0;
+    }
+    .back-to-top {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #0366d6;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <nav class="toc">
+    <h4>Documentation Contents</h4>
+    <ul>
+      <li><a href="admin_guide.html">Admin Guide</a></li>
+      <li><a href="api_reference.html">Api Reference</a></li>
+      <li><a href="general_manager_guide.html">General Manager Guide</a></li>
+      <li><a href="guest_guide.html">Guest Guide</a></li>
+      <li><a href="installation.html">Installation</a></li>
+      <li><a href="manager_guide.html">Manager Guide</a></li>
+      <li><a href="super_admin_guide.html">Super Admin Guide</a></li>
+      <li><a href="system_overview.html">System Overview</a></li>
+      <li><a href="user_guide.html">User Guide</a></li>
+    </ul>
+  </nav>
+<h1>General Manager User Guide</h1>
+<p>This comprehensive guide covers all aspects of the General Manager role within the Modern Management Ticketing System, focusing on managing multiple properties and their associated managers.</p>
+<h2>Role Overview</h2>
+<p>As a General Manager, you have elevated privileges that allow you to oversee multiple properties and the managers assigned to them. Your key responsibilities include:</p>
+<ul>
+<li>Managing multiple properties</li>
+<li>Overseeing property managers</li>
+<li>Managing users assigned to your properties</li>
+<li>Creating and assigning tasks</li>
+<li>Generating reports for your properties</li>
+<li>Handling escalated issues</li>
+</ul>
+<h2>Navigation Overview</h2>
+<p>As a General Manager, you have access to two main interfaces:</p>
+<ol>
+<li><strong>Main Application</strong>: Day-to-day operations</li>
+<li><strong>Management Console</strong>: Property and user administration</li>
+</ol>
+<h2>Main Application Components</h2>
+<h3>Dashboard</h3>
+<p>The Dashboard provides an overview of all activities across your assigned properties.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Property Selector</strong>: Switch between different properties or view aggregated data</li>
+<li><strong>Performance Summary</strong>: View ticket and task metrics for your properties</li>
+<li><strong>Manager Performance</strong>: Track performance metrics for managers under your supervision</li>
+<li><strong>Priority Tickets</strong>: See high-priority items requiring attention</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Use the property filter dropdown to select specific properties or &quot;All Properties&quot;</li>
+<li>View the KPI cards for critical metrics across selected properties</li>
+<li>Check the &quot;Manager Performance&quot; panel to monitor your team</li>
+<li>Use the &quot;Action Required&quot; section to address urgent matters</li>
+</ol>
+<h3>Tickets Management</h3>
+<p>Monitor and manage tickets across all your properties.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Multi-property View</strong>: See tickets from all your assigned properties</li>
+<li><strong>Advanced Filtering</strong>: Filter by property, status, priority, assignee, etc.</li>
+<li><strong>Escalation Management</strong>: Handle tickets escalated from property managers</li>
+<li><strong>Bulk Operations</strong>: Process multiple tickets simultaneously</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Tickets&quot; in the main navigation</li>
+<li>Use the property filter to view tickets from specific properties</li>
+<li>Use the search and filter options to find specific tickets</li>
+<li>Select tickets to perform bulk actions (reassign, change status, etc.)</li>
+<li>Click on individual tickets to view details and add comments</li>
+</ol>
+<h3>Task Management</h3>
+<p>Monitor and create tasks across your properties.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Multi-property Task View</strong>: View tasks across all your properties</li>
+<li><strong>Staff Workload Analysis</strong>: See how tasks are distributed among staff</li>
+<li><strong>Task Creation</strong>: Create new tasks for any of your properties</li>
+<li><strong>Performance Monitoring</strong>: Track task completion rates and times</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Tasks&quot; in the main navigation</li>
+<li>Use the property filter to view tasks for specific properties</li>
+<li>Click &quot;Create Task&quot; to add a new task</li>
+<li>Use the &quot;Workload&quot; view to see task distribution</li>
+<li>Monitor the &quot;Overdue Tasks&quot; section for follow-up</li>
+</ol>
+<h3>Reports</h3>
+<p>Generate and view reports for your properties.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Multi-property Reporting</strong>: Compare metrics across properties</li>
+<li><strong>Manager Performance Reports</strong>: Evaluate manager effectiveness</li>
+<li><strong>Custom Report Builder</strong>: Create tailored reports for your areas</li>
+<li><strong>Scheduled Reports</strong>: Configure automated report delivery</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Reports&quot; in the main navigation</li>
+<li>Select from available report templates</li>
+<li>Configure report parameters (date range, properties, etc.)</li>
+<li>Use the compare feature to analyze multiple properties</li>
+<li>Export reports in your preferred format (PDF, CSV, Excel)</li>
+</ol>
+<h2>Management Console Components</h2>
+<h3>Property Management</h3>
+<p>Manage your assigned properties and their details.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Property Overview</strong>: View all properties under your management</li>
+<li><strong>Room Management</strong>: Manage rooms within properties</li>
+<li><strong>Property Configuration</strong>: Update property settings and details</li>
+<li><strong>Service Configuration</strong>: Set up available services for each property</li>
+</ul>
+<p><strong>Step-by-Step Guide</strong>:</p>
+<ol>
+<li>Navigate to the Management Console</li>
+<li>Select &quot;Properties&quot; from the sidebar</li>
+<li>To view a property&#39;s details:<ul>
+<li>Click on the property name</li>
+<li>Review the property dashboard</li>
+<li>Check performance metrics specific to that property</li>
+</ul>
+</li>
+<li>To manage rooms:<ul>
+<li>Select a property</li>
+<li>Click the &quot;Rooms&quot; tab</li>
+<li>Add, edit, or deactivate rooms as needed</li>
+</ul>
+</li>
+<li>To update property settings:<ul>
+<li>Select a property</li>
+<li>Click the &quot;Settings&quot; tab</li>
+<li>Modify details and click &quot;Save&quot;</li>
+</ul>
+</li>
+</ol>
+<h3>User Management</h3>
+<p>Manage users assigned to your properties.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>User Overview</strong>: View all users across your properties</li>
+<li><strong>Manager Administration</strong>: Assign and manage property managers</li>
+<li><strong>User Creation</strong>: Add new users to your properties</li>
+<li><strong>Permission Management</strong>: Control what users can access</li>
+</ul>
+<p><strong>Step-by-Step Guide</strong>:</p>
+<ol>
+<li>Navigate to the Management Console</li>
+<li>Select &quot;Users&quot; from the sidebar</li>
+<li>To add a new user:<ul>
+<li>Click &quot;Add User&quot;</li>
+<li>Fill in the required details</li>
+<li>Assign appropriate role (User or Manager)</li>
+<li>Select which properties they can access</li>
+<li>Click &quot;Save&quot;</li>
+</ul>
+</li>
+<li>To promote a user to manager:<ul>
+<li>Find the user in the list</li>
+<li>Click the &quot;Edit&quot; icon</li>
+<li>Change their role to &quot;Manager&quot;</li>
+<li>Assign them to manage specific properties</li>
+<li>Click &quot;Save&quot;</li>
+</ul>
+</li>
+<li>To reset a password:<ul>
+<li>Click the reset password icon next to the user</li>
+<li>Enter a new password or generate a random one</li>
+<li>Enable &quot;Send password via email&quot; if needed</li>
+<li>Click &quot;Change Password&quot;</li>
+</ul>
+</li>
+</ol>
+<h2>Advanced Features for General Managers</h2>
+<h3>Manager Assignment</h3>
+<p><strong>How to Assign Managers to Properties</strong>:</p>
+<ol>
+<li>Navigate to Management Console &gt; Properties</li>
+<li>Select the property you want to assign a manager to</li>
+<li>Click &quot;Manage Assignments&quot;</li>
+<li>Select the user you want to promote to manager</li>
+<li>Click &quot;Assign as Manager&quot;</li>
+<li>Configure any additional settings</li>
+<li>Click &quot;Save&quot;</li>
+</ol>
+<h3>Cross-Property Task Assignment</h3>
+<p><strong>How to Create Tasks Across Multiple Properties</strong>:</p>
+<ol>
+<li>Navigate to &quot;Tasks&quot; in the main application</li>
+<li>Click &quot;Create Task&quot;</li>
+<li>Select &quot;Multi-property Task&quot; option</li>
+<li>Choose the properties to include</li>
+<li>Fill in task details (title, description, due date)</li>
+<li>Assign to appropriate staff members</li>
+<li>Click &quot;Create Tasks&quot;</li>
+</ol>
+<h3>Performance Analysis</h3>
+<p><strong>How to Compare Property Performance</strong>:</p>
+<ol>
+<li>Navigate to &quot;Reports&quot; in the main application</li>
+<li>Select &quot;Property Comparison&quot; from the report templates</li>
+<li>Choose the properties to compare</li>
+<li>Select the metrics to include (response time, completion rate, etc.)</li>
+<li>Choose a date range</li>
+<li>Click &quot;Generate Report&quot;</li>
+<li>Review the comparison chart and data tables</li>
+</ol>
+<h2>Best Practices for General Managers</h2>
+<ol>
+<li><p><strong>Regular Property Reviews</strong>:</p>
+<ul>
+<li>Conduct weekly reviews of all properties</li>
+<li>Compare metrics against benchmarks</li>
+<li>Identify trends and patterns across properties</li>
+</ul>
+</li>
+<li><p><strong>Manager Development</strong>:</p>
+<ul>
+<li>Regularly review manager performance</li>
+<li>Provide feedback and coaching</li>
+<li>Share best practices between managers</li>
+</ul>
+</li>
+<li><p><strong>User Management</strong>:</p>
+<ul>
+<li>Maintain appropriate role assignments</li>
+<li>Regularly review user access needs</li>
+<li>Implement the principle of least privilege</li>
+</ul>
+</li>
+<li><p><strong>Escalation Handling</strong>:</p>
+<ul>
+<li>Establish clear escalation procedures</li>
+<li>Address escalated issues promptly</li>
+<li>Document resolution processes for future reference</li>
+</ul>
+</li>
+<li><p><strong>Reporting Strategy</strong>:</p>
+<ul>
+<li>Create consistent reporting schedules</li>
+<li>Define key metrics for each property type</li>
+<li>Use data to drive improvement initiatives</li>
+</ul>
+</li>
+</ol>
+<h2>Troubleshooting Common Issues</h2>
+<h3>Manager Access Problems</h3>
+<ul>
+<li>Verify manager role assignment</li>
+<li>Check property assignments</li>
+<li>Confirm account is active</li>
+<li>Verify they&#39;ve completed initial login</li>
+</ul>
+<h3>Cross-Property Data Issues</h3>
+<ul>
+<li>Check property assignment configurations</li>
+<li>Verify user has appropriate permissions</li>
+<li>Clear browser cache if old data persists</li>
+<li>Confirm filters are set correctly</li>
+</ul>
+<h3>Reporting Discrepancies</h3>
+<ul>
+<li>Verify date ranges match</li>
+<li>Check that all relevant properties are included</li>
+<li>Confirm filters are consistent across reports</li>
+<li>Validate that data sources are up-to-date</li>
+</ul>
+
+  <a href="#" class="back-to-top">Back to Top</a>
+  <script>
+    // Add IDs to all headers for linking
+    document.querySelectorAll('h2, h3, h4, h5, h6').forEach(header => {
+      if (!header.id) {
+        const id = header.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        header.id = id;
+      }
+    });
+    
+    // Create TOC for the current page
+    const toc = document.createElement('div');
+    toc.innerHTML = '<h4>Table of Contents</h4><ul></ul>';
+    const tocList = toc.querySelector('ul');
+    
+    document.querySelectorAll('h2, h3').forEach(header => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = '#' + header.id;
+      a.textContent = header.textContent;
+      li.style.marginLeft = (header.tagName === 'H3' ? '20px' : '0');
+      li.appendChild(a);
+      tocList.appendChild(li);
+    });
+    
+    // Insert TOC after the nav element
+    const nav = document.querySelector('nav.toc');
+    nav.after(toc);
+  </script>
+</body>
+</html>

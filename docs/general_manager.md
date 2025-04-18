@@ -15,13 +15,22 @@ General Managers can:
 5. Create new regular users and managers
 6. Access and view reports for all their managed properties
 
+## Console Access
+
+The system provides two separate consoles:
+
+1. **Management Console**: Accessible by managers, general managers, and super admins. Includes property and user management.
+2. **System Console**: Accessible only by super admins. Contains system-wide settings, history, email configuration, SMS configuration, and attachment settings.
+
+General Managers have enhanced privileges in the Management Console but cannot access the System Console.
+
 ## Hierarchy of Roles
 
 From highest to lowest permission level:
 
-1. **Super Admin**: Can access and manage everything in the system
-2. **General Manager**: Can manage multiple properties and their managers
-3. **Manager**: Can manage a specific property and its users
+1. **Super Admin**: Can access and manage everything in the system, including both Management and System Consoles
+2. **General Manager**: Can manage multiple properties and their managers through the Management Console
+3. **Manager**: Can manage a specific property and its users through the Management Console
 4. **User**: Basic access to create tickets and perform assigned tasks
 
 ## How to Promote a User to General Manager
@@ -31,7 +40,7 @@ There are two ways to make a user a General Manager:
 ### Option 1: Using the Admin Interface
 
 1. Log in as a Super Admin
-2. Navigate to "Manage Users"
+2. Navigate to "Management Console" > "Users"
 3. Find the user you want to promote
 4. Change their role from the dropdown menu to "general_manager"
 5. Save the changes
@@ -53,6 +62,7 @@ The script will verify if the user is eligible for promotion and handle the role
 - When converting from Manager to General Manager, all property assignments are preserved
 - General Managers cannot create or edit Super Admin users
 - General Managers cannot modify system-wide settings
+- Only Super Admins can access the System Console which contains system settings, history, and communication settings
 
 ## Technical Details
 

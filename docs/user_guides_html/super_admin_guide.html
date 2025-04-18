@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modern Management Ticketing System</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+      color: #0366d6;
+    }
+    h1 { font-size: 2em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid #eaecef; }
+    h3 { font-size: 1.25em; }
+    pre {
+      background-color: #f6f8fa;
+      border-radius: 3px;
+      padding: 16px;
+      overflow: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    code {
+      background-color: rgba(27, 31, 35, 0.05);
+      border-radius: 3px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      padding: 0.2em 0.4em;
+    }
+    pre code {
+      background-color: transparent;
+      padding: 0;
+    }
+    a {
+      color: #0366d6;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1em 0;
+    }
+    table th, table td {
+      border: 1px solid #dfe2e5;
+      padding: 6px 13px;
+    }
+    table th {
+      background-color: #f6f8fa;
+      font-weight: 600;
+    }
+    nav.toc {
+      background-color: #f6f8fa;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+    nav.toc h4 {
+      margin-top: 0;
+    }
+    .back-to-top {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #0366d6;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <nav class="toc">
+    <h4>Documentation Contents</h4>
+    <ul>
+      <li><a href="admin_guide.html">Admin Guide</a></li>
+      <li><a href="api_reference.html">Api Reference</a></li>
+      <li><a href="general_manager_guide.html">General Manager Guide</a></li>
+      <li><a href="guest_guide.html">Guest Guide</a></li>
+      <li><a href="installation.html">Installation</a></li>
+      <li><a href="manager_guide.html">Manager Guide</a></li>
+      <li><a href="super_admin_guide.html">Super Admin Guide</a></li>
+      <li><a href="system_overview.html">System Overview</a></li>
+      <li><a href="user_guide.html">User Guide</a></li>
+    </ul>
+  </nav>
+<h1>Super Admin User Guide</h1>
+<p>This comprehensive guide covers all aspects of the Super Admin role within the Modern Management Ticketing System, including detailed instructions for using each feature and component.</p>
+<h2>Role Overview</h2>
+<p>As a Super Admin, you have full access to all system features, including:</p>
+<ul>
+<li>Complete user management</li>
+<li>Property administration</li>
+<li>System-wide configuration</li>
+<li>Email and SMS settings</li>
+<li>Audit history and logs</li>
+<li>Attachment settings</li>
+</ul>
+<h2>Navigation Overview</h2>
+<p>As a Super Admin, you have access to three main interfaces:</p>
+<ol>
+<li><strong>Main Application</strong>: Day-to-day operations</li>
+<li><strong>Management Console</strong>: Property and user administration</li>
+<li><strong>System Console</strong>: System-wide configuration</li>
+</ol>
+<h2>Main Application Components</h2>
+<h3>Dashboard</h3>
+<p>The Dashboard provides a system-wide overview of all activities.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Activity Summary</strong>: Shows ticket and task statistics across all properties</li>
+<li><strong>Performance Metrics</strong>: Response times, completion rates, and workload distribution</li>
+<li><strong>Alert Panel</strong>: High-priority items requiring attention</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>View the KPI cards at the top for critical metrics</li>
+<li>Check the &quot;Recent Activity&quot; section for the latest system events</li>
+<li>Use the &quot;Quick Actions&quot; panel for common operations</li>
+</ol>
+<h3>Tickets Management</h3>
+<p>As a Super Admin, you can view and manage tickets across all properties.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Global Ticket View</strong>: See tickets from all properties</li>
+<li><strong>Advanced Filtering</strong>: Filter by any combination of properties, status, priority, etc.</li>
+<li><strong>Bulk Operations</strong>: Perform actions on multiple tickets simultaneously</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Tickets&quot; in the main navigation</li>
+<li>Use the filter panel to narrow down results</li>
+<li>Click on a ticket to view details</li>
+<li>Use the &quot;Actions&quot; dropdown for operations like reassignment, priority changes, etc.</li>
+</ol>
+<h3>Task Management</h3>
+<p>Manage tasks across the entire system.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Global Task View</strong>: See all tasks in the system</li>
+<li><strong>Resource Allocation</strong>: Monitor staff workloads across properties</li>
+<li><strong>Performance Tracking</strong>: Track completion metrics</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Tasks&quot; in the main navigation</li>
+<li>Use the &quot;Group By&quot; feature to organize tasks by property, assignee, etc.</li>
+<li>Use the &quot;Workload View&quot; to see task distribution among staff</li>
+</ol>
+<h3>Reports</h3>
+<p>Access comprehensive reporting features.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>System-wide Reports</strong>: Generate reports across all properties</li>
+<li><strong>Custom Report Builder</strong>: Create tailored reports with specific metrics</li>
+<li><strong>Scheduled Reports</strong>: Configure automated report generation</li>
+</ul>
+<p><strong>How to Use</strong>:</p>
+<ol>
+<li>Navigate to &quot;Reports&quot; in the main navigation</li>
+<li>Select from pre-configured report templates or create a custom report</li>
+<li>Use the export options (PDF, CSV, Excel) to download reports</li>
+<li>Set up scheduled reports using the &quot;Schedule&quot; button</li>
+</ol>
+<h2>Management Console Components</h2>
+<h3>Property Management</h3>
+<p>Manage all properties in the system.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Property Creation/Editing</strong>: Add new properties or modify existing ones</li>
+<li><strong>Bulk Property Operations</strong>: Update multiple properties simultaneously</li>
+<li><strong>Property Assignment</strong>: Assign properties to managers and general managers</li>
+</ul>
+<p><strong>Step-by-Step Guide</strong>:</p>
+<ol>
+<li>Navigate to the Management Console</li>
+<li>Select &quot;Properties&quot; from the sidebar</li>
+<li>To add a new property:<ul>
+<li>Click &quot;Add Property&quot;</li>
+<li>Fill in required details (name, address, type, etc.)</li>
+<li>Click &quot;Save&quot;</li>
+</ul>
+</li>
+<li>To edit a property:<ul>
+<li>Click the edit icon next to the property</li>
+<li>Modify details as needed</li>
+<li>Click &quot;Save&quot;</li>
+</ul>
+</li>
+<li>To assign managers:<ul>
+<li>Select a property</li>
+<li>Click &quot;Manage Assignments&quot;</li>
+<li>Select managers from the user list</li>
+<li>Click &quot;Save Assignments&quot;</li>
+</ul>
+</li>
+</ol>
+<h3>User Management</h3>
+<p>Comprehensive user administration.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>User Creation/Editing</strong>: Add new users or modify existing ones</li>
+<li><strong>Role Assignment</strong>: Assign appropriate roles (User, Manager, General Manager)</li>
+<li><strong>Property Assignment</strong>: Connect users to relevant properties</li>
+<li><strong>Account Management</strong>: Reset passwords, deactivate accounts, etc.</li>
+</ul>
+<p><strong>Step-by-Step Guide</strong>:</p>
+<ol>
+<li>Navigate to the Management Console</li>
+<li>Select &quot;Users&quot; from the sidebar</li>
+<li>To add a new user:<ul>
+<li>Click &quot;Add User&quot;</li>
+<li>Fill in required details (username, email, password, etc.)</li>
+<li>Select the appropriate role</li>
+<li>Assign properties if relevant</li>
+<li>Click &quot;Save&quot;</li>
+</ul>
+</li>
+<li>To edit a user:<ul>
+<li>Click the edit icon next to the user</li>
+<li>Modify details as needed</li>
+<li>Click &quot;Save&quot;</li>
+</ul>
+</li>
+<li>To reset a password:<ul>
+<li>Click the reset password icon next to the user</li>
+<li>Enter the new password</li>
+<li>Enable &quot;Send password via email&quot; if needed</li>
+<li>Click &quot;Change Password&quot;</li>
+</ul>
+</li>
+</ol>
+<h2>System Console Components</h2>
+<h3>System Settings</h3>
+<p>Configure global system parameters.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>General Settings</strong>: System name, language, time zone, etc.</li>
+<li><strong>Security Settings</strong>: Password policies, session timeouts, etc.</li>
+<li><strong>Branding</strong>: Logo, colors, and themes</li>
+</ul>
+<p><strong>Step-by-Step Guide</strong>:</p>
+<ol>
+<li>Navigate to the System Console</li>
+<li>Select &quot;System Settings&quot; from the sidebar</li>
+<li>Navigate between tabs (General, Security, Branding)</li>
+<li>Make desired changes</li>
+<li>Click &quot;Save&quot; in each section</li>
+</ol>
+<h3>History/Audit Logs</h3>
+<p>Review system activities for security and troubleshooting.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Advanced Filtering</strong>: Search by user, action type, date, etc.</li>
+<li><strong>Detailed Activity View</strong>: See exactly what changed in each action</li>
+<li><strong>Export Options</strong>: Download logs for external analysis</li>
+</ul>
+<p><strong>Step-by-Step Guide</strong>:</p>
+<ol>
+<li>Navigate to the System Console</li>
+<li>Select &quot;History&quot; from the sidebar</li>
+<li>Use the filter panel to narrow down results</li>
+<li>Click on an entry to view details</li>
+<li>Use the &quot;Export&quot; button to download logs</li>
+</ol>
+<h3>Email Settings</h3>
+<p>Configure system email functionality.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>SMTP Configuration</strong>: Set up email server connections</li>
+<li><strong>Template Management</strong>: Customize email notifications</li>
+<li><strong>Schedule Configuration</strong>: Set up automated emails</li>
+</ul>
+<p><strong>Step-by-Step Guide</strong>:</p>
+<ol>
+<li>Navigate to the System Console</li>
+<li>Select &quot;Email Settings&quot; from the sidebar</li>
+<li>Configure SMTP details on the main tab</li>
+<li>Select &quot;Templates&quot; to customize notification emails</li>
+<li>Use &quot;Scheduling&quot; to set up automated reports</li>
+</ol>
+<h3>SMS Settings</h3>
+<p>Configure text message notifications.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Provider Configuration</strong>: Set up SMS gateway connections</li>
+<li><strong>Template Management</strong>: Customize SMS messages</li>
+<li><strong>Notification Rules</strong>: Define when SMS alerts are sent</li>
+</ul>
+<p><strong>Step-by-Step Guide</strong>:</p>
+<ol>
+<li>Navigate to the System Console</li>
+<li>Select &quot;SMS Settings&quot; from the sidebar</li>
+<li>Choose and configure your SMS provider</li>
+<li>Customize templates in the &quot;Templates&quot; tab</li>
+<li>Set up notification rules in the &quot;Rules&quot; tab</li>
+</ol>
+<h3>Attachment Settings</h3>
+<p>Configure file handling and storage.</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Storage Configuration</strong>: Choose and set up storage locations</li>
+<li><strong>File Limitations</strong>: Set size limits and allowed file types</li>
+<li><strong>Image Processing</strong>: Configure automatic image handling</li>
+</ul>
+<p><strong>Step-by-Step Guide</strong>:</p>
+<ol>
+<li>Navigate to the System Console</li>
+<li>Select &quot;Attachment Settings&quot; from the sidebar</li>
+<li>Choose your storage provider</li>
+<li>Configure storage-specific settings</li>
+<li>Set file limitations and processing options</li>
+</ol>
+<h2>Advanced Administration Tasks</h2>
+<h3>System Backup and Restore</h3>
+<p><strong>How to Create a System Backup</strong>:</p>
+<ol>
+<li>Navigate to System Console &gt; System Settings &gt; Backup</li>
+<li>Click &quot;Create Backup&quot;</li>
+<li>Choose backup options (full or configuration only)</li>
+<li>Click &quot;Start Backup&quot;</li>
+<li>Download the backup file when complete</li>
+</ol>
+<p><strong>How to Restore from Backup</strong>:</p>
+<ol>
+<li>Navigate to System Console &gt; System Settings &gt; Backup</li>
+<li>Click &quot;Restore Backup&quot;</li>
+<li>Upload your backup file</li>
+<li>Select restoration options</li>
+<li>Click &quot;Start Restore&quot;</li>
+</ol>
+<h3>User Bulk Operations</h3>
+<p><strong>How to Perform Bulk User Updates</strong>:</p>
+<ol>
+<li>Navigate to Management Console &gt; Users</li>
+<li>Use checkboxes to select multiple users</li>
+<li>Click &quot;Bulk Actions&quot;</li>
+<li>Choose the operation (change role, assign properties, etc.)</li>
+<li>Configure operation details</li>
+<li>Click &quot;Apply&quot;</li>
+</ol>
+<h3>Custom Role Configuration</h3>
+<p>While the system has predefined roles, Super Admins can fine-tune permissions:</p>
+<ol>
+<li>Navigate to System Console &gt; System Settings &gt; Roles</li>
+<li>Select a role to modify</li>
+<li>Adjust permission checkboxes</li>
+<li>Click &quot;Save Changes&quot;</li>
+</ol>
+<h2>Best Practices for Super Admins</h2>
+<ol>
+<li><p><strong>Regular Security Audits</strong>:</p>
+<ul>
+<li>Review user accounts monthly</li>
+<li>Check history logs for suspicious activity</li>
+<li>Ensure password policies are enforced</li>
+</ul>
+</li>
+<li><p><strong>System Maintenance</strong>:</p>
+<ul>
+<li>Schedule regular database maintenance</li>
+<li>Archive old tickets and tasks</li>
+<li>Review and optimize system settings</li>
+</ul>
+</li>
+<li><p><strong>User Administration</strong>:</p>
+<ul>
+<li>Enforce the principle of least privilege</li>
+<li>Regularly review user roles and permissions</li>
+<li>Document role assignments and changes</li>
+</ul>
+</li>
+<li><p><strong>Data Management</strong>:</p>
+<ul>
+<li>Configure appropriate retention policies</li>
+<li>Ensure regular backups are taken</li>
+<li>Test restoration procedures periodically</li>
+</ul>
+</li>
+</ol>
+<h2>Troubleshooting Common Issues</h2>
+<h3>User Access Problems</h3>
+<ul>
+<li>Check user role assignments</li>
+<li>Verify property assignments</li>
+<li>Review account status (active/inactive)</li>
+<li>Check for recent password changes</li>
+</ul>
+<h3>Email Notification Issues</h3>
+<ul>
+<li>Verify SMTP settings</li>
+<li>Check for template errors</li>
+<li>Ensure email addresses are valid</li>
+<li>Review spam filter settings</li>
+</ul>
+<h3>Performance Concerns</h3>
+<ul>
+<li>Analyze database query performance</li>
+<li>Check attachment storage usage</li>
+<li>Review scheduled job configurations</li>
+<li>Monitor system resource usage</li>
+</ul>
+
+  <a href="#" class="back-to-top">Back to Top</a>
+  <script>
+    // Add IDs to all headers for linking
+    document.querySelectorAll('h2, h3, h4, h5, h6').forEach(header => {
+      if (!header.id) {
+        const id = header.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        header.id = id;
+      }
+    });
+    
+    // Create TOC for the current page
+    const toc = document.createElement('div');
+    toc.innerHTML = '<h4>Table of Contents</h4><ul></ul>';
+    const tocList = toc.querySelector('ul');
+    
+    document.querySelectorAll('h2, h3').forEach(header => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = '#' + header.id;
+      a.textContent = header.textContent;
+      li.style.marginLeft = (header.tagName === 'H3' ? '20px' : '0');
+      li.appendChild(a);
+      tocList.appendChild(li);
+    });
+    
+    // Insert TOC after the nav element
+    const nav = document.querySelector('nav.toc');
+    nav.after(toc);
+  </script>
+</body>
+</html>
