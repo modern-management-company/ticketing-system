@@ -10,7 +10,7 @@ class User(db.Model):
     password = db.Column(db.String(200), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     phone = db.Column(db.String(20))  # Add phone field
-    role = db.Column(db.String(20), default='user')  # user, manager, super_admin
+    role = db.Column(db.String(20), default='user')  # user, manager, general_manager, super_admin
     group = db.Column(db.String(50))  # Added group field
     manager_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

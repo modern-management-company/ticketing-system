@@ -1516,6 +1516,25 @@ def get_users():
         
         if current_user.role == 'super_admin':
             users = User.query.all()
+        elif current_user.role == 'general_manager':
+            # General managers can see users assigned to their properties
+            managed_properties = current_user.managed_properties.all()
+            property_ids = [p.property_id for p in managed_properties]
+            
+            # Get all users assigned to these properties
+            users = []
+            for prop_id in property_ids:
+                property_users = Property.query.get(prop_id).assigned_users.all()
+                users.extend(property_users)
+                
+            # Add managers of these properties too
+            for prop_id in property_ids:
+                property_managers = Property.query.get(prop_id).managers.all()
+                users.extend(property_managers)
+                
+            # Remove duplicates while preserving order
+            seen = set()
+            users = [x for x in users if not (x.user_id in seen or seen.add(x.user_id))]
         elif current_user.role == 'manager':
             # Managers can see their team members
             users = current_user.team_members
@@ -1537,10 +1556,29 @@ def manage_user(user_id):
         if not current_user:
             return jsonify({"msg": "User not found"}), 404
 
-        if current_user.role not in ['super_admin', 'manager']:
+        if current_user.role not in ['super_admin', 'general_manager', 'manager']:
             return jsonify({'msg': 'Unauthorized'}), 403
 
         target_user = User.query.get_or_404(user_id)
+
+        # For general_manager, validate they can only manage users assigned to their properties
+        if current_user.role == 'general_manager':
+            managed_properties = current_user.managed_properties.all()
+            property_ids = [p.property_id for p in managed_properties]
+            
+            user_property_ids = [p.property_id for p in target_user.assigned_properties.all()]
+            
+            # Check if the target user is assigned to any of the properties managed by the general manager
+            if not any(p_id in property_ids for p_id in user_property_ids):
+                # Also check if the user is a manager of these properties
+                is_manager = False
+                for p_id in property_ids:
+                    if target_user in Property.query.get(p_id).managers:
+                        is_manager = True
+                        break
+                
+                if not is_manager:
+                    return jsonify({'msg': 'Unauthorized - User not assigned to your managed properties'}), 403
 
         if request.method == 'GET':
             return jsonify(target_user.to_dict())
@@ -1719,11 +1757,12 @@ def manage_user(user_id):
                             )
                 
                 # If changing from manager
-                elif old_role == 'manager':
+                elif old_role == 'manager' or old_role == 'general_manager':
                     # Get manager properties before deletion for history
                     manager_properties = PropertyManager.query.filter_by(user_id=target_user.user_id).all()
                     for mp in manager_properties:
-                        property_name = Property.query.get(mp.property_id).name if Property.query.get(mp.property_id) else f"Property #{mp.property_id}"
+                        property_obj = Property.query.get(mp.property_id)
+                        property_name = property_obj.name if property_obj else f"Property #{mp.property_id}"
                         
                         # Record history for removing manager role
                         History.create_entry(
@@ -1731,7 +1770,7 @@ def manage_user(user_id):
                             entity_id=user_id,
                             action='updated',
                             field_name='manager_role',
-                            old_value=f"Manager for {property_name}",
+                            old_value=f"{old_role} for {property_name}",
                             new_value='None',
                             user_id=current_user.user_id
                         )
@@ -3244,13 +3283,32 @@ def reset_password():
         if not data or 'user_id' not in data or 'new_password' not in data:
             return jsonify({"msg": "Missing required fields"}), 400
 
-        # Only super_admin and managers can reset other users' passwords
-        if current_user.role not in ['super_admin', 'manager'] and str(current_user.user_id) != str(data['user_id']):
+        # Only super_admin, general_manager and managers can reset other users' passwords
+        if current_user.role not in ['super_admin', 'general_manager', 'manager'] and str(current_user.user_id) != str(data['user_id']):
             return jsonify({"msg": "Unauthorized"}), 403
 
         target_user = User.query.get(data['user_id'])
         if not target_user:
             return jsonify({"msg": "Target user not found"}), 404
+
+        # If user is general_manager, check if they can manage this user
+        if current_user.role == 'general_manager' and str(current_user.user_id) != str(data['user_id']):
+            managed_properties = current_user.managed_properties.all()
+            property_ids = [p.property_id for p in managed_properties]
+            
+            user_property_ids = [p.property_id for p in target_user.assigned_properties.all()]
+            
+            # Check if the target user is assigned to any of the properties managed by the general manager
+            if not any(p_id in property_ids for p_id in user_property_ids):
+                # Also check if the user is a manager of these properties
+                is_manager = False
+                for p_id in property_ids:
+                    if target_user in Property.query.get(p_id).managers:
+                        is_manager = True
+                        break
+                
+                if not is_manager:
+                    return jsonify({'msg': 'Unauthorized - User not assigned to your managed properties'}), 403
 
         # Hash the new password
         target_user.password = generate_password_hash(data['new_password'])
@@ -3658,8 +3716,8 @@ def create_user():
         if not current_user:
             return jsonify({"msg": "User not found"}), 404
         
-        # Verify permissions (only super_admin and managers can create users)
-        if current_user.role not in ['super_admin', 'manager']:
+        # Verify permissions (only super_admin, general_manager and managers can create users)
+        if current_user.role not in ['super_admin', 'general_manager', 'manager']:
             return jsonify({"msg": "Unauthorized - Insufficient permissions"}), 403
         
         # Parse request data
@@ -3673,9 +3731,19 @@ def create_user():
             if field not in data:
                 return jsonify({"msg": f"Missing required field: {field}"}), 400
         
-        # If not super_admin, restrict role creation to 'user' only
-        if current_user.role != 'super_admin' and data['role'] in ['super_admin', 'manager']:
-            return jsonify({"msg": "Unauthorized - Cannot create users with elevated privileges"}), 403
+        # Role restrictions based on current user role
+        if current_user.role == 'super_admin':
+            # Super admins can create any role except super_admin
+            if data['role'] == 'super_admin':
+                return jsonify({"msg": "Creating super_admin users is restricted"}), 403
+        elif current_user.role == 'general_manager':
+            # General managers can only create regular users and managers
+            if data['role'] not in ['user', 'manager']:
+                return jsonify({"msg": "Unauthorized - Cannot create users with elevated privileges"}), 403
+        elif current_user.role == 'manager':
+            # Managers can only create regular users
+            if data['role'] != 'user':
+                return jsonify({"msg": "Unauthorized - Cannot create users with elevated privileges"}), 403
         
         # Create new user
         new_user = User(
@@ -3825,10 +3893,13 @@ def update_user(user_id):
             changes.append(f"Role changed from {old_role} to {new_role}")
             
             # If changing to manager - special handling for manager role
-            is_upgrading_to_manager = data.get('is_upgrading_to_manager', False) or (old_role != 'manager' and new_role == 'manager')
+            is_upgrading_to_manager = data.get('is_upgrading_to_manager', False) or (
+                old_role not in ['manager', 'general_manager'] and 
+                new_role in ['manager', 'general_manager']
+            )
             
             if is_upgrading_to_manager:
-                app.logger.info(f"Upgrading user {user.username} to manager role")
+                app.logger.info(f"Upgrading user {user.username} to {new_role} role")
                 
                 # Get property IDs - either from the data or existing user properties
                 property_ids = data.get('property_ids', old_properties)

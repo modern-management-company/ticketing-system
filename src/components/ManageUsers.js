@@ -63,7 +63,7 @@ const ManageUsers = () => {
     sendEmail: true
   });
 
-  const roles = ['user', 'manager', 'super_admin'];
+  const roles = ['user', 'manager', 'general_manager', 'super_admin'];
   const groups = ['Front Desk', 'Maintenance', 'Housekeeping', 'Engineering', 'Executive'];
 
   useEffect(() => {
@@ -115,15 +115,17 @@ const ManageUsers = () => {
       // Get current user properties before role change
       const currentProperties = user.assigned_properties.map(p => p.property_id);
       
-      // If changing to manager, we need to ensure PropertyManager entries are created
+      // If changing to manager or general_manager, we need to ensure PropertyManager entries are created
       const payload = { 
         role: newRole,
         property_ids: currentProperties
       };
       
-      // Special flag when upgrading to manager to ensure backend creates proper assignments
-      if (user.role !== 'manager' && newRole === 'manager') {
+      // Special flag when upgrading to manager or general_manager to ensure backend creates proper assignments
+      if ((user.role !== 'manager' && user.role !== 'general_manager') && 
+          (newRole === 'manager' || newRole === 'general_manager')) {
         payload.is_upgrading_to_manager = true;
+        console.log('Upgrading user to manager/general_manager role with properties:', userFormData.assigned_properties)
       }
 
       const response = await apiClient.patch(`/users/${userId}`, payload);
@@ -457,8 +459,8 @@ const ManageUsers = () => {
                               key={propertyId}
                               label={property ? property.name : 'Unknown'}
                               size="small"
-                              color={user.role === 'manager' ? 'primary' : 'default'}
-                              variant={user.role === 'manager' ? 'filled' : 'outlined'}
+                              color={user.role === 'manager' || user.role === 'general_manager' ? 'primary' : 'default'}
+                              variant={user.role === 'manager' || user.role === 'general_manager' ? 'filled' : 'outlined'}
                             />
                           );
                         })}
@@ -639,8 +641,8 @@ const ManageUsers = () => {
                           key={value}
                           label={properties.find(p => p.property_id === value)?.name}
                           size="small"
-                          color={userFormData.role === 'manager' ? 'primary' : 'default'}
-                          variant={userFormData.role === 'manager' ? 'filled' : 'outlined'}
+                          color={userFormData.role === 'manager' || userFormData.role === 'general_manager' ? 'primary' : 'default'}
+                          variant={userFormData.role === 'manager' || userFormData.role === 'general_manager' ? 'filled' : 'outlined'}
                         />
                       ))}
                     </Box>

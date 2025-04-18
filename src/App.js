@@ -79,17 +79,17 @@ const App = () => {
             
             {/* Management Console Routes */}
             <Route path="/manage" element={
-              <ProtectedRoute allowedRoles={['manager', 'super_admin']} redirectTo="/unauthorized">
+              <ProtectedRoute allowedRoles={['manager', 'general_manager', 'super_admin']} redirectTo="/unauthorized">
                 <ManagementLayout />
               </ProtectedRoute>
             }>
               <Route path="properties" element={
-                <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
+                <ProtectedRoute allowedRoles={['manager', 'general_manager', 'super_admin']}>
                   <PropertyManagement />
                 </ProtectedRoute>
               } />
               <Route path="users" element={
-                <ProtectedRoute allowedRoles={['super_admin']}>
+                <ProtectedRoute allowedRoles={['general_manager', 'super_admin']}>
                   <ManageUsers />
                 </ProtectedRoute>
               } />
@@ -166,7 +166,7 @@ const App = () => {
               } />
               
               <Route path="/reports" element={
-                <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
+                <ProtectedRoute allowedRoles={['manager', 'general_manager', 'super_admin']}>
                   <Reports />
                 </ProtectedRoute>
               } />
