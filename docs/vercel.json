@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "name": "ticketing-system-docs",
+  "builds": [
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "user_guides_html/**/*", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/", "dest": "/index.html" },
+    { "src": "/user_guides_html/(.*)", "dest": "/user_guides_html/$1" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
+} 
