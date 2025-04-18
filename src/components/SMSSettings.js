@@ -33,7 +33,7 @@ import SmsIcon from '@mui/icons-material/Sms';
 import PhoneIcon from '@mui/icons-material/Phone';
 import apiClient from './apiClient';
 
-const SMSSettings = () => {
+const SMSSettings = ({ onError, onSuccess }) => {
   const [settings, setSettings] = useState({
     service_provider: '',
     account_sid: '',
@@ -42,8 +42,6 @@ const SMSSettings = () => {
     enable_sms_notifications: true
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
   const [testPhoneNumber, setTestPhoneNumber] = useState('');
   const [testingSMS, setTestingSMS] = useState(false);
   const [testResults, setTestResults] = useState([]);
@@ -62,7 +60,7 @@ const SMSSettings = () => {
       setSettings(response.data);
     } catch (error) {
       console.error('Failed to fetch SMS settings:', error);
-      setError('Failed to load SMS settings');
+      if (onError) onError('Failed to load SMS settings');
     } finally {
       setLoading(false);
     }
@@ -70,17 +68,14 @@ const SMSSettings = () => {
 
   const handleSave = async () => {
     try {
-      setError(null);
-      setSuccess(null);
       setLoading(true);
-
       // Replace with your actual SMS settings API endpoint
       const response = await apiClient.post('/api/settings/sms', settings);
-      setSuccess('SMS settings updated successfully');
+      if (onSuccess) onSuccess('SMS settings updated successfully');
       setSettings(response.data);
     } catch (error) {
       console.error('Failed to save SMS settings:', error);
-      setError(error.response?.data?.message || 'Failed to save SMS settings');
+      if (onError) onError(error.response?.data?.message || 'Failed to save SMS settings');
     } finally {
       setLoading(false);
     }
@@ -88,18 +83,16 @@ const SMSSettings = () => {
 
   const handleTestSMS = async () => {
     try {
-      setError(null);
-      setSuccess(null);
       setTestingSMS(true);
 
       // Replace with your actual test SMS API endpoint
       await apiClient.post('/api/test-sms', {
         phone: testPhoneNumber
       });
-      setSuccess('Test SMS sent successfully');
+      if (onSuccess) onSuccess('Test SMS sent successfully');
     } catch (error) {
       console.error('Failed to send test SMS:', error);
-      setError(error.response?.data?.message || 'Failed to send test SMS');
+      if (onError) onError(error.response?.data?.message || 'Failed to send test SMS');
     } finally {
       setTestingSMS(false);
     }
@@ -107,8 +100,6 @@ const SMSSettings = () => {
 
   const handleTestAllSMS = async () => {
     try {
-      setError(null);
-      setSuccess(null);
       setTestingSMS(true);
       setTestResults([
         { test: 'SMS Provider Connection', success: false, message: 'Pending...' },
@@ -124,10 +115,10 @@ const SMSSettings = () => {
       // Replace with your actual test all SMS API endpoint
       const response = await apiClient.post('/api/test-all-sms');
       setTestResults(response.data.results);
-      setSuccess(`SMS tests completed: ${response.data.message}`);
+      if (onSuccess) onSuccess(`SMS tests completed: ${response.data.message}`);
     } catch (error) {
       console.error('Failed to run SMS tests:', error);
-      setError(error.response?.data?.message || 'Failed to run SMS tests');
+      if (onError) onError(error.response?.data?.message || 'Failed to run SMS tests');
       
       // Simulate response for demonstration (remove in production)
       setTimeout(() => {
@@ -146,8 +137,6 @@ const SMSSettings = () => {
 
   const handleTestNotifications = async () => {
     try {
-      setError(null);
-      setSuccess(null);
       setTestingSMS(true);
       setNotificationTestResults([
         { test: 'Task Assignment SMS', success: false, message: 'Pending...' },
@@ -170,11 +159,11 @@ const SMSSettings = () => {
             message: Math.random() > 0.2 ? 'Test completed successfully' : 'Test failed'
           }))
         );
-        setSuccess('Notification tests completed');
+        if (onSuccess) onSuccess('Notification tests completed');
       }, 2000);
     } catch (error) {
       console.error('Failed to run notification tests:', error);
-      setError(error.response?.data?.message || 'Failed to run notification tests');
+      if (onError) onError(error.response?.data?.message || 'Failed to run notification tests');
     } finally {
       setTestingSMS(false);
     }
@@ -226,18 +215,6 @@ const SMSSettings = () => {
       <Typography variant="h5" gutterBottom>
         SMS Settings
       </Typography>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
 
       <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 2 }}>
         <Tab icon={<SettingsIcon />} label="Settings" />

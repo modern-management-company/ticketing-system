@@ -118,19 +118,9 @@ const Layout = () => {
         path: '/admin/history',
       },
       {
-        text: 'Email Settings',
-        icon: <EmailIcon />,
-        path: '/admin/email-settings',
-      },
-      {
-        text: 'SMS Settings',
-        icon: <SmsIcon />,
-        path: '/admin/sms-settings',
-      },
-      {
-        text: 'Attachment Settings',
-        icon: <AttachFileIcon />,
-        path: '/admin/attachment-settings',
+        text: 'System Settings',
+        icon: <SettingsIcon />,
+        path: '/admin/system-settings',
       }      
     ];
 

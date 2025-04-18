@@ -16,7 +16,7 @@ import apiClient from './apiClient';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import StorageIcon from '@mui/icons-material/Storage';
 
-const AttachmentSettings = () => {
+const AttachmentSettings = ({ onError, onSuccess }) => {
   const { auth } = useAuth();
   const [settings, setSettings] = useState({
     storage_type: 'local',
@@ -26,8 +26,6 @@ const AttachmentSettings = () => {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [testResult, setTestResult] = useState(null);
   const [newExtension, setNewExtension] = useState('');
 
@@ -43,14 +41,15 @@ const AttachmentSettings = () => {
 
   const fetchSettings = async () => {
     try {
+      setLoading(true);
       const response = await apiClient.get('/api/settings/attachments');
       if (response.data) {
         setSettings(response.data);
       }
-      setLoading(false);
     } catch (err) {
       console.error('Error fetching settings:', err);
-      setError('Failed to load settings');
+      if (onError) onError('Failed to load settings');
+    } finally {
       setLoading(false);
     }
   };
@@ -66,23 +65,21 @@ const AttachmentSettings = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setError('');
-    setSuccess('');
 
     try {
       if (!isSuperAdmin) {
-        setError('Super admin access required to manage attachment settings');
+        if (onError) onError('Super admin access required to manage attachment settings');
         return;
       }
 
       const response = await apiClient.post('/api/settings/attachments', settings);
       if (response.data) {
-        setSuccess('Settings saved successfully');
+        if (onSuccess) onSuccess('Settings saved successfully');
         setSettings(response.data.settings || settings);
       }
     } catch (err) {
       console.error('Error saving settings:', err);
-      setError(err.response?.data?.msg || 'Failed to save settings');
+      if (onError) onError(err.response?.data?.msg || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -90,7 +87,7 @@ const AttachmentSettings = () => {
 
   const handleTestSettings = async () => {
     if (!isSuperAdmin) {
-      setError('Super admin access required to test settings');
+      if (onError) onError('Super admin access required to test settings');
       return;
     }
 
@@ -156,18 +153,6 @@ const AttachmentSettings = () => {
             Global Attachment Settings
             {isSuperAdmin && <Typography variant="caption" color="success" sx={{ ml: 1 }}>(Super Admin Access)</Typography>}
           </Typography>
-          
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-          
-          {success && (
-            <Alert severity="success" sx={{ mb: 2 }}>
-              {success}
-            </Alert>
-          )}
           
           <form onSubmit={handleSubmit}>
             <Grid container spacing={3}>

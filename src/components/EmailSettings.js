@@ -34,7 +34,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import apiClient from './apiClient';
 
-const EmailSettings = () => {
+const EmailSettings = ({ onError, onSuccess }) => {
   const [settings, setSettings] = useState({
     smtp_server: '',
     smtp_port: '',
@@ -48,8 +48,6 @@ const EmailSettings = () => {
     enable_daily_reports: true
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
   const [testEmailAddress, setTestEmailAddress] = useState('');
   const [testingEmail, setTestingEmail] = useState(false);
   const [testResults, setTestResults] = useState([]);
@@ -70,7 +68,7 @@ const EmailSettings = () => {
       setSettings(response.data);
     } catch (error) {
       console.error('Failed to fetch email settings:', error);
-      setError('Failed to load email settings');
+      if (onError) onError('Failed to load email settings');
     } finally {
       setLoading(false);
     }
@@ -78,16 +76,13 @@ const EmailSettings = () => {
 
   const handleSave = async () => {
     try {
-      setError(null);
-      setSuccess(null);
       setLoading(true);
-
       const response = await apiClient.post('/api/settings/system', settings);
-      setSuccess('Email settings updated successfully');
+      if (onSuccess) onSuccess('Email settings updated successfully');
       setSettings(response.data);
     } catch (error) {
       console.error('Failed to save email settings:', error);
-      setError(error.response?.data?.message || 'Failed to save email settings');
+      if (onError) onError(error.response?.data?.message || 'Failed to save email settings');
     } finally {
       setLoading(false);
     }
@@ -95,17 +90,15 @@ const EmailSettings = () => {
 
   const handleTestEmail = async () => {
     try {
-      setError(null);
-      setSuccess(null);
       setTestingEmail(true);
 
       await apiClient.post('/api/test-email', {
         email: testEmailAddress
       });
-      setSuccess('Test email sent successfully');
+      if (onSuccess) onSuccess('Test email sent successfully');
     } catch (error) {
       console.error('Failed to send test email:', error);
-      setError(error.response?.data?.message || 'Failed to send test email');
+      if (onError) onError(error.response?.data?.message || 'Failed to send test email');
     } finally {
       setTestingEmail(false);
     }
@@ -113,8 +106,6 @@ const EmailSettings = () => {
 
   const handleTestAllEmails = async () => {
     try {
-      setError(null);
-      setSuccess(null);
       setTestingEmail(true);
       setTestResults([
         { test: 'SMTP Server Connection', success: false, message: 'Pending...' },
@@ -132,10 +123,10 @@ const EmailSettings = () => {
 
       const response = await apiClient.post('/api/test-all-emails');
       setTestResults(response.data.results);
-      setSuccess(`Email tests completed: ${response.data.message}`);
+      if (onSuccess) onSuccess(`Email tests completed: ${response.data.message}`);
     } catch (error) {
       console.error('Failed to run email tests:', error);
-      setError(error.response?.data?.message || 'Failed to run email tests');
+      if (onError) onError(error.response?.data?.message || 'Failed to run email tests');
     } finally {
       setTestingEmail(false);
     }
@@ -143,8 +134,6 @@ const EmailSettings = () => {
 
   const handleTestNotifications = async () => {
     try {
-      setError(null);
-      setSuccess(null);
       setTestingEmail(true);
       setNotificationTestResults([
         { test: 'Task Assignment Notification', success: false, message: 'Pending...' },
@@ -168,11 +157,11 @@ const EmailSettings = () => {
             message: Math.random() > 0.2 ? 'Test completed successfully' : 'Test failed'
           }))
         );
-        setSuccess('Notification tests completed');
+        if (onSuccess) onSuccess('Notification tests completed');
       }, 2000);
     } catch (error) {
       console.error('Failed to run notification tests:', error);
-      setError(error.response?.data?.message || 'Failed to run notification tests');
+      if (onError) onError(error.response?.data?.message || 'Failed to run notification tests');
     } finally {
       setTestingEmail(false);
     }
@@ -180,15 +169,13 @@ const EmailSettings = () => {
 
   const handleResendReportToExecutives = async () => {
     try {
-      setError(null);
-      setSuccess(null);
       setResendingReport(true);
 
       await apiClient.post('/api/settings/resend-executive-report');
-      setSuccess('Executive reports have been resent successfully');
+      if (onSuccess) onSuccess('Executive reports have been resent successfully');
     } catch (error) {
       console.error('Failed to resend executive reports:', error);
-      setError(error.response?.data?.message || 'Failed to resend executive reports');
+      if (onError) onError(error.response?.data?.message || 'Failed to resend executive reports');
     } finally {
       setResendingReport(false);
     }
@@ -196,15 +183,13 @@ const EmailSettings = () => {
 
   const handleVerifyScheduler = async () => {
     try {
-      setError(null);
-      setSuccess(null);
       setVerifyingScheduler(true);
 
       await apiClient.post('/api/settings/verify-scheduler');
-      setSuccess('Scheduler settings verified and updated successfully');
+      if (onSuccess) onSuccess('Scheduler settings verified and updated successfully');
     } catch (error) {
       console.error('Failed to verify scheduler settings:', error);
-      setError(error.response?.data?.message || 'Failed to verify scheduler settings');
+      if (onError) onError(error.response?.data?.message || 'Failed to verify scheduler settings');
     } finally {
       setVerifyingScheduler(false);
     }
@@ -256,18 +241,6 @@ const EmailSettings = () => {
       <Typography variant="h5" gutterBottom>
         Email Settings
       </Typography>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
 
       <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 2 }}>
         <Tab icon={<SettingsIcon />} label="Settings" />

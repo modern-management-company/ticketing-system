@@ -31,6 +31,7 @@ import HomeOverview from './components/HomeOverview';
 import EmailSettings from './components/EmailSettings';
 import SMSSettings from './components/SMSSettings';
 import AttachmentSettings from './components/AttachmentSettings';
+import SystemSettings from './components/SystemSettings';
 import ServiceRequests from './components/ServiceRequests';
 import Welcome from './components/Welcome';
 import ViewTask from './components/ViewTask';
@@ -142,24 +143,14 @@ const App = () => {
                     <ManageUsers />
                   </ProtectedRoute>
                 } />
-                <Route path="email-settings" element={
-                  <ProtectedRoute allowedRoles={['super_admin']}>
-                    <EmailSettings />
-                  </ProtectedRoute>
-                } />
                 <Route path="history" element={
                   <ProtectedRoute allowedRoles={['super_admin']}>
                     <HistoryView />
                   </ProtectedRoute>
                 } />
-                <Route path="sms-settings" element={
+                <Route path="system-settings" element={
                   <ProtectedRoute allowedRoles={['super_admin']}>
-                    <SMSSettings />
-                  </ProtectedRoute>
-                } />
-                <Route path="attachment-settings" element={
-                  <ProtectedRoute allowedRoles={['super_admin']}>
-                    <AttachmentSettings />
+                    <SystemSettings />
                   </ProtectedRoute>
                 } />
               </Route>
