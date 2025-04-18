@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Box, 
   AppBar, 
@@ -28,12 +28,14 @@ import SmsIcon from '@mui/icons-material/Sms';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import MenuIcon from '@mui/icons-material/Menu';
 import HomeIcon from '@mui/icons-material/Home';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 
 const drawerWidth = 240;
 
-const ManagementLayout = () => {
+const ManagementLayout = ({ isSystemConsole = false }) => {
   const { auth } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -42,44 +44,70 @@ const ManagementLayout = () => {
     setMobileOpen(!mobileOpen);
   };
 
-  const menuItems = [
+  // Management console menu items
+  const managementMenuItems = [
     {
       text: 'Properties',
       icon: <BusinessIcon />,
       path: '/manage/properties',
-      roles: ['manager', 'super_admin']
+      roles: ['manager', 'general_manager', 'super_admin']
     },
     {
       text: 'Users',
       icon: <PeopleIcon />,
       path: '/manage/users',
+      roles: ['general_manager', 'super_admin']
+    }
+  ];
+
+  // System console menu items
+  const systemMenuItems = [
+    {
+      text: 'System Settings',
+      icon: <SettingsIcon />,
+      path: '/system/system-settings',
       roles: ['super_admin']
     },
     {
       text: 'History',
       icon: <HistoryIcon />,
-      path: '/manage/history',
+      path: '/system/history',
       roles: ['super_admin']
     },
     {
-      text: 'System Settings',
-      icon: <SettingsIcon />,
-      path: '/manage/system-settings',
+      text: 'Email Settings',
+      icon: <EmailIcon />,
+      path: '/system/email-settings',
+      roles: ['super_admin']
+    },
+    {
+      text: 'SMS Settings',
+      icon: <SmsIcon />,
+      path: '/system/sms-settings',
+      roles: ['super_admin']
+    },
+    {
+      text: 'Attachment Settings',
+      icon: <AttachFileIcon />,
+      path: '/system/attachment-settings',
       roles: ['super_admin']
     }
   ];
+
+  const menuItems = isSystemConsole ? systemMenuItems : managementMenuItems;
+  const consoleName = isSystemConsole ? "System Console" : "Management Console";
 
   const drawer = (
     <div>
       <Toolbar>
         <Typography variant="h6" component="div">
-          Management Console
+          {consoleName}
         </Typography>
       </Toolbar>
       <Divider />
       <List>
         {menuItems.map((item) => (
-          (item.roles.includes(auth.user.role) || auth.user.role === 'super_admin') && (
+          (item.roles.includes(auth.user.role)) && (
             <ListItem 
               button 
               key={item.text} 
@@ -95,6 +123,18 @@ const ManagementLayout = () => {
       </List>
       <Divider />
       <List>
+        {auth.user.role === 'super_admin' && !isSystemConsole && (
+          <ListItem button component={RouterLink} to="/system" onClick={() => isMobile && setMobileOpen(false)}>
+            <ListItemIcon><AdminPanelSettingsIcon /></ListItemIcon>
+            <ListItemText primary="System Console" />
+          </ListItem>
+        )}
+        {isSystemConsole && (
+          <ListItem button component={RouterLink} to="/manage" onClick={() => isMobile && setMobileOpen(false)}>
+            <ListItemIcon><BusinessIcon /></ListItemIcon>
+            <ListItemText primary="Management Console" />
+          </ListItem>
+        )}
         <ListItem button component={RouterLink} to="/home" onClick={() => isMobile && setMobileOpen(false)}>
           <ListItemIcon><HomeIcon /></ListItemIcon>
           <ListItemText primary="Back to Main App" />
@@ -105,7 +145,10 @@ const ManagementLayout = () => {
   
   return (
     <Box sx={{ display: 'flex' }}>
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+      <AppBar position="fixed" sx={{ 
+        zIndex: (theme) => theme.zIndex.drawer + 1,
+        bgcolor: isSystemConsole ? 'primary.dark' : 'primary.main' 
+      }}>
         <Toolbar>
           <IconButton
             color="inherit"
@@ -117,7 +160,7 @@ const ManagementLayout = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Management Console
+            {consoleName}
           </Typography>
         </Toolbar>
       </AppBar>

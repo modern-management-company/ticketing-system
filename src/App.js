@@ -93,6 +93,15 @@ const App = () => {
                   <ManageUsers />
                 </ProtectedRoute>
               } />
+              <Route index element={<Navigate to="properties" replace />} />
+            </Route>
+            
+            {/* System Console Routes - Super Admin Only */}
+            <Route path="/system" element={
+              <ProtectedRoute allowedRoles={['super_admin']} redirectTo="/unauthorized">
+                <ManagementLayout isSystemConsole={true} />
+              </ProtectedRoute>
+            }>
               <Route path="history" element={
                 <ProtectedRoute allowedRoles={['super_admin']}>
                   <HistoryView />
@@ -118,7 +127,7 @@ const App = () => {
                   <AttachmentSettings />
                 </ProtectedRoute>
               } />
-              <Route index element={<Navigate to="properties" replace />} />
+              <Route index element={<Navigate to="system-settings" replace />} />
             </Route>
             
             {/* Protected routes */}
