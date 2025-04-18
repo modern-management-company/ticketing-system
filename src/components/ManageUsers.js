@@ -107,15 +107,37 @@ const ManageUsers = () => {
     if (auth.role !== 'super_admin') return;
 
     try {
-      const response = await apiClient.patch(`/users/${userId}`, { role: newRole });
+      setError('');
+      setSuccess('');
+      
+      const user = users.find(u => u.user_id === userId);
+      
+      // Get current user properties before role change
+      const currentProperties = user.assigned_properties.map(p => p.property_id);
+      
+      // If changing to manager, we need to ensure PropertyManager entries are created
+      const payload = { 
+        role: newRole,
+        property_ids: currentProperties
+      };
+      
+      // Special flag when upgrading to manager to ensure backend creates proper assignments
+      if (user.role !== 'manager' && newRole === 'manager') {
+        payload.is_upgrading_to_manager = true;
+      }
+
+      const response = await apiClient.patch(`/users/${userId}`, payload);
+      
       if (response.data?.user) {
         setUsers(users.map(user =>
           user.user_id === userId ? response.data.user : user
         ));
-        setSuccess('User role updated successfully');
+        setSuccess(`User role updated successfully to ${newRole}`);
+        await fetchData(); // Refresh to get updated property manager statuses
       }
     } catch (error) {
-      setError('Failed to update user role');
+      console.error('Failed to update user role:', error);
+      setError(error.response?.data?.msg || 'Failed to update user role');
     }
   };
 
@@ -236,11 +258,21 @@ const ManageUsers = () => {
         return;
       }
 
+      // Prepare the payload
       const payload = {
         ...userFormData,
         property_ids: userFormData.assigned_properties,
         is_active: userFormData.is_active
       };
+
+      // If user is changed to manager, ensure we keep property assignments
+      if (editingUser && editingUser.role !== 'manager' && userFormData.role === 'manager') {
+        // When upgrading to manager, keep the existing property assignments
+        console.log('Upgrading user to manager role with properties:', userFormData.assigned_properties);
+        
+        // Make sure the proper PropertyManager assignments will be created in the backend
+        payload.is_upgrading_to_manager = true;
+      }
 
       let response;
       if (editingUser) {

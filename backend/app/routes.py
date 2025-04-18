@@ -1554,6 +1554,8 @@ def manage_user(user_id):
             old_group = target_user.group
             old_status = target_user.is_active
             old_phone = target_user.phone
+            old_email = target_user.email
+            old_username = target_user.username
             old_properties = set(p.property_id for p in target_user.assigned_properties)
             
             # Handle property assignments
@@ -1574,30 +1576,205 @@ def manage_user(user_id):
                 if added_properties:
                     added_names = [Property.query.get(pid).name for pid in added_properties if Property.query.get(pid)]
                     changes.append(f"Added to properties: {', '.join(added_names)}")
+                    
+                    # Record history for property assignments
+                    for pid in added_properties:
+                        prop = Property.query.get(pid)
+                        if prop:
+                            History.create_entry(
+                                entity_type='user',
+                                entity_id=user_id,
+                                action='updated',
+                                field_name='property_assignment',
+                                old_value='None',
+                                new_value=prop.name,
+                                user_id=current_user.user_id
+                            )
+                
                 if removed_properties:
                     removed_names = [Property.query.get(pid).name for pid in removed_properties if Property.query.get(pid)]
                     changes.append(f"Removed from properties: {', '.join(removed_names)}")
+                    
+                    # Record history for property removals
+                    for pid in removed_properties:
+                        prop = Property.query.get(pid)
+                        if prop:
+                            History.create_entry(
+                                entity_type='user',
+                                entity_id=user_id,
+                                action='updated',
+                                field_name='property_assignment',
+                                old_value=prop.name,
+                                new_value='None',
+                                user_id=current_user.user_id
+                            )
             
             # Update other fields
-            if 'email' in data:
+            if 'email' in data and data['email'] != old_email:
                 target_user.email = data['email']
                 changes.append(f"Email updated to: {data['email']}")
+                
+                # Record history for email change
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=user_id,
+                    action='updated',
+                    field_name='email',
+                    old_value=old_email,
+                    new_value=data['email'],
+                    user_id=current_user.user_id
+                )
             
-            if 'phone' in data:
+            if 'username' in data and data['username'] != old_username:
+                target_user.username = data['username']
+                changes.append(f"Username updated to: {data['username']}")
+                
+                # Record history for username change
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=user_id,
+                    action='updated',
+                    field_name='username',
+                    old_value=old_username,
+                    new_value=data['username'],
+                    user_id=current_user.user_id
+                )
+            
+            if 'phone' in data and data['phone'] != old_phone:
                 target_user.phone = data['phone']
                 changes.append(f"Phone updated to: {data['phone']}")
+                
+                # Record history for phone change
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=user_id,
+                    action='updated',
+                    field_name='phone',
+                    old_value=old_phone or 'None',
+                    new_value=data['phone'] or 'None',
+                    user_id=current_user.user_id
+                )
             
-            if 'is_active' in data:
+            if 'is_active' in data and data['is_active'] != old_status:
                 target_user.is_active = data['is_active']
-                changes.append(f"Account {data['is_active'] and 'activated' or 'deactivated'}")
+                status_text = 'activated' if data['is_active'] else 'deactivated'
+                changes.append(f"Account {status_text}")
+                
+                # Record history for status change
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=user_id,
+                    action='updated',
+                    field_name='status',
+                    old_value='active' if old_status else 'inactive',
+                    new_value='active' if data['is_active'] else 'inactive',
+                    user_id=current_user.user_id
+                )
             
-            if 'role' in data and current_user.role == 'super_admin':
-                target_user.role = data['role']
-                changes.append(f"Role changed from {old_role} to {data['role']}")
+            if 'role' in data and data['role'] != old_role and current_user.role == 'super_admin':
+                new_role = data['role']
+                changes.append(f"Role changed from {old_role} to {new_role}")
+                
+                # Record history for role change
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=user_id,
+                    action='updated',
+                    field_name='role',
+                    old_value=old_role,
+                    new_value=new_role,
+                    user_id=current_user.user_id
+                )
+                
+                # If changing to manager
+                if new_role == 'manager':
+                    # Get all current user properties
+                    for property_id in old_properties:
+                        # Check if PropertyManager entry already exists
+                        existing_manager = PropertyManager.query.filter_by(
+                            user_id=target_user.user_id,
+                            property_id=property_id
+                        ).first()
+                        
+                        # If not exists, create it
+                        if not existing_manager:
+                            property_manager = PropertyManager(
+                                user_id=target_user.user_id,
+                                property_id=property_id
+                            )
+                            db.session.add(property_manager)
+                            
+                            # Get property name for the log
+                            property_name = Property.query.get(property_id).name if Property.query.get(property_id) else f"Property #{property_id}"
+                            
+                            # Record history for manager property assignment
+                            History.create_entry(
+                                entity_type='user',
+                                entity_id=user_id,
+                                action='updated',
+                                field_name='manager_role',
+                                old_value='None',
+                                new_value=f"Manager for {property_name}",
+                                user_id=current_user.user_id
+                            )
+                
+                # If changing from manager
+                elif old_role == 'manager':
+                    # Get manager properties before deletion for history
+                    manager_properties = PropertyManager.query.filter_by(user_id=target_user.user_id).all()
+                    for mp in manager_properties:
+                        property_name = Property.query.get(mp.property_id).name if Property.query.get(mp.property_id) else f"Property #{mp.property_id}"
+                        
+                        # Record history for removing manager role
+                        History.create_entry(
+                            entity_type='user',
+                            entity_id=user_id,
+                            action='updated',
+                            field_name='manager_role',
+                            old_value=f"Manager for {property_name}",
+                            new_value='None',
+                            user_id=current_user.user_id
+                        )
+                    
+                    # Just remove from property_managers but keep user_properties
+                    PropertyManager.query.filter_by(user_id=target_user.user_id).delete()
+                
+                # Update the role
+                target_user.role = new_role
             
-            if 'group' in data:
+            if 'group' in data and data['group'] != old_group:
                 target_user.group = data['group']
-                changes.append(f"Group changed from {old_group or 'None'} to {data['group']}")
+                changes.append(f"Group changed from {old_group or 'None'} to {data['group'] or 'None'}")
+                
+                # Record history for group change
+                History.create_entry(
+                    entity_type='user',
+                    entity_id=user_id,
+                    action='updated',
+                    field_name='group',
+                    old_value=old_group or 'None',
+                    new_value=data['group'] or 'None',
+                    user_id=current_user.user_id
+                )
+            
+            # Handle any other user attributes that might be added in the future
+            for field, value in data.items():
+                if field not in ['role', 'username', 'email', 'phone', 'group', 'is_active', 'password', 'assigned_properties'] and hasattr(target_user, field):
+                    old_value = getattr(target_user, field)
+                    if old_value != value:
+                        setattr(target_user, field, value)
+                        changes.append(f"{field.replace('_', ' ').title()} updated to: {value}")
+                        
+                        # Record history
+                        History.create_entry(
+                            entity_type='user',
+                            entity_id=user_id,
+                            action='updated',
+                            field_name=field,
+                            old_value=str(old_value) if old_value is not None else 'None',
+                            new_value=str(value) if value is not None else 'None',
+                            user_id=current_user.user_id
+                        )
             
             db.session.commit()
 
@@ -1634,6 +1811,14 @@ def manage_user(user_id):
         elif request.method == 'DELETE':
             if current_user.role != 'super_admin':
                 return jsonify({'msg': 'Unauthorized'}), 403
+            
+            # Record history for user deletion
+            History.create_entry(
+                entity_type='user',
+                entity_id=user_id,
+                action='deleted',
+                user_id=current_user.user_id
+            )
             
             # Send deletion notification
             try:
@@ -3472,29 +3657,27 @@ def create_user():
         current_user = get_user_from_jwt()
         if not current_user:
             return jsonify({"msg": "User not found"}), 404
-            
-        # Only super_admin and managers can create users
+        
+        # Verify permissions (only super_admin and managers can create users)
         if current_user.role not in ['super_admin', 'manager']:
             return jsonify({"msg": "Unauthorized - Insufficient permissions"}), 403
-            
-        # Get and validate input data
+        
+        # Parse request data
         data = request.get_json()
         if not data:
             return jsonify({"msg": "No input data provided"}), 400
-            
-        # Validate required fields
+        
+        # Basic validation
         required_fields = ['username', 'email', 'password', 'role']
-        missing_fields = [field for field in required_fields if not data.get(field)]
-        if missing_fields:
-            return jsonify({"msg": f"Missing required fields: {', '.join(missing_fields)}"}), 400
-
-        # Check if username or email already exists
-        if User.query.filter_by(username=data['username']).first():
-            return jsonify({"msg": "Username already exists"}), 400
-        if User.query.filter_by(email=data['email']).first():
-            return jsonify({"msg": "Email already exists"}), 400
-
-        # Create new user with only the fields that exist in the model
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"msg": f"Missing required field: {field}"}), 400
+        
+        # If not super_admin, restrict role creation to 'user' only
+        if current_user.role != 'super_admin' and data['role'] in ['super_admin', 'manager']:
+            return jsonify({"msg": "Unauthorized - Cannot create users with elevated privileges"}), 403
+        
+        # Create new user
         new_user = User(
             username=data['username'],
             email=data['email'],
@@ -3511,31 +3694,40 @@ def create_user():
         db.session.add(new_user)
         db.session.flush()  # Flush to get the user_id
 
-        
-        # Record history for user creation
+        # Record history for user creation with details
         History.create_entry(
             entity_type='user',
             entity_id=new_user.user_id,
             action='created',
+            field_name='user',
+            old_value='None',
+            new_value=f"{new_user.username} ({new_user.role})",
             user_id=current_user.user_id
         )
 
         # Handle property assignments
         if 'property_ids' in data and data['property_ids']:
             for property_id in data['property_ids']:
+                # Get property for name reference
+                property_obj = Property.query.get(property_id)
+                if not property_obj:
+                    continue
+                    
                 # Create UserProperty relationship
                 user_property = UserProperty(
                     user_id=new_user.user_id,
                     property_id=property_id
                 )
                 db.session.add(user_property)
-
                 
-                # Record history for user creation
+                # Record history for property assignment
                 History.create_entry(
                     entity_type='user',
                     entity_id=new_user.user_id,
-                    action='created',
+                    action='updated',
+                    field_name='property_assignment',
+                    old_value='None',
+                    new_value=property_obj.name,
                     user_id=current_user.user_id
                 )
 
@@ -3547,14 +3739,14 @@ def create_user():
                     )
                     db.session.add(property_manager)
 
-                                        # Record history for manager role assignment
+                    # Record history for manager role assignment
                     History.create_entry(
                         entity_type='user',
                         entity_id=new_user.user_id,
                         action='updated',
                         field_name='manager_role',
                         old_value='None',
-                        new_value=f"Manager for {property.name}",
+                        new_value=f"Manager for {property_obj.name}",
                         user_id=current_user.user_id
                     )
 
@@ -3604,12 +3796,22 @@ def update_user(user_id):
         if not data:
             return jsonify({"msg": "No input data provided"}), 400
 
+        # Track changes for history and notifications
+        changes = []
+        old_role = user.role
+        old_username = user.username
+        old_email = user.email
+        old_group = user.group
+        old_phone = user.phone
+        old_status = user.is_active
+        old_properties = [p.property_id for p in user.assigned_properties]
+
         # Handle role change
         if 'role' in data and data['role'] != user.role:
             old_role = user.role
             new_role = data['role']
 
-                        # Record history for role change
+            # Record history for role change
             History.create_entry(
                 entity_type='user',
                 entity_id=user_id,
@@ -3620,27 +3822,39 @@ def update_user(user_id):
                 user_id=current_user.user_id
             )
             
+            changes.append(f"Role changed from {old_role} to {new_role}")
             
-            # If changing to manager
-            if new_role == 'manager':
-                # Get all current user properties
-                user_properties = UserProperty.query.filter_by(user_id=user.user_id).all()
+            # If changing to manager - special handling for manager role
+            is_upgrading_to_manager = data.get('is_upgrading_to_manager', False) or (old_role != 'manager' and new_role == 'manager')
+            
+            if is_upgrading_to_manager:
+                app.logger.info(f"Upgrading user {user.username} to manager role")
+                
+                # Get property IDs - either from the data or existing user properties
+                property_ids = data.get('property_ids', old_properties)
+                
+                # Log which properties are being assigned
+                app.logger.info(f"Assigning manager to properties: {property_ids}")
                 
                 # Add PropertyManager entries for all properties the user has access to
-                for up in user_properties:
+                for property_id in property_ids:
                     # Check if PropertyManager entry already exists
                     existing_manager = PropertyManager.query.filter_by(
                         user_id=user.user_id,
-                        property_id=up.property_id
+                        property_id=property_id
                     ).first()
                     
                     # If not exists, create it
                     if not existing_manager:
                         property_manager = PropertyManager(
                             user_id=user.user_id,
-                            property_id=up.property_id
+                            property_id=property_id
                         )
                         db.session.add(property_manager)
+
+                        # Get property name 
+                        property_obj = Property.query.get(property_id)
+                        property_name = property_obj.name if property_obj else f"Property #{property_id}"
 
                         # Record history for manager role assignment
                         History.create_entry(
@@ -3649,38 +3863,137 @@ def update_user(user_id):
                             action='updated',   
                             field_name='manager_role',
                             old_value='None',
-                            new_value=f"Manager for {Property.query.get(up.property_id).name}",
+                            new_value=f"Manager for {property_name}",
                             user_id=current_user.user_id
                         )
             
             # If changing from manager
             elif old_role == 'manager':
+                # Get manager properties before deletion for history
+                manager_properties = PropertyManager.query.filter_by(user_id=user.user_id).all()
+                for mp in manager_properties:
+                    property_obj = Property.query.get(mp.property_id)
+                    property_name = property_obj.name if property_obj else f"Property #{mp.property_id}"
+                    
+                    # Record history for removing manager role
+                    History.create_entry(
+                        entity_type='user',
+                        entity_id=user_id,
+                        action='updated',
+                        field_name='manager_role',
+                        old_value=f"Manager for {property_name}",
+                        new_value='None',
+                        user_id=current_user.user_id
+                    )
+                
                 # Just remove from property_managers but keep user_properties
                 PropertyManager.query.filter_by(user_id=user.user_id).delete()
             
             user.role = new_role
 
-        # Update other fields
-        if 'username' in data:
+        # Update other fields with history tracking
+        if 'username' in data and data['username'] != old_username:
             user.username = data['username']
-        if 'email' in data:
+            changes.append(f"Username changed from {old_username} to {data['username']}")
+            
+            # Record history
+            History.create_entry(
+                entity_type='user',
+                entity_id=user_id,
+                action='updated',
+                field_name='username',
+                old_value=old_username,
+                new_value=data['username'],
+                user_id=current_user.user_id
+            )
+            
+        if 'email' in data and data['email'] != old_email:
             user.email = data['email']
-        if 'group' in data:
+            changes.append(f"Email changed from {old_email} to {data['email']}")
+            
+            # Record history
+            History.create_entry(
+                entity_type='user',
+                entity_id=user_id,
+                action='updated',
+                field_name='email',
+                old_value=old_email,
+                new_value=data['email'],
+                user_id=current_user.user_id
+            )
+            
+        if 'group' in data and data['group'] != old_group:
             user.group = data['group']
-        if 'phone' in data:
+            changes.append(f"Group changed from {old_group or 'None'} to {data['group'] or 'None'}")
+            
+            # Record history
+            History.create_entry(
+                entity_type='user',
+                entity_id=user_id,
+                action='updated',
+                field_name='group',
+                old_value=old_group or 'None',
+                new_value=data['group'] or 'None',
+                user_id=current_user.user_id
+            )
+            
+        if 'phone' in data and data['phone'] != old_phone:
             user.phone = data['phone']
-        if 'is_active' in data:
+            changes.append(f"Phone changed from {old_phone or 'None'} to {data['phone'] or 'None'}")
+            
+            # Record history
+            History.create_entry(
+                entity_type='user',
+                entity_id=user_id,
+                action='updated',
+                field_name='phone',
+                old_value=old_phone or 'None',
+                new_value=data['phone'] or 'None',
+                user_id=current_user.user_id
+            )
+            
+        if 'is_active' in data and data['is_active'] != old_status:
             user.is_active = data['is_active']
+            status_text = 'activated' if data['is_active'] else 'deactivated'
+            changes.append(f"Account {status_text}")
+            
+            # Record history
+            History.create_entry(
+                entity_type='user',
+                entity_id=user_id,
+                action='updated',
+                field_name='status',
+                old_value='active' if old_status else 'inactive',
+                new_value='active' if data['is_active'] else 'inactive',
+                user_id=current_user.user_id
+            )
+            
         if 'password' in data:
             user.set_password(data['password'])
+            changes.append("Password updated")
+            
+            # Record history (don't store actual password values)
+            History.create_entry(
+                entity_type='user',
+                entity_id=user_id,
+                action='updated',
+                field_name='password',
+                old_value='*****',
+                new_value='*****',
+                user_id=current_user.user_id
+            )
 
         # Handle property assignments
         if 'property_ids' in data:
-            # Store old property assignments before deletion if user is a manager
-            old_property_ids = None
-            if user.role == 'manager':
-                old_property_ids = [p.property_id for p in user.assigned_properties]
-
+            # Store old property assignments for history
+            old_property_ids = [p.property_id for p in user.assigned_properties]
+            old_property_set = set(old_property_ids)
+            new_property_set = set(data['property_ids'])
+            
+            # Determine added and removed properties
+            added_properties = new_property_set - old_property_set
+            removed_properties = old_property_set - new_property_set
+            
             # Remove all current property assignments
             UserProperty.query.filter_by(user_id=user.user_id).delete()
             if user.role == 'manager':
@@ -3695,13 +4008,22 @@ def update_user(user_id):
                 )
                 db.session.add(user_property)
                 
-                # Record history for user creation
-                History.create_entry(
-                    entity_type='user',
-                    entity_id=user.user_id,
-                    action='updated',
-                    user_id=current_user.user_id
-                )   
+                # Get property name for history
+                property_obj = Property.query.get(property_id)
+                property_name = property_obj.name if property_obj else f"Property #{property_id}"
+                
+                # Record history for added properties
+                if property_id in added_properties:
+                    History.create_entry(
+                        entity_type='user',
+                        entity_id=user.user_id,
+                        action='updated',
+                        field_name='property_assignment',
+                        old_value='None',
+                        new_value=property_name,
+                        user_id=current_user.user_id
+                    )   
+                
                 # Add PropertyManager only for managers
                 if user.role == 'manager':
                     property_manager = PropertyManager(
@@ -3715,6 +4037,9 @@ def update_user(user_id):
                         entity_type='user',
                         entity_id=user.user_id,
                         action='updated',
+                        field_name='manager_role',
+                        old_value='None' if property_id in added_properties else 'Reassigned',
+                        new_value=f"Manager for {property_name}",
                         user_id=current_user.user_id
                     )
 
