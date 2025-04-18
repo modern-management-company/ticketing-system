@@ -2218,7 +2218,7 @@ def assign_property():
         if not current_user:
             return jsonify({'message': 'User not found'}), 404
 
-        if current_user.role not in ['super_admin', 'manager']:
+        if current_user.role not in ['super_admin', 'manager', 'general_manager']:
             return jsonify({'message': 'Unauthorized'}), 403
 
         data = request.get_json()
@@ -2231,15 +2231,15 @@ def assign_property():
             return jsonify({'message': 'User not found'}), 404
 
         # For manager assignments, verify the assigner has permission
-        if is_manager_assignment and current_user.role != 'super_admin':
-            return jsonify({'message': 'Only super admins can assign manager properties'}), 403
+        if is_manager_assignment and current_user.role not in ['super_admin', 'general_manager']:
+            return jsonify({'message': 'Only super admins and general managers can assign manager properties'}), 403
 
         # Clear existing property assignments based on type
         if is_manager_assignment:
             PropertyManager.query.filter_by(user_id=user_id).delete()
         else:
             UserProperty.query.filter_by(user_id=user_id).delete()
-
+        
         # Add new property assignments
         for property_id in property_ids:
             property = Property.query.get(property_id)
@@ -2270,7 +2270,7 @@ def assign_property():
 @jwt_required()
 def remove_property_assignment():
     current_user = get_jwt_identity()
-    if current_user['role'] not in ['super_admin', 'manager']:
+    if current_user['role'] not in ['super_admin', 'manager', 'general_manager']:
         return jsonify({'message': 'Unauthorized'}), 403
 
     data = request.get_json()
@@ -2321,8 +2321,8 @@ def get_managed_properties(user_id):
         return jsonify({'message': 'Unauthorized'}), 403
 
     user = User.query.get(user_id)
-    if not user or user.role != 'manager':
-        return jsonify({'message': 'User not found or not a manager'}), 404
+    if not user or user.role not in ['manager', 'general_manager']:
+        return jsonify({'message': 'User not found or not a manager/general manager'}), 404
 
     managed_properties = Property.query.filter(Property.managers.any(user_id=user_id)).all()
 
