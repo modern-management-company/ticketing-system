@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchTicketHistory, fetchTaskHistory, getCompletedInfo } from './historyHelpers';
 import { useAuth } from '../context/AuthContext';
 import apiClient from './apiClient';
 import {
@@ -157,11 +158,55 @@ const Reports = () => {
           task?.status?.toLowerCase() !== 'completed'
         );
       }
-      
+
+      // Fetch and attach completion info for tickets and tasks
+      // (Do this in parallel for performance)
+      const ticketWithHistory = await Promise.all(
+        allTickets.map(async (ticket) => {
+          const history = await fetchTicketHistory(ticket.ticket_id);
+          console.log('Ticket', ticket.ticket_id, 'history:', history);
+          const { completedBy, completedAt } = getCompletedInfo(history);
+          return {
+            ...ticket,
+            completed_by: completedBy,
+            completed_at: completedAt,
+            history: history.map(h => ({
+              action: h.action,
+              user: h.user_name || h.user || 'Unknown',
+              timestamp: h.created_at || h.timestamp,
+              old_status: h.old_value,
+              new_status: h.new_value,
+            }))
+          };
+        })
+      );
+
+      // Only declare taskWithHistory once (with debug logging)
+      const taskWithHistory = await Promise.all(
+        allTasks.map(async (task) => {
+          const history = await fetchTaskHistory(task.task_id);
+          console.log('Task', task.task_id, 'history:', history);
+          const { completedBy, completedAt } = getCompletedInfo(history);
+          return {
+            ...task,
+            completed_by: completedBy,
+            completed_at: completedAt,
+            history: history.map(h => ({
+              action: h.action,
+              user: h.user_name || h.user || 'Unknown',
+              timestamp: h.created_at || h.timestamp,
+              old_status: h.old_value,
+              new_status: h.new_value,
+            }))
+          };
+        })
+      );
+
+
       console.log('Raw data fetched:', {
-        tickets: allTickets.length,
+        tickets: ticketWithHistory.length,
         requests: allRequests.length,
-        tasks: allTasks.length
+        tasks: taskWithHistory.length
       });
       
       // Apply client-side filtering if a room is selected
@@ -201,8 +246,8 @@ const Reports = () => {
       }
 
       setReportData({
-        tickets: allTickets || [],
-        tasks: allTasks || [],
+        tickets: ticketWithHistory || [],
+        tasks: taskWithHistory || [],
         requests: allRequests || []
       });
     } catch (error) {
@@ -239,7 +284,9 @@ const Reports = () => {
           item.status,
           item.priority,
           item.created_by_username,
-          format(new Date(item.created_at), 'MM/dd/yyyy HH:mm')
+          format(new Date(item.created_at), 'MM/dd/yyyy HH:mm'),
+          item.completed_at ? format(new Date(item.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A',
+          item.completed_by || 'N/A'
         ];
       } else if (type === 'tasks') {
         return [
@@ -250,7 +297,9 @@ const Reports = () => {
           item.priority,
           item.assigned_to || 'Unassigned',
           item.ticket_id ? `Ticket #${item.ticket_id}` : 'None',
-          item.due_date ? format(new Date(item.due_date), 'MM/dd/yyyy') : 'No due date'
+          item.due_date ? format(new Date(item.due_date), 'MM/dd/yyyy') : 'No due date',
+          item.completed_at ? format(new Date(item.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A',
+          item.completed_by || 'N/A'
         ];
       } else if (type === 'requests') {
         return [
@@ -267,9 +316,9 @@ const Reports = () => {
     });
 
     const columns = type === 'tickets' 
-      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Created At']
+      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Created At', 'Completed At', 'Completed By']
       : type === 'tasks'
-      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Assigned To', 'Linked To', 'Due Date']
+      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Assigned To', 'Linked To', 'Due Date', 'Completed At', 'Completed By']
       : ['ID', 'Type', 'Room', 'Group', 'Status', 'Priority', 'Guest', 'Created At'];
 
     doc.autoTable({
@@ -523,6 +572,10 @@ const Reports = () => {
                         </TableCell>
                         <TableCell>
                           {ticket.completed_at ? format(new Date(ticket.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
+                          <br />
+                          {ticket.completed_by && (
+                            <span style={{fontSize: '0.8em', color: '#666'}}>by {ticket.completed_by}</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Box sx={{ maxHeight: '100px', overflow: 'auto' }}>
@@ -594,6 +647,10 @@ const Reports = () => {
                         </TableCell>
                         <TableCell>
                           {task.completed_at ? format(new Date(task.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
+                          <br />
+                          {task.completed_by && (
+                            <span style={{fontSize: '0.8em', color: '#666'}}>by {task.completed_by}</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Box sx={{ maxHeight: '100px', overflow: 'auto' }}>

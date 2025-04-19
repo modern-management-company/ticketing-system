@@ -1100,6 +1100,16 @@ def manage_task(task_id):
                     new_value=data['status'],
                     user_id=current_user.user_id
                 )
+                db.session.commit()
+                # If completed, record completion event
+                if data['status'] == 'completed' and old_value != 'completed':
+                    History.create_entry(
+                        entity_type='task',
+                        entity_id=task_id,
+                        action='completed',
+                        user_id=current_user.user_id
+                    )
+                    db.session.commit()
                 # Update associated task assignment and ticket
                 task_assignment = TaskAssignment.query.filter_by(task_id=task_id).first()
                 if task_assignment:
@@ -1109,6 +1119,14 @@ def manage_task(task_id):
                         # Map task status to ticket status
                         if data['status'] == 'completed':
                             ticket.status = 'completed'
+                            # Record ticket completion event
+                            History.create_entry(
+                                entity_type='ticket',
+                                entity_id=ticket.ticket_id,
+                                action='completed',
+                                user_id=current_user.user_id
+                            )
+                            db.session.commit()
                         elif data['status'] == 'in progress':
                             ticket.status = 'in progress'
                         elif data['status'] == 'pending':
@@ -2994,6 +3012,7 @@ def manage_ticket(ticket_id):
                             new_value=str(new_value),
                             user_id=current_user.user_id
                         )
+                        db.session.commit()
 
             # Handle status and priority updates with task synchronization
             if 'status' in data:
@@ -3012,7 +3031,16 @@ def manage_ticket(ticket_id):
                         new_value=new_status,
                         user_id=current_user.user_id
                     )
-                    
+                    db.session.commit()
+                    # If completed, record completion event
+                    if new_status == 'completed':
+                        History.create_entry(
+                            entity_type='ticket',
+                            entity_id=ticket_id,
+                            action='completed',
+                            user_id=current_user.user_id
+                        )
+                        db.session.commit()
                     # Update associated task status
                     task_assignment = TaskAssignment.query.filter_by(ticket_id=ticket_id).first()
                     if task_assignment:
@@ -3021,6 +3049,14 @@ def manage_ticket(ticket_id):
                             # Map ticket status to task status
                             if new_status == 'completed':
                                 task.status = 'completed'
+                                # Record task completion event
+                                History.create_entry(
+                                    entity_type='task',
+                                    entity_id=task.task_id,
+                                    action='completed',
+                                    user_id=current_user.user_id
+                                )
+                                db.session.commit()
                             elif new_status == 'in progress':
                                 task.status = 'in progress'
                             elif new_status == 'open':
