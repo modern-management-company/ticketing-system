@@ -2166,32 +2166,85 @@ def property_report():
 @jwt_required()
 def task_report():
     tasks = TaskAssignment.query.all()
-    task_data = [{
-        'task_id': task.task_id,
-        'ticket_id': task.ticket_id,
-        'assigned_to_user_id': task.assigned_to_user_id,
-        'status': task.status,
-        # Add ticket_type while maintaining existing fields
-        'ticket_type': task.ticket_type,  # This will be 'ticket' or 'service_request'
-        # Keep backward compatibility by providing type info in multiple formats
-        'is_service_request': task.ticket_type == 'service_request'
-    } for task in tasks]
+    task_data = []
+    for task in tasks:
+        # Get task history
+        history = History.query.filter_by(
+            entity_type='task',
+            entity_id=task.task_id
+        ).order_by(History.created_at.desc()).all()
+        
+        # Get assignment history
+        assignment_history = []
+        for h in history:
+            if h.action == 'assigned':
+                assigned_user = User.query.get(h.user_id)
+                assignment_history.append({
+                    'assigned_to': assigned_user.username if assigned_user else 'Unknown',
+                    'assigned_at': h.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    'assigned_by': h.created_by_username
+                })
+            elif h.action == 'completed':
+                completed_by = User.query.get(h.user_id)
+                assignment_history.append({
+                    'completed_by': completed_by.username if completed_by else 'Unknown',
+                    'completed_at': h.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                })
+        
+        task_data.append({
+            'task_id': task.task_id,
+            'ticket_id': task.ticket_id,
+            'assigned_to_user_id': task.assigned_to_user_id,
+            'status': task.status,
+            'ticket_type': task.ticket_type,
+            'is_service_request': task.ticket_type == 'service_request',
+            'created_at': task.created_at.strftime('%Y-%m-%d %H:%M:%S') if task.created_at else None,
+            'completed_at': task.completed_at.strftime('%Y-%m-%d %H:%M:%S') if task.completed_at else None,
+            'history': assignment_history,
+            'current_assigned_to': User.query.get(task.assigned_to_user_id).username if task.assigned_to_user_id else 'Unassigned'
+        })
     return jsonify({'tasks': task_data})
 
 @app.route('/reports/tickets', methods=['GET'])
 @jwt_required()
 def ticket_report():
     tickets = Ticket.query.all()
-    ticket_data = [{
-        'ticket_id': ticket.ticket_id,
-        'title': ticket.title,
-        'status': ticket.status,
-        'priority': ticket.priority,
-        'category': ticket.category,
-        'user_id': ticket.user_id,
-        'property_id': ticket.property_id,
-        'created_at': ticket.created_at.strftime('%Y-%m-%d %H:%M:%S') if ticket.created_at else None
-    } for ticket in tickets]
+    ticket_data = []
+    for ticket in tickets:
+        # Get ticket history
+        history = History.query.filter_by(
+            entity_type='ticket',
+            entity_id=ticket.ticket_id
+        ).order_by(History.created_at.desc()).all()
+        
+        # Get status history
+        status_history = []
+        for h in history:
+            if h.action in ['created', 'status_changed', 'completed']:
+                user = User.query.get(h.user_id)
+                status_history.append({
+                    'action': h.action,
+                    'user': user.username if user else 'Unknown',
+                    'timestamp': h.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    'old_status': h.old_value if hasattr(h, 'old_value') else None,
+                    'new_status': h.new_value if hasattr(h, 'new_value') else None
+                })
+        
+        creator = User.query.get(ticket.user_id)
+        ticket_data.append({
+            'ticket_id': ticket.ticket_id,
+            'title': ticket.title,
+            'status': ticket.status,
+            'priority': ticket.priority,
+            'category': ticket.category,
+            'user_id': ticket.user_id,
+            'property_id': ticket.property_id,
+            'created_at': ticket.created_at.strftime('%Y-%m-%d %H:%M:%S') if ticket.created_at else None,
+            'completed_at': ticket.completed_at.strftime('%Y-%m-%d %H:%M:%S') if ticket.completed_at else None,
+            'created_by': creator.username if creator else 'Unknown',
+            'room_name': ticket.room_name if hasattr(ticket, 'room_name') else 'N/A',
+            'history': status_history
+        })
     return jsonify({'tickets': ticket_data})
 
 @app.route('/switch_property', methods=['POST'])
@@ -4297,7 +4350,10 @@ def send_report_email():
                     'status': t.status,
                     'priority': t.priority,
                     'assigned_to': assigned_user.username if assigned_user else 'Unassigned',
-                    'due_date': t.due_date.strftime('%m/%d/%Y') if t.due_date else 'No due date'
+                    'due_date': t.due_date.strftime('%m/%d/%Y') if t.due_date else 'No due date',
+                    'created_at': t.created_at.strftime('%m/%d/%Y %H:%M') if t.created_at else 'N/A',
+                    'completed_at': t.completed_at.strftime('%m/%d/%Y %H:%M') if t.completed_at else 'N/A',
+                    'history': t.history if hasattr(t, 'history') else []
                 })
         elif report_type == 'requests':
             requests = ServiceRequest.query.filter_by(property_id=data['property_id']).all()
@@ -4328,6 +4384,7 @@ def send_report_email():
                 .high {{ color: #fd7e14; }}
                 .medium {{ color: #ffc107; }}
                 .low {{ color: #28a745; }}
+                .history {{ margin-top: 10px; font-size: 0.9em; color: #666; }}
             </style>
         </head>
         <body>
@@ -4339,14 +4396,15 @@ def send_report_email():
             <table>
                 <thead>
                     <tr>
-                        {''.join(f'<th>{key.replace("_", " ").title()}</th>' for key in items[0].keys() if key != 'id')}
+                        {''.join(f'<th>{key.replace("_", " ").title()}</th>' for key in items[0].keys() if key not in ['id', 'history'])}
                     </tr>
                 </thead>
                 <tbody>
                     {''.join(f'''
                     <tr>
-                        {''.join(f'<td class="{item["priority"].lower()}">{value}</td>' for key, value in item.items() if key != 'id')}
+                        {''.join(f'<td class="{item["priority"].lower()}">{value}</td>' for key, value in item.items() if key not in ['id', 'history'])}
                     </tr>
+                    {f'<tr><td colspan="{len(items[0].keys()) - 2}"><div class="history">{item.get("history", [])}</div></td></tr>' if report_type == 'tasks' and item.get('history') else ''}
                     ''' for item in items)}
                 </tbody>
             </table>
@@ -4354,14 +4412,25 @@ def send_report_email():
         </html>
         """
 
-        # Send email
+        # Get recipient emails
+        if 'user_ids' in data and data['user_ids']:
+            recipients = User.query.filter(User.user_id.in_(data['user_ids'])).all()
+            recipient_emails = [user.email for user in recipients]
+        else:
+            recipient_emails = [current_user.email]
+
+        # Send email to all recipients
         email_service = EmailService()
-        success = email_service.send_report_email(
-            to_email=current_user.email,
-            subject=f"{report_type.capitalize()} Report - {property.name}",
-            content=html_content,
-            is_html=True
-        )
+        success = True
+        for email in recipient_emails:
+            if not email_service.send_report_email(
+                to_email=email,
+                subject=f"{report_type.capitalize()} Report - {property.name}",
+                content=html_content,
+                is_html=True
+            ):
+                success = False
+                break
 
         if success:
             return jsonify({

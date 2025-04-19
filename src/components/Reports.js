@@ -71,6 +71,14 @@ const Reports = () => {
   const [properties, setProperties] = useState([]);
   const [hideCompleted, setHideCompleted] = useState(true);
   const [reportType, setReportType] = useState('tickets');
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [openEmailDialog, setOpenEmailDialog] = useState(false);
+  const [dateRange, setDateRange] = useState({
+    start: new Date(),
+    end: new Date()
+  });
+  const [openDateRangePicker, setOpenDateRangePicker] = useState(false);
 
   useEffect(() => {
     fetchProperties();
@@ -123,13 +131,14 @@ const Reports = () => {
       setLoading(true);
       setError(null);
 
-      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+      const formattedStartDate = format(dateRange.start, 'yyyy-MM-dd');
+      const formattedEndDate = format(dateRange.end, 'yyyy-MM-dd');
       
       // Fetch all data without room filtering
       const [ticketsRes, requestsRes, tasksRes] = await Promise.all([
-        apiClient.get(`/properties/${selectedProperty}/tickets?date=${formattedDate}`),
-        apiClient.get(`/service-requests?property_id=${selectedProperty}`),
-        apiClient.get(`/properties/${selectedProperty}/tasks?date=${formattedDate}`)
+        apiClient.get(`/properties/${selectedProperty}/tickets?start_date=${formattedStartDate}&end_date=${formattedEndDate}`),
+        apiClient.get(`/service-requests?property_id=${selectedProperty}&start_date=${formattedStartDate}&end_date=${formattedEndDate}`),
+        apiClient.get(`/properties/${selectedProperty}/tasks?start_date=${formattedStartDate}&end_date=${formattedEndDate}`)
       ]);
 
       let allTickets = ticketsRes.data?.tickets || [];
@@ -275,17 +284,38 @@ const Reports = () => {
     doc.save(`${type}_report_${format(selectedDate, 'yyyy-MM-dd')}.pdf`);
   };
 
+  const fetchUsers = async () => {
+    if (!selectedProperty) return;
+    try {
+      const response = await apiClient.get(`/properties/${selectedProperty}/users`);
+      if (response.data) {
+        setUsers(response.data.users);
+      }
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+      setError('Failed to load users');
+    }
+  };
+
+  useEffect(() => {
+    if (selectedProperty) {
+      fetchUsers();
+    }
+  }, [selectedProperty]);
+
   const handleSendEmail = async () => {
     try {
       setLoading(true);
       const response = await apiClient.post('/api/reports/send-email', {
         property_id: selectedProperty,
         date: format(selectedDate, 'yyyy-MM-dd'),
-        type: reportType
+        type: reportType,
+        user_ids: selectedUsers.map(user => user.user_id)
       });
 
       if (response.data && response.data.success) {
-        toast.success('Report sent to your email successfully');
+        toast.success('Report sent successfully');
+        setOpenEmailDialog(false);
       } else {
         throw new Error(response.data?.message || 'Failed to send report email');
       }
@@ -310,49 +340,56 @@ const Reports = () => {
         <Grid item xs={12} md={3}>
           <PropertySwitcher onPropertyChange={setSelectedProperty} />
         </Grid>
-        <Grid item xs={12} md={3}>
-          <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <TextField
-              fullWidth
-              value={format(selectedDate, 'MM/dd/yyyy')}
-              onClick={() => setOpenDatePicker(true)}
-              label="Select Date"
-              inputProps={{ readOnly: true }}
-            />
-            <Dialog open={openDatePicker} onClose={() => setOpenDatePicker(false)}>
-              <DialogContent>
-                <StaticDatePicker
-                  displayStaticWrapperAs="desktop"
-                  value={selectedDate}
-                  onChange={(newValue) => {
-                    setSelectedDate(newValue);
-                    setOpenDatePicker(false);
-                  }}
-                />
-              </DialogContent>
-            </Dialog>
-          </LocalizationProvider>
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Date Range
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <TextField
+                fullWidth
+                value={`${format(dateRange.start, 'MM/dd/yyyy')} - ${format(dateRange.end, 'MM/dd/yyyy')}`}
+                onClick={() => setOpenDateRangePicker(true)}
+                label="Select Date Range"
+                inputProps={{ readOnly: true }}
+              />
+              <Dialog open={openDateRangePicker} onClose={() => setOpenDateRangePicker(false)}>
+                <DialogContent>
+                  <LocalizationProvider dateAdapter={AdapterDateFns}>
+                    <StaticDatePicker
+                      displayStaticWrapperAs="desktop"
+                      value={dateRange.start}
+                      onChange={(newValue) => {
+                        setDateRange(prev => ({ ...prev, start: newValue }));
+                      }}
+                      renderInput={(params) => <TextField {...params} />}
+                    />
+                    <StaticDatePicker
+                      displayStaticWrapperAs="desktop"
+                      value={dateRange.end}
+                      onChange={(newValue) => {
+                        setDateRange(prev => ({ ...prev, end: newValue }));
+                      }}
+                      renderInput={(params) => <TextField {...params} />}
+                    />
+                  </LocalizationProvider>
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                    <Button onClick={() => setOpenDateRangePicker(false)}>Cancel</Button>
+                    <Button
+                      variant="contained"
+                      onClick={() => {
+                        setOpenDateRangePicker(false);
+                        fetchReportData();
+                      }}
+                    >
+                      Apply
+                    </Button>
+                  </Box>
+                </DialogContent>
+              </Dialog>
+            </Box>
+          </Paper>
         </Grid>
-        
-        <Grid item xs={12} md={3}>
-          <FormControl fullWidth>
-            <InputLabel>Filter by Room</InputLabel>
-            <Select
-              value={selectedRoom}
-              onChange={(e) => setSelectedRoom(e.target.value)}
-              label="Filter by Room"
-              disabled={!selectedProperty || rooms.length === 0}
-            >
-              <MenuItem value="all">All Rooms</MenuItem>
-              {rooms.map((room) => (
-                <MenuItem key={room.room_id} value={room.room_id}>
-                  {room.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-
         <Grid item xs={12} md={3}>
           <Paper sx={{ p: 2 }}>
             <FormControlLabel
@@ -400,25 +437,31 @@ const Reports = () => {
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2}>
           <Grid item xs={4}>
-            <Typography variant="h6">
-              Active Tickets: {reportData.tickets.length}
-            </Typography>
+            <Paper sx={{ p: 2, bgcolor: '#e3f2fd' }}>
+              <Typography variant="h6" color="primary">
+                Active Tickets: {reportData.tickets.length}
+              </Typography>
+            </Paper>
           </Grid>
           <Grid item xs={4}>
-            <Typography variant="h6">
-              Active Service Requests: {reportData.requests.length}
-            </Typography>
+            <Paper sx={{ p: 2, bgcolor: '#f3e5f5' }}>
+              <Typography variant="h6" color="secondary">
+                Active Service Requests: {reportData.requests.length}
+              </Typography>
+            </Paper>
           </Grid>
           <Grid item xs={4}>
-            <Typography variant="h6">
-              Active Tasks: {reportData.tasks.length}
-            </Typography>
+            <Paper sx={{ p: 2, bgcolor: '#e8f5e9' }}>
+              <Typography variant="h6" color="success.main">
+                Active Tasks: {reportData.tasks.length}
+              </Typography>
+            </Paper>
           </Grid>
         </Grid>
       </Paper>
 
       <Paper sx={{ width: '100%', mb: 2 }}>
-        <Tabs value={tabValue} onChange={handleTabChange}>
+        <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tab label="Tickets Report" />
           <Tab label="Tasks Report" />
           <Tab label="Service Requests Report" />
@@ -445,10 +488,10 @@ const Reports = () => {
                 <Button
                   variant="contained"
                   color="secondary"
-                  onClick={handleSendEmail}
-                  disabled={!reportData.tickets.length || loading}
+                  onClick={() => setOpenEmailDialog(true)}
+                  disabled={!reportData.tickets.length}
                 >
-                  {loading ? 'Sending...' : 'Send to Email'}
+                  Send to Email
                 </Button>
               </Box>
               <TableContainer>
@@ -462,6 +505,8 @@ const Reports = () => {
                       <TableCell>Priority</TableCell>
                       <TableCell>Created By</TableCell>
                       <TableCell>Created At</TableCell>
+                      <TableCell>Completed At</TableCell>
+                      <TableCell>History</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -469,12 +514,28 @@ const Reports = () => {
                       <TableRow key={ticket.ticket_id}>
                         <TableCell>{ticket.ticket_id}</TableCell>
                         <TableCell>{ticket.title}</TableCell>
-                        <TableCell>{ticket.room_name || 'N/A'}</TableCell>
+                        <TableCell>{ticket.room_name}</TableCell>
                         <TableCell>{ticket.status}</TableCell>
                         <TableCell>{ticket.priority}</TableCell>
-                        <TableCell>{ticket.created_by_username}</TableCell>
+                        <TableCell>{ticket.created_by}</TableCell>
                         <TableCell>
-                          {format(new Date(ticket.created_at), 'MM/dd/yyyy HH:mm')}
+                          {ticket.created_at ? format(new Date(ticket.created_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          {ticket.completed_at ? format(new Date(ticket.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ maxHeight: '100px', overflow: 'auto' }}>
+                            {ticket.history.map((h, index) => (
+                              <Box key={index} sx={{ mb: 1 }}>
+                                <Typography variant="body2">
+                                  {h.action === 'created' && `Created by ${h.user} at ${format(new Date(h.timestamp), 'MM/dd/yyyy HH:mm')}`}
+                                  {h.action === 'status_changed' && `Status changed from ${h.old_status} to ${h.new_status} by ${h.user} at ${format(new Date(h.timestamp), 'MM/dd/yyyy HH:mm')}`}
+                                  {h.action === 'completed' && `Completed by ${h.user} at ${format(new Date(h.timestamp), 'MM/dd/yyyy HH:mm')}`}
+                                </Typography>
+                              </Box>
+                            ))}
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -498,10 +559,10 @@ const Reports = () => {
                 <Button
                   variant="contained"
                   color="secondary"
-                  onClick={handleSendEmail}
-                  disabled={!reportData.tasks.length || loading}
+                  onClick={() => setOpenEmailDialog(true)}
+                  disabled={!reportData.tasks.length}
                 >
-                  {loading ? 'Sending...' : 'Send to Email'}
+                  Send to Email
                 </Button>
               </Box>
               <TableContainer>
@@ -513,9 +574,10 @@ const Reports = () => {
                       <TableCell>Room</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
-                      <TableCell>Assigned To</TableCell>
-                      <TableCell>Related To</TableCell>
-                      <TableCell>Due Date</TableCell>
+                      <TableCell>Current Assignee</TableCell>
+                      <TableCell>Created At</TableCell>
+                      <TableCell>Completed At</TableCell>
+                      <TableCell>History</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -526,16 +588,30 @@ const Reports = () => {
                         <TableCell>{task.room_info?.room_name || 'N/A'}</TableCell>
                         <TableCell>{task.status}</TableCell>
                         <TableCell>{task.priority}</TableCell>
-                        <TableCell>{task.assigned_to || 'Unassigned'}</TableCell>
+                        <TableCell>{task.current_assigned_to}</TableCell>
                         <TableCell>
-                          {task.ticket_id ? (
-                            `Ticket #${task.ticket_id}`
-                          ) : (
-                            'None'
-                          )}
+                          {task.created_at ? format(new Date(task.created_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
                         </TableCell>
                         <TableCell>
-                          {task.due_date ? format(new Date(task.due_date), 'MM/dd/yyyy') : 'No due date'}
+                          {task.completed_at ? format(new Date(task.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ maxHeight: '100px', overflow: 'auto' }}>
+                            {task.history.map((h, index) => (
+                              <Box key={index} sx={{ mb: 1 }}>
+                                {h.assigned_to && (
+                                  <Typography variant="body2">
+                                    Assigned to {h.assigned_to} by {h.assigned_by} at {format(new Date(h.assigned_at), 'MM/dd/yyyy HH:mm')}
+                                  </Typography>
+                                )}
+                                {h.completed_by && (
+                                  <Typography variant="body2">
+                                    Completed by {h.completed_by} at {format(new Date(h.completed_at), 'MM/dd/yyyy HH:mm')}
+                                  </Typography>
+                                )}
+                              </Box>
+                            ))}
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -559,10 +635,10 @@ const Reports = () => {
                 <Button
                   variant="contained"
                   color="secondary"
-                  onClick={handleSendEmail}
-                  disabled={!reportData.requests.length || loading}
+                  onClick={() => setOpenEmailDialog(true)}
+                  disabled={!reportData.requests.length}
                 >
-                  {loading ? 'Sending...' : 'Send to Email'}
+                  Send to Email
                 </Button>
               </Box>
               <TableContainer>
@@ -601,6 +677,40 @@ const Reports = () => {
           </>
         )}
       </Paper>
+
+      <Dialog open={openEmailDialog} onClose={() => setOpenEmailDialog(false)}>
+        <DialogContent>
+          <Typography variant="h6" gutterBottom>
+            Select Users to Email
+          </Typography>
+          <Autocomplete
+            multiple
+            options={users}
+            getOptionLabel={(option) => option.username}
+            value={selectedUsers}
+            onChange={(event, newValue) => {
+              setSelectedUsers(newValue);
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Select Users"
+                placeholder="Choose users to email"
+              />
+            )}
+          />
+          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button onClick={() => setOpenEmailDialog(false)}>Cancel</Button>
+            <Button
+              variant="contained"
+              onClick={handleSendEmail}
+              disabled={loading || selectedUsers.length === 0}
+            >
+              {loading ? 'Sending...' : 'Send'}
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
