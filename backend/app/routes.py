@@ -665,7 +665,7 @@ def manage_property_room(property_id, room_id):
         # Check if user has permission to manage this property
         if current_user.role == 'super_admin':
             property = Property.query.get(property_id)
-        elif current_user.role == 'manager':
+        elif current_user.role in ['manager', 'general_manager']:
             # Use the PropertyManager relationship to check if user manages this property
             property = Property.query.filter(
                 Property.property_id == property_id,
@@ -688,8 +688,8 @@ def manage_property_room(property_id, room_id):
         if request.method == 'GET':
             return jsonify(room.to_dict())
 
-        # Only managers and super_admins can modify rooms
-        if current_user.role not in ['super_admin', 'manager']:
+        # Only managers, general managers and super_admins can modify rooms
+        if current_user.role not in ['super_admin', 'manager', 'general_manager']:
             app.logger.warning(f"User {current_user.user_id} attempted to modify room without permission")
             return jsonify({"msg": "Unauthorized"}), 403
 
@@ -971,7 +971,7 @@ def get_tasks():
         )
 
         # Get tasks based on user role
-        if current_user.role == 'super_admin':
+        if current_user.role == 'super_admin' or current_user.role == 'general_manager':
             tasks_query = base_query
         elif current_user.role == 'manager':
             # Get tasks for properties managed by this manager
@@ -1030,7 +1030,7 @@ def manage_task(task_id):
             return jsonify({"msg": "Task not found"}), 404
 
         # Check authorization
-        if current_user.role not in ['super_admin', 'manager'] and task.assigned_to_id != current_user.user_id:
+        if current_user.role not in ['super_admin', 'manager', 'general_manager'] and task.assigned_to_id != current_user.user_id:
             return jsonify({'msg': 'Unauthorized'}), 403
 
         if request.method == 'GET':
@@ -1290,7 +1290,7 @@ def manage_task(task_id):
                 return jsonify({'msg': 'Failed to update task'}), 500
 
         elif request.method == 'DELETE':
-            if current_user.role not in ['super_admin', 'manager']:
+            if current_user.role not in ['super_admin', 'manager', 'general_manager']:
                 return jsonify({'msg': 'Unauthorized'}), 403
                 
             # Record history before deletion
@@ -1938,11 +1938,11 @@ def manage_property(property_id):
             return jsonify(property.to_dict())
 
         # Check authorization for PUT and DELETE
-        if current_user.role not in ['super_admin', 'manager']:
-            return jsonify({'message': 'Unauthorized - Only super admins and managers can modify properties'}), 403
+        if current_user.role not in ['super_admin', 'manager', 'general_manager']:
+            return jsonify({'message': 'Unauthorized - Only super admins, managers, and general managers can modify properties'}), 403
             
-        # For managers, verify they manage this property
-        if current_user.role == 'manager' and not any(m.user_id == current_user.user_id for m in property.managers):
+        # For managers and general managers, verify they manage this property
+        if current_user.role in ['manager', 'general_manager'] and not any(m.user_id == current_user.user_id for m in property.managers):
             return jsonify({'message': 'Unauthorized - You can only modify properties you manage'}), 403
 
         if request.method == 'PUT':
@@ -3142,9 +3142,9 @@ def upload_rooms(property_id):
         if not property:
             return jsonify({"msg": "Property not found"}), 404
             
-        # Check permissions - only managers and super_admins can upload rooms
-        if current_user.role not in ['manager', 'super_admin']:
-            return jsonify({"msg": "Unauthorized - Only managers can upload rooms"}), 403
+        # Check permissions - only managers, general managers and super_admins can upload rooms
+        if current_user.role not in ['manager', 'general_manager', 'super_admin']:
+            return jsonify({"msg": "Unauthorized - Only managers and general managers can upload rooms"}), 403
 
         # Get the uploaded file
         if 'file' not in request.files:
