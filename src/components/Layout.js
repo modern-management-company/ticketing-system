@@ -67,26 +67,31 @@ const Layout = () => {
         text: 'Home',
         icon: <HomeIcon />,
         path: '/home',
+        description: 'View your dashboard and quick actions'
       },
       {
         text: 'Dashboard',
         icon: <DashboardIcon />,
         path: '/dashboard',
+        description: 'Monitor key metrics and performance indicators'
       },
       {
         text: 'Tickets',
         icon: <TicketsIcon />,
         path: '/tickets',
+        description: 'Create and manage maintenance and service tickets'
       },
       {
         text: 'Tasks',
         icon: <TasksIcon />,
         path: '/tasks',
+        description: 'Track and assign work tasks to team members'
       },
       {
         text: 'Requests',
         icon: <HousekeepingIcon />,
         path: '/requests',
+        description: 'Handle guest service requests and housekeeping needs'
       },
     ];
 
@@ -95,11 +100,13 @@ const Layout = () => {
         text: 'Rooms',
         icon: <RoomIcon />,
         path: '/rooms',
+        description: 'Manage room inventory, status, and maintenance'
       },
       {
         text: 'Reports',
         icon: <ReportIcon />,
         path: '/reports',
+        description: 'Generate and analyze property performance reports'
       }
     ];
     
@@ -109,19 +116,19 @@ const Layout = () => {
         text: 'Team',
         icon: <TeamIcon />,
         path: '/team',
-        description: 'Manage property managers and staff'
+        description: 'Manage property managers and staff assignments'
       },
       {
         text: 'Rooms',
         icon: <RoomIcon />,
         path: '/rooms',
-        description: 'View and manage rooms'
+        description: 'View and manage all property rooms and status'
       },
       {
         text: 'Reports',
         icon: <ReportIcon />,
         path: '/reports',
-        description: 'View detailed reports and analytics'
+        description: 'Access comprehensive property analytics and reports'
       }
     ];
 
@@ -131,7 +138,7 @@ const Layout = () => {
         text: 'Management Console',
         icon: <SettingsIcon />,
         path: '/manage',
-        description: 'Access property management features'
+        description: 'Configure property settings and management tools'
       });
     }
 
@@ -141,7 +148,7 @@ const Layout = () => {
         text: 'Management Console',
         icon: <SettingsIcon />,
         path: '/manage',
-        description: 'Access system administration'
+        description: 'Access system-wide administration and settings'
       });
     }
 
