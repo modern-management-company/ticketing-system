@@ -148,13 +148,13 @@ const Reports = () => {
       // Filter out completed items if hideCompleted is true
       if (hideCompleted) {
         allTickets = allTickets.filter(ticket => 
-          ticket.status.toLowerCase() !== 'completed'
+          ticket?.status?.toLowerCase() !== 'completed'
         );
         allRequests = allRequests.filter(request => 
-          request.status.toLowerCase() !== 'completed'
+          request?.status?.toLowerCase() !== 'completed'
         );
         allTasks = allTasks.filter(task => 
-          task.status.toLowerCase() !== 'completed'
+          task?.status?.toLowerCase() !== 'completed'
         );
       }
       
@@ -201,9 +201,9 @@ const Reports = () => {
       }
 
       setReportData({
-        tickets: allTickets,
-        tasks: allTasks,
-        requests: allRequests
+        tickets: allTickets || [],
+        tasks: allTasks || [],
+        requests: allRequests || []
       });
     } catch (error) {
       setError('Failed to fetch report data');
@@ -439,21 +439,21 @@ const Reports = () => {
           <Grid item xs={4}>
             <Paper sx={{ p: 2, bgcolor: '#e3f2fd' }}>
               <Typography variant="h6" color="primary">
-                Active Tickets: {reportData.tickets.length}
+                Active Tickets: {reportData.tickets?.length || 0}
               </Typography>
             </Paper>
           </Grid>
           <Grid item xs={4}>
             <Paper sx={{ p: 2, bgcolor: '#f3e5f5' }}>
               <Typography variant="h6" color="secondary">
-                Active Service Requests: {reportData.requests.length}
+                Active Service Requests: {reportData.requests?.length || 0}
               </Typography>
             </Paper>
           </Grid>
           <Grid item xs={4}>
             <Paper sx={{ p: 2, bgcolor: '#e8f5e9' }}>
               <Typography variant="h6" color="success.main">
-                Active Tasks: {reportData.tasks.length}
+                Active Tasks: {reportData.tasks?.length || 0}
               </Typography>
             </Paper>
           </Grid>
@@ -481,7 +481,7 @@ const Reports = () => {
                     generatePDF('tickets');
                     setReportType('tickets');
                   }}
-                  disabled={!reportData.tickets.length}
+                  disabled={!reportData.tickets?.length}
                 >
                   Generate PDF
                 </Button>
@@ -489,7 +489,7 @@ const Reports = () => {
                   variant="contained"
                   color="secondary"
                   onClick={() => setOpenEmailDialog(true)}
-                  disabled={!reportData.tickets.length}
+                  disabled={!reportData.tickets?.length}
                 >
                   Send to Email
                 </Button>
@@ -510,11 +510,11 @@ const Reports = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {reportData.tickets.map((ticket) => (
+                    {(reportData.tickets || []).map((ticket) => (
                       <TableRow key={ticket.ticket_id}>
                         <TableCell>{ticket.ticket_id}</TableCell>
                         <TableCell>{ticket.title}</TableCell>
-                        <TableCell>{ticket.room_name}</TableCell>
+                        <TableCell>{ticket.room_name || 'N/A'}</TableCell>
                         <TableCell>{ticket.status}</TableCell>
                         <TableCell>{ticket.priority}</TableCell>
                         <TableCell>{ticket.created_by}</TableCell>
@@ -526,7 +526,7 @@ const Reports = () => {
                         </TableCell>
                         <TableCell>
                           <Box sx={{ maxHeight: '100px', overflow: 'auto' }}>
-                            {ticket.history.map((h, index) => (
+                            {(ticket.history || []).map((h, index) => (
                               <Box key={index} sx={{ mb: 1 }}>
                                 <Typography variant="body2">
                                   {h.action === 'created' && `Created by ${h.user} at ${format(new Date(h.timestamp), 'MM/dd/yyyy HH:mm')}`}
@@ -552,7 +552,7 @@ const Reports = () => {
                     generatePDF('tasks');
                     setReportType('tasks');
                   }}
-                  disabled={!reportData.tasks.length}
+                  disabled={!reportData.tasks?.length}
                 >
                   Generate PDF
                 </Button>
@@ -560,7 +560,7 @@ const Reports = () => {
                   variant="contained"
                   color="secondary"
                   onClick={() => setOpenEmailDialog(true)}
-                  disabled={!reportData.tasks.length}
+                  disabled={!reportData.tasks?.length}
                 >
                   Send to Email
                 </Button>
@@ -581,7 +581,7 @@ const Reports = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {reportData.tasks.map((task) => (
+                    {(reportData.tasks || []).map((task) => (
                       <TableRow key={task.task_id}>
                         <TableCell>{task.task_id}</TableCell>
                         <TableCell>{task.title}</TableCell>
@@ -597,7 +597,7 @@ const Reports = () => {
                         </TableCell>
                         <TableCell>
                           <Box sx={{ maxHeight: '100px', overflow: 'auto' }}>
-                            {task.history.map((h, index) => (
+                            {(task.history || []).map((h, index) => (
                               <Box key={index} sx={{ mb: 1 }}>
                                 {h.assigned_to && (
                                   <Typography variant="body2">
@@ -628,7 +628,7 @@ const Reports = () => {
                     generatePDF('requests');
                     setReportType('requests');
                   }}
-                  disabled={!reportData.requests.length}
+                  disabled={!reportData.requests?.length}
                 >
                   Generate PDF
                 </Button>
@@ -636,7 +636,7 @@ const Reports = () => {
                   variant="contained"
                   color="secondary"
                   onClick={() => setOpenEmailDialog(true)}
-                  disabled={!reportData.requests.length}
+                  disabled={!reportData.requests?.length}
                 >
                   Send to Email
                 </Button>
@@ -656,7 +656,7 @@ const Reports = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {reportData.requests.map((request) => (
+                    {(reportData.requests || []).map((request) => (
                       <TableRow key={request.request_id}>
                         <TableCell>{request.request_id}</TableCell>
                         <TableCell>{request.request_type}</TableCell>

@@ -103,13 +103,25 @@ const Layout = () => {
       }
     ];
     
-    // General Manager only needs Team access
+    // General Manager items
     const generalManagerItems = [
       {
         text: 'Team',
         icon: <TeamIcon />,
         path: '/team',
         description: 'Manage property managers and staff'
+      },
+      {
+        text: 'Rooms',
+        icon: <RoomIcon />,
+        path: '/rooms',
+        description: 'View and manage rooms'
+      },
+      {
+        text: 'Reports',
+        icon: <ReportIcon />,
+        path: '/reports',
+        description: 'View detailed reports and analytics'
       }
     ];
 
