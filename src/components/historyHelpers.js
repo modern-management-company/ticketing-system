@@ -23,23 +23,39 @@ export async function fetchTaskHistory(taskId) {
 
 // Extract completed info from history
 export function getCompletedInfo(history) {
-  const completed = history.find(h => h.action === 'completed');
+  const completed = history.find(h => 
+    h.action === 'completed' || 
+    (h.action === 'updated' && h.field_name === 'status' && h.new_value === 'completed')
+  );
+  
   if (completed) {
     return {
-      completedBy: completed.user_name || completed.user || 'Unknown',
+      completedBy: completed.username || completed.user_name || completed.user || 'Unknown',
       completedAt: completed.created_at || completed.timestamp || null,
     };
   }
   return { completedBy: null, completedAt: null };
 }
 
+// Extract creator info from history
+export function getCreatorInfo(history) {
+  const created = history.find(h => h.action === 'created');
+  if (created) {
+    return {
+      createdBy: created.username || created.user_name || created.user || 'Unknown',
+      createdAt: created.created_at || created.timestamp || null,
+    };
+  }
+  return { createdBy: null, createdAt: null };
+}
+
 // Extract assignment history (array of {assignedTo, assignedBy, assignedAt})
 export function getAssignmentHistory(history) {
   return history
-    .filter(h => h.action === 'assigned')
+    .filter(h => h.action === 'assigned' || (h.action === 'updated' && h.field_name === 'assigned_to'))
     .map(h => ({
       assignedTo: h.new_value || h.assigned_to || h.user,
-      assignedBy: h.user_name || h.user || 'Unknown',
+      assignedBy: h.username || h.user_name || h.user || 'Unknown',
       assignedAt: h.created_at || h.timestamp || null,
     }));
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchTicketHistory, fetchTaskHistory, getCompletedInfo } from './historyHelpers';
+import { fetchTicketHistory, fetchTaskHistory, getCompletedInfo, getCreatorInfo, getAssignmentHistory } from './historyHelpers';
 import { useAuth } from '../context/AuthContext';
 import apiClient from './apiClient';
 import {
@@ -159,23 +159,23 @@ const Reports = () => {
         );
       }
 
-      // Fetch and attach completion info for tickets and tasks
-      // (Do this in parallel for performance)
+      // Fetch and attach history info for tickets
       const ticketWithHistory = await Promise.all(
         allTickets.map(async (ticket) => {
           const history = await fetchTicketHistory(ticket.ticket_id);
           console.log('Ticket', ticket.ticket_id, 'history:', history);
-          const { completedBy, completedAt } = getCompletedInfo(history);
+          const { createdBy, createdAt } = getCreatorInfo(history);
           return {
             ...ticket,
-            completed_by: completedBy,
-            completed_at: completedAt,
+            created_by: createdBy || ticket.created_by_username || 'Unknown', 
+            created_at: createdAt || ticket.created_at,
             history: history.map(h => ({
               action: h.action,
-              user: h.user_name || h.user || 'Unknown',
+              user: h.username || h.user_name || h.user || 'Unknown',
               timestamp: h.created_at || h.timestamp,
               old_status: h.old_value,
               new_status: h.new_value,
+              field_name: h.field_name,
             }))
           };
         })
@@ -187,21 +187,27 @@ const Reports = () => {
           const history = await fetchTaskHistory(task.task_id);
           console.log('Task', task.task_id, 'history:', history);
           const { completedBy, completedAt } = getCompletedInfo(history);
+          const { createdBy, createdAt } = getCreatorInfo(history);
+          const assignmentHistory = getAssignmentHistory(history);
           return {
             ...task,
             completed_by: completedBy,
             completed_at: completedAt,
+            created_by: createdBy || 'Unknown',
+            created_at: createdAt || task.created_at,
+            assignmentHistory: assignmentHistory,
+            current_assigned_to: task.assigned_to || (assignmentHistory.length > 0 ? assignmentHistory[0].assignedTo : 'Unassigned'),
             history: history.map(h => ({
               action: h.action,
-              user: h.user_name || h.user || 'Unknown',
+              user: h.username || h.user_name || h.user || 'Unknown',
               timestamp: h.created_at || h.timestamp,
               old_status: h.old_value,
               new_status: h.new_value,
+              field_name: h.field_name,
             }))
           };
         })
       );
-
 
       console.log('Raw data fetched:', {
         tickets: ticketWithHistory.length,
@@ -283,19 +289,22 @@ const Reports = () => {
           item.room_name || 'N/A',
           item.status,
           item.priority,
-          item.created_by_username,
-          format(new Date(item.created_at), 'MM/dd/yyyy HH:mm'),
-          item.completed_at ? format(new Date(item.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A',
-          item.completed_by || 'N/A'
+          item.created_by || 'Unknown',
+          format(new Date(item.created_at), 'MM/dd/yyyy HH:mm')
         ];
       } else if (type === 'tasks') {
+        const assignmentInfo = item.assignmentHistory && item.assignmentHistory.length > 0 
+          ? `${item.assignmentHistory[0].assignedTo} (by ${item.assignmentHistory[0].assignedBy})` 
+          : 'Unassigned';
+        
         return [
           item.task_id,
           item.title,
           item.room_info?.room_name || 'N/A',
           item.status,
           item.priority,
-          item.assigned_to || 'Unassigned',
+          item.created_by || 'Unknown',
+          assignmentInfo,
           item.ticket_id ? `Ticket #${item.ticket_id}` : 'None',
           item.due_date ? format(new Date(item.due_date), 'MM/dd/yyyy') : 'No due date',
           item.completed_at ? format(new Date(item.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A',
@@ -316,9 +325,9 @@ const Reports = () => {
     });
 
     const columns = type === 'tickets' 
-      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Created At', 'Completed At', 'Completed By']
+      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Created At']
       : type === 'tasks'
-      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Assigned To', 'Linked To', 'Due Date', 'Completed At', 'Completed By']
+      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Assigned To', 'Linked To', 'Due Date', 'Completed At', 'Completed By']
       : ['ID', 'Type', 'Room', 'Group', 'Status', 'Priority', 'Guest', 'Created At'];
 
     doc.autoTable({
@@ -554,7 +563,6 @@ const Reports = () => {
                       <TableCell>Priority</TableCell>
                       <TableCell>Created By</TableCell>
                       <TableCell>Created At</TableCell>
-                      <TableCell>Completed At</TableCell>
                       <TableCell>History</TableCell>
                     </TableRow>
                   </TableHead>
@@ -571,20 +579,12 @@ const Reports = () => {
                           {ticket.created_at ? format(new Date(ticket.created_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
                         </TableCell>
                         <TableCell>
-                          {ticket.completed_at ? format(new Date(ticket.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
-                          <br />
-                          {ticket.completed_by && (
-                            <span style={{fontSize: '0.8em', color: '#666'}}>by {ticket.completed_by}</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
                           <Box sx={{ maxHeight: '100px', overflow: 'auto' }}>
                             {(ticket.history || []).map((h, index) => (
                               <Box key={index} sx={{ mb: 1 }}>
                                 <Typography variant="body2">
                                   {h.action === 'created' && `Created by ${h.user} at ${format(new Date(h.timestamp), 'MM/dd/yyyy HH:mm')}`}
-                                  {h.action === 'status_changed' && `Status changed from ${h.old_status} to ${h.new_status} by ${h.user} at ${format(new Date(h.timestamp), 'MM/dd/yyyy HH:mm')}`}
-                                  {h.action === 'completed' && `Completed by ${h.user} at ${format(new Date(h.timestamp), 'MM/dd/yyyy HH:mm')}`}
+                                  {h.action === 'updated' && h.field_name === 'status' && `Status changed from ${h.old_status} to ${h.new_status} by ${h.user} at ${format(new Date(h.timestamp), 'MM/dd/yyyy HH:mm')}`}
                                 </Typography>
                               </Box>
                             ))}
@@ -627,9 +627,9 @@ const Reports = () => {
                       <TableCell>Room</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
+                      <TableCell>Created By</TableCell>
                       <TableCell>Current Assignee</TableCell>
-                      <TableCell>Created At</TableCell>
-                      <TableCell>Completed At</TableCell>
+                      <TableCell>Completed At/By</TableCell>
                       <TableCell>History</TableCell>
                     </TableRow>
                   </TableHead>
@@ -641,10 +641,8 @@ const Reports = () => {
                         <TableCell>{task.room_info?.room_name || 'N/A'}</TableCell>
                         <TableCell>{task.status}</TableCell>
                         <TableCell>{task.priority}</TableCell>
+                        <TableCell>{task.created_by}</TableCell>
                         <TableCell>{task.current_assigned_to}</TableCell>
-                        <TableCell>
-                          {task.created_at ? format(new Date(task.created_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
-                        </TableCell>
                         <TableCell>
                           {task.completed_at ? format(new Date(task.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
                           <br />
@@ -654,19 +652,21 @@ const Reports = () => {
                         </TableCell>
                         <TableCell>
                           <Box sx={{ maxHeight: '100px', overflow: 'auto' }}>
-                            {(task.history || []).map((h, index) => (
-                              <Box key={index} sx={{ mb: 1 }}>
-                                {h.assigned_to && (
-                                  <Typography variant="body2">
-                                    Assigned to {h.assigned_to} by {h.assigned_by} at {format(new Date(h.assigned_at), 'MM/dd/yyyy HH:mm')}
-                                  </Typography>
-                                )}
-                                {h.completed_by && (
-                                  <Typography variant="body2">
-                                    Completed by {h.completed_by} at {format(new Date(h.completed_at), 'MM/dd/yyyy HH:mm')}
-                                  </Typography>
-                                )}
+                            {task.assignmentHistory && task.assignmentHistory.length > 0 && task.assignmentHistory.map((h, index) => (
+                              <Box key={`assign-${index}`} sx={{ mb: 1 }}>
+                                <Typography variant="body2">
+                                  Assigned to {h.assignedTo} by {h.assignedBy} at {format(new Date(h.assignedAt), 'MM/dd/yyyy HH:mm')}
+                                </Typography>
                               </Box>
+                            ))}
+                            {(task.history || [])
+                              .filter(h => h.action === 'completed' || (h.action === 'updated' && h.field_name === 'status' && h.new_status === 'completed'))
+                              .map((h, index) => (
+                                <Box key={`complete-${index}`} sx={{ mb: 1 }}>
+                                  <Typography variant="body2">
+                                    Completed by {h.user} at {format(new Date(h.timestamp), 'MM/dd/yyyy HH:mm')}
+                                  </Typography>
+                                </Box>
                             ))}
                           </Box>
                         </TableCell>
