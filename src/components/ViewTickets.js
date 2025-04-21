@@ -50,6 +50,7 @@ import UnarchiveIcon from '@mui/icons-material/Unarchive';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RestoreIcon from '@mui/icons-material/Restore';
+import FilterListIcon from '@mui/icons-material/FilterList';
 
 const ViewTickets = () => {
   const { auth } = useAuth();
@@ -80,6 +81,19 @@ const ViewTickets = () => {
   const [viewMode, setViewMode] = useState('table');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
+  
+  // Filters state
+  const [filters, setFilters] = useState({
+    category: '',
+    subcategory: '',
+    group: ''
+  });
+  const [openFilterDialog, setOpenFilterDialog] = useState(false);
+  const [availableFilters, setAvailableFilters] = useState({
+    categories: [],
+    subcategories: [],
+    groups: []
+  });
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const categories = ['General', 'Maintenance', 'Security', 'Housekeeping', 'Other'];
@@ -151,6 +165,22 @@ const ViewTickets = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  // Add this useEffect after fetchTickets is defined
+  useEffect(() => {
+    if (tickets.length > 0) {
+      // Extract unique categories, subcategories, and groups
+      const categories = [...new Set(tickets.map(ticket => ticket.category))];
+      const subcategories = [...new Set(tickets.map(ticket => ticket.subcategory).filter(Boolean))];
+      const groups = [...new Set(tickets.map(ticket => ticket.created_by_group).filter(Boolean))];
+      
+      setAvailableFilters({
+        categories,
+        subcategories,
+        groups
+      });
+    }
+  }, [tickets]);
 
   const fetchProperties = async () => {
     try {
@@ -462,12 +492,58 @@ const ViewTickets = () => {
     });
   };
 
+  // Add this function to handle clearing filters
+  const handleClearFilters = () => {
+    setFilters({
+      category: '',
+      subcategory: '',
+      group: ''
+    });
+  };
+
+  // Add this function to handle filter changes
+  const handleFilterChange = (filterType, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterType]: value
+    }));
+    
+    // If category changes, reset subcategory if it doesn't belong to the new category
+    if (filterType === 'category' && value !== filters.category) {
+      const validSubcategories = subcategories[value] || [];
+      if (filters.subcategory && !validSubcategories.includes(filters.subcategory)) {
+        setFilters(prev => ({
+          ...prev,
+          subcategory: ''
+        }));
+      }
+    }
+  };
+
+  // Update the filteredTickets to include the new filters
   const filteredTickets = useMemo(() => {
     return tickets.filter(ticket => {
+      // Filter by completion status
       const isCompleted = ticket.status.toLowerCase() === 'completed';
-      return showCompleted ? isCompleted : !isCompleted;
+      if (showCompleted !== isCompleted) return false;
+      
+      // Filter by category
+      if (filters.category && ticket.category !== filters.category) return false;
+      
+      // Filter by subcategory
+      if (filters.subcategory && ticket.subcategory !== filters.subcategory) return false;
+      
+      // Filter by group
+      if (filters.group && ticket.created_by_group !== filters.group) return false;
+      
+      return true;
     });
-  }, [tickets, showCompleted]);
+  }, [tickets, showCompleted, filters]);
+
+  // Add this function to get active filter count
+  const getActiveFilterCount = () => {
+    return Object.values(filters).filter(Boolean).length;
+  };
 
   const sortRooms = (rooms) => {
     return [...rooms].sort((a, b) => {
@@ -573,6 +649,101 @@ const ViewTickets = () => {
     </Card>
   );
 
+  // Add this right before the main return statement
+  const FilterDialog = () => (
+    <Dialog
+      open={openFilterDialog}
+      onClose={() => setOpenFilterDialog(false)}
+      maxWidth="xs"
+      fullWidth
+    >
+      <DialogTitle>
+        Filter Tickets
+        <IconButton
+          aria-label="close"
+          onClick={() => setOpenFilterDialog(false)}
+          sx={{
+            position: 'absolute',
+            right: 8,
+            top: 8,
+            color: (theme) => theme.palette.grey[500],
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+          <FormControl fullWidth>
+            <InputLabel>Category</InputLabel>
+            <Select
+              value={filters.category}
+              onChange={(e) => handleFilterChange('category', e.target.value)}
+              label="Category"
+            >
+              <MenuItem value="">
+                <em>All Categories</em>
+              </MenuItem>
+              {availableFilters.categories.map((category) => (
+                <MenuItem key={category} value={category}>
+                  {category}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          <FormControl fullWidth disabled={!filters.category}>
+            <InputLabel>Subcategory</InputLabel>
+            <Select
+              value={filters.subcategory}
+              onChange={(e) => handleFilterChange('subcategory', e.target.value)}
+              label="Subcategory"
+            >
+              <MenuItem value="">
+                <em>All Subcategories</em>
+              </MenuItem>
+              {filters.category && subcategories[filters.category]?.map((subcategory) => (
+                <MenuItem key={subcategory} value={subcategory}>
+                  {subcategory}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          <FormControl fullWidth>
+            <InputLabel>User Group</InputLabel>
+            <Select
+              value={filters.group}
+              onChange={(e) => handleFilterChange('group', e.target.value)}
+              label="User Group"
+            >
+              <MenuItem value="">
+                <em>All Groups</em>
+              </MenuItem>
+              {availableFilters.groups.map((group) => (
+                <MenuItem key={group} value={group}>
+                  {group}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleClearFilters} color="secondary">
+          Clear Filters
+        </Button>
+        <Button 
+          onClick={() => setOpenFilterDialog(false)} 
+          variant="contained" 
+          color="primary"
+        >
+          Apply
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -606,6 +777,17 @@ const ViewTickets = () => {
         </Box>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
+          <Tooltip title="Filter Tickets">
+            <Button
+              variant={getActiveFilterCount() > 0 ? "contained" : "outlined"}
+              color="secondary"
+              startIcon={<FilterListIcon />}
+              onClick={() => setOpenFilterDialog(true)}
+              sx={getActiveFilterCount() > 0 ? { borderRadius: 2 } : {}}
+            >
+              Filters {getActiveFilterCount() > 0 && `(${getActiveFilterCount()})`}
+            </Button>
+          </Tooltip>
           {!showCompleted && (
             <Button
               variant="contained"
@@ -637,6 +819,41 @@ const ViewTickets = () => {
         </Alert>
       )}
 
+      {/* Show active filters */}
+      {getActiveFilterCount() > 0 && (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+          {filters.category && (
+            <Chip
+              label={`Category: ${filters.category}`}
+              onDelete={() => handleFilterChange('category', '')}
+              color="primary"
+              variant="outlined"
+            />
+          )}
+          {filters.subcategory && (
+            <Chip
+              label={`Subcategory: ${filters.subcategory}`}
+              onDelete={() => handleFilterChange('subcategory', '')}
+              color="primary"
+              variant="outlined"
+            />
+          )}
+          {filters.group && (
+            <Chip
+              label={`Group: ${filters.group}`}
+              onDelete={() => handleFilterChange('group', '')}
+              color="primary"
+              variant="outlined"
+            />
+          )}
+          <Chip
+            label="Clear All Filters"
+            onClick={handleClearFilters}
+            color="secondary"
+          />
+        </Box>
+      )}
+
       {!selectedProperty ? (
         <Alert severity="info">Please select a property to view tickets</Alert>
       ) : loading ? (
@@ -655,9 +872,13 @@ const ViewTickets = () => {
             />
           ) : isMobile ? (
             <Box sx={{ mt: 2 }}>
-              {filteredTickets.map((ticket) => (
-                <TicketCard key={ticket.ticket_id} ticket={ticket} />
-              ))}
+              {filteredTickets.length > 0 ? (
+                filteredTickets.map((ticket) => (
+                  <TicketCard key={ticket.ticket_id} ticket={ticket} />
+                ))
+              ) : (
+                <Alert severity="info">No tickets match the selected filters</Alert>
+              )}
             </Box>
           ) : (
             <TableContainer component={Paper}>
@@ -767,135 +988,171 @@ const ViewTickets = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {sortTickets(filteredTickets).map((ticket) => (
-                    <TableRow key={ticket.ticket_id}>
-                      <TableCell>
-                        <Button
-                          onClick={() => navigate(`/tickets/${ticket.ticket_id}`)}
-                          sx={{ textTransform: 'none', minWidth: 'auto' }}
-                        >
-                          {ticket.ticket_id}
-                        </Button>
-                      </TableCell>
-                      <TableCell>{ticket.title}</TableCell>
-                      <TableCell>{ticket.description}</TableCell>
-                      <TableCell>
-                        {ticket.room_name || 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={ticket.status}
-                          color={
-                            ticket.status.toLowerCase() === 'open' ? 'error' :
-                            ticket.status.toLowerCase() === 'in progress' ? 'warning' :
-                            'success'
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={ticket.priority}
-                          color={
-                            ticket.priority === 'Critical' ? 'error' :
-                            ticket.priority === 'High' ? 'warning' :
-                            ticket.priority === 'Medium' ? 'info' :
-                            'success'
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>{ticket.category}</TableCell>
-                      <TableCell>{ticket.subcategory || 'N/A'}</TableCell>
-                      <TableCell>{ticket.created_by_username}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={ticket.created_by_group || 'N/A'} 
-                          variant="outlined"
-                          size="small"
-                          color="primary"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const linkedTasks = tasks.filter(task => task.ticket_id === ticket.ticket_id);
-                          return linkedTasks.length > 0 ? (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                              <Chip 
-                                label={`${linkedTasks.length} Task${linkedTasks.length > 1 ? 's' : ''}`}
-                                color="primary"
-                                size="small"
-                                onClick={() => navigate(`/tickets/${ticket.ticket_id}`)}
-                                sx={{ cursor: 'pointer' }}
-                              />
-                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                {linkedTasks.map(task => (
-                                  <Chip
-                                    key={task.task_id}
-                                    label={`#${task.task_id}`}
-                                    size="small"
-                                    variant="outlined"
-                                    onClick={() => navigate(`/tasks/${task.task_id}`)}
-                                    sx={{ cursor: 'pointer' }}
-                                  />
-                                ))}
-                              </Box>
-                            </Box>
-                          ) : (
-                            <Typography variant="body2" color="textSecondary">No tasks</Typography>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          {!showCompleted ? (
-                            <>
-                              <Button
-                                startIcon={<EditIcon />}
-                                onClick={() => handleOpenDialog(ticket)}
-                                size="small"
-                              >
-                                Edit
-                              </Button>
-                              <Button
-                                startIcon={<CheckCircleIcon />}
-                                onClick={() => handleStatusChange(ticket.ticket_id, 'completed')}
-                                size="small"
-                                color="success"
-                              >
-                                Mark Complete
-                              </Button>
-                              {(auth?.user?.role === 'super_admin' || 
-                                managers.some(m => m.user_id === auth?.user?.user_id) || 
-                                ticket.created_by_id === auth?.user?.user_id) && (
-                                <Button
-                                  startIcon={<DeleteIcon />}
-                                  onClick={() => handleDeleteTicket(ticket.ticket_id)}
-                                  size="small"
-                                  color="error"
-                                >
-                                  Delete
-                                </Button>
-                              )}
-                            </>
-                          ) : (
-                            <Button
-                              startIcon={<RestoreIcon />}
-                              onClick={() => handleStatusChange(ticket.ticket_id, 'open')}
+                  {filteredTickets.length > 0 ? (
+                    sortTickets(filteredTickets).map((ticket) => (
+                      <TableRow key={ticket.ticket_id}>
+                        <TableCell>
+                          <Button
+                            onClick={() => navigate(`/tickets/${ticket.ticket_id}`)}
+                            sx={{ textTransform: 'none', minWidth: 'auto' }}
+                          >
+                            {ticket.ticket_id}
+                          </Button>
+                        </TableCell>
+                        <TableCell>{ticket.title}</TableCell>
+                        <TableCell>{ticket.description}</TableCell>
+                        <TableCell>
+                          {ticket.room_name || 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={ticket.status}
+                            color={
+                              ticket.status.toLowerCase() === 'open' ? 'error' :
+                              ticket.status.toLowerCase() === 'in progress' ? 'warning' :
+                              'success'
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={ticket.priority}
+                            color={
+                              ticket.priority === 'Critical' ? 'error' :
+                              ticket.priority === 'High' ? 'warning' :
+                              ticket.priority === 'Medium' ? 'info' :
+                              'success'
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={ticket.category}
+                            variant="outlined"
+                            onClick={() => handleFilterChange('category', ticket.category)}
+                            sx={{ cursor: 'pointer' }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {ticket.subcategory ? (
+                            <Chip 
+                              label={ticket.subcategory} 
+                              variant="outlined"
+                              onClick={() => {
+                                handleFilterChange('category', ticket.category);
+                                handleFilterChange('subcategory', ticket.subcategory);
+                              }}
+                              sx={{ cursor: 'pointer' }}
+                            />
+                          ) : 'N/A'}
+                        </TableCell>
+                        <TableCell>{ticket.created_by_username}</TableCell>
+                        <TableCell>
+                          {ticket.created_by_group ? (
+                            <Chip 
+                              label={ticket.created_by_group} 
+                              variant="outlined"
                               size="small"
                               color="primary"
-                            >
-                              Reopen
-                            </Button>
-                          )}
-                        </Box>
+                              onClick={() => handleFilterChange('group', ticket.created_by_group)}
+                              sx={{ cursor: 'pointer' }}
+                            />
+                          ) : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const linkedTasks = tasks.filter(task => task.ticket_id === ticket.ticket_id);
+                            return linkedTasks.length > 0 ? (
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                <Chip 
+                                  label={`${linkedTasks.length} Task${linkedTasks.length > 1 ? 's' : ''}`}
+                                  color="primary"
+                                  size="small"
+                                  onClick={() => navigate(`/tickets/${ticket.ticket_id}`)}
+                                  sx={{ cursor: 'pointer' }}
+                                />
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                  {linkedTasks.map(task => (
+                                    <Chip
+                                      key={task.task_id}
+                                      label={`#${task.task_id}`}
+                                      size="small"
+                                      variant="outlined"
+                                      onClick={() => navigate(`/tasks/${task.task_id}`)}
+                                      sx={{ cursor: 'pointer' }}
+                                    />
+                                  ))}
+                                </Box>
+                              </Box>
+                            ) : (
+                              <Typography variant="body2" color="textSecondary">No tasks</Typography>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            {!showCompleted ? (
+                              <>
+                                <Button
+                                  startIcon={<EditIcon />}
+                                  onClick={() => handleOpenDialog(ticket)}
+                                  size="small"
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  startIcon={<CheckCircleIcon />}
+                                  onClick={() => handleStatusChange(ticket.ticket_id, 'completed')}
+                                  size="small"
+                                  color="success"
+                                >
+                                  Mark Complete
+                                </Button>
+                                {(auth?.user?.role === 'super_admin' || 
+                                  managers.some(m => m.user_id === auth?.user?.user_id) || 
+                                  ticket.created_by_id === auth?.user?.user_id) && (
+                                  <Button
+                                    startIcon={<DeleteIcon />}
+                                    onClick={() => handleDeleteTicket(ticket.ticket_id)}
+                                    size="small"
+                                    color="error"
+                                  >
+                                    Delete
+                                  </Button>
+                                )}
+                              </>
+                            ) : (
+                              <Button
+                                startIcon={<RestoreIcon />}
+                                onClick={() => handleStatusChange(ticket.ticket_id, 'open')}
+                                size="small"
+                                color="primary"
+                              >
+                                Reopen
+                              </Button>
+                            )}
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={12} align="center">
+                        <Typography variant="body1" sx={{ py: 2 }}>
+                          No tickets match the selected filters
+                        </Typography>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           )}
         </>
       )}
+
+      {/* Render the filter dialog */}
+      <FilterDialog />
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>

@@ -55,6 +55,7 @@ import ArchiveIcon from '@mui/icons-material/Archive';
 import UnarchiveIcon from '@mui/icons-material/Unarchive';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import RestoreIcon from '@mui/icons-material/Restore';
+import FilterListIcon from '@mui/icons-material/FilterList';
 
 const ViewTasks = () => {
   const navigate = useNavigate();
@@ -88,6 +89,21 @@ const ViewTasks = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [navigatingToTicket, setNavigatingToTicket] = useState(null);
+
+  // Filter states
+  const [filters, setFilters] = useState({
+    priority: '',
+    status: '',
+    assigned_group: '',
+    assigned_user: ''
+  });
+  const [openFilterDialog, setOpenFilterDialog] = useState(false);
+  const [availableFilters, setAvailableFilters] = useState({
+    priorities: [],
+    statuses: [],
+    groups: [],
+    users: []
+  });
 
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
   const statuses = ['pending', 'in progress', 'completed'];
@@ -197,6 +213,26 @@ const ViewTasks = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (tasks.length > 0 && users.length > 0) {
+      // Extract unique priorities, statuses, and user groups
+      const priorities = [...new Set(tasks.map(task => task.priority))];
+      const statuses = [...new Set(tasks.map(task => task.status))];
+      
+      // Get unique user groups from users in tasks
+      const taskUserIds = [...new Set(tasks.map(task => task.assigned_to_id).filter(Boolean))];
+      const taskUsers = users.filter(user => taskUserIds.includes(user.user_id));
+      const groups = [...new Set(taskUsers.map(user => user.group).filter(Boolean))];
+      
+      setAvailableFilters({
+        priorities,
+        statuses,
+        groups,
+        users: taskUsers
+      });
+    }
+  }, [tasks, users]);
 
   const handleImportTicket = (ticket) => {
     console.log('Importing ticket:', ticket);
@@ -436,12 +472,68 @@ const ViewTasks = () => {
     });
   };
 
+  const handleClearFilters = () => {
+    setFilters({
+      priority: '',
+      status: '',
+      assigned_group: '',
+      assigned_user: ''
+    });
+  };
+
+  const handleFilterChange = (filterType, value) => {
+    // If switching to a different user, clear the group filter
+    if (filterType === 'assigned_user' && value) {
+      setFilters(prev => ({
+        ...prev,
+        [filterType]: value,
+        assigned_group: '' // Clear group filter when specific user is selected
+      }));
+    } 
+    // If switching to a different group, clear the user filter
+    else if (filterType === 'assigned_group' && value) {
+      setFilters(prev => ({
+        ...prev,
+        [filterType]: value,
+        assigned_user: '' // Clear user filter when specific group is selected
+      }));
+    }
+    else {
+      setFilters(prev => ({
+        ...prev,
+        [filterType]: value
+      }));
+    }
+  };
+
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
+      // Filter by completion status
       const isCompleted = task.status.toLowerCase() === 'completed';
-      return showCompleted ? isCompleted : !isCompleted;
+      if (showCompleted !== isCompleted) return false;
+      
+      // Filter by priority
+      if (filters.priority && task.priority !== filters.priority) return false;
+      
+      // Filter by status
+      if (filters.status && task.status !== filters.status) return false;
+      
+      // Filter by assigned group
+      if (filters.assigned_group) {
+        const assignedUser = users.find(user => user.user_id === task.assigned_to_id);
+        if (!assignedUser || assignedUser.group !== filters.assigned_group) return false;
+      }
+      
+      // Filter by assigned user
+      if (filters.assigned_user && task.assigned_to_id !== filters.assigned_user) return false;
+      
+      return true;
     });
-  }, [tasks, showCompleted]);
+  }, [tasks, showCompleted, filters, users]);
+
+  const getActiveFilterCount = () => {
+    return Object.values(filters).filter(Boolean).length;
+  };
 
   const handleArchiveTask = async (taskId) => {
     try {
@@ -561,6 +653,120 @@ const ViewTasks = () => {
     </Card>
   );
 
+  const FilterDialog = () => (
+    <Dialog
+      open={openFilterDialog}
+      onClose={() => setOpenFilterDialog(false)}
+      maxWidth="xs"
+      fullWidth
+    >
+      <DialogTitle>
+        Filter Tasks
+        <IconButton
+          aria-label="close"
+          onClick={() => setOpenFilterDialog(false)}
+          sx={{
+            position: 'absolute',
+            right: 8,
+            top: 8,
+            color: (theme) => theme.palette.grey[500],
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+          <FormControl fullWidth>
+            <InputLabel>Priority</InputLabel>
+            <Select
+              value={filters.priority}
+              onChange={(e) => handleFilterChange('priority', e.target.value)}
+              label="Priority"
+            >
+              <MenuItem value="">
+                <em>All Priorities</em>
+              </MenuItem>
+              {availableFilters.priorities.map((priority) => (
+                <MenuItem key={priority} value={priority}>
+                  {priority}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          <FormControl fullWidth>
+            <InputLabel>Status</InputLabel>
+            <Select
+              value={filters.status}
+              onChange={(e) => handleFilterChange('status', e.target.value)}
+              label="Status"
+            >
+              <MenuItem value="">
+                <em>All Statuses</em>
+              </MenuItem>
+              {availableFilters.statuses.map((status) => (
+                <MenuItem key={status} value={status}>
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          <FormControl fullWidth>
+            <InputLabel>User Group</InputLabel>
+            <Select
+              value={filters.assigned_group}
+              onChange={(e) => handleFilterChange('assigned_group', e.target.value)}
+              label="User Group"
+              disabled={Boolean(filters.assigned_user)}
+            >
+              <MenuItem value="">
+                <em>All Groups</em>
+              </MenuItem>
+              {availableFilters.groups.map((group) => (
+                <MenuItem key={group} value={group}>
+                  {group}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          <FormControl fullWidth>
+            <InputLabel>Assigned User</InputLabel>
+            <Select
+              value={filters.assigned_user}
+              onChange={(e) => handleFilterChange('assigned_user', e.target.value)}
+              label="Assigned User"
+              disabled={Boolean(filters.assigned_group)}
+            >
+              <MenuItem value="">
+                <em>All Users</em>
+              </MenuItem>
+              {availableFilters.users.map((user) => (
+                <MenuItem key={user.user_id} value={user.user_id}>
+                  {user.username} ({user.group || 'No Group'})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleClearFilters} color="secondary">
+          Clear Filters
+        </Button>
+        <Button 
+          onClick={() => setOpenFilterDialog(false)} 
+          variant="contained" 
+          color="primary"
+        >
+          Apply
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -594,6 +800,17 @@ const ViewTasks = () => {
         </Box>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <PropertySwitcher onPropertyChange={handlePropertyChange} />
+          <Tooltip title="Filter Tasks">
+            <Button
+              variant={getActiveFilterCount() > 0 ? "contained" : "outlined"}
+              color="secondary"
+              startIcon={<FilterListIcon />}
+              onClick={() => setOpenFilterDialog(true)}
+              sx={getActiveFilterCount() > 0 ? { borderRadius: 2 } : {}}
+            >
+              Filters {getActiveFilterCount() > 0 && `(${getActiveFilterCount()})`}
+            </Button>
+          </Tooltip>
           {!showCompleted && (
             <>
               <Button
@@ -636,6 +853,49 @@ const ViewTasks = () => {
         </Alert>
       )}
 
+      {/* Show active filters */}
+      {getActiveFilterCount() > 0 && (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+          {filters.priority && (
+            <Chip
+              label={`Priority: ${filters.priority}`}
+              onDelete={() => handleFilterChange('priority', '')}
+              color="primary"
+              variant="outlined"
+            />
+          )}
+          {filters.status && (
+            <Chip
+              label={`Status: ${filters.status.charAt(0).toUpperCase() + filters.status.slice(1)}`}
+              onDelete={() => handleFilterChange('status', '')}
+              color="primary"
+              variant="outlined"
+            />
+          )}
+          {filters.assigned_group && (
+            <Chip
+              label={`Group: ${filters.assigned_group}`}
+              onDelete={() => handleFilterChange('assigned_group', '')}
+              color="primary"
+              variant="outlined"
+            />
+          )}
+          {filters.assigned_user && (
+            <Chip
+              label={`Assigned to: ${users.find(u => u.user_id === filters.assigned_user)?.username || 'Unknown'}`}
+              onDelete={() => handleFilterChange('assigned_user', '')}
+              color="primary"
+              variant="outlined"
+            />
+          )}
+          <Chip
+            label="Clear All Filters"
+            onClick={handleClearFilters}
+            color="secondary"
+          />
+        </Box>
+      )}
+
       {!selectedProperty ? (
         <Alert severity="info">Please select a property to view tasks</Alert>
       ) : loading ? (
@@ -655,9 +915,13 @@ const ViewTasks = () => {
             />
           ) : isMobile ? (
             <Box sx={{ mt: 2 }}>
-              {filteredTasks.map((task) => (
-                <TaskCard key={task.task_id} task={task} />
-              ))}
+              {filteredTasks.length > 0 ? (
+                filteredTasks.map((task) => (
+                  <TaskCard key={task.task_id} task={task} />
+                ))
+              ) : (
+                <Alert severity="info">No tasks match the selected filters</Alert>
+              )}
             </Box>
           ) : (
             <TableContainer component={Paper}>
@@ -749,136 +1013,163 @@ const ViewTasks = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {sortTasks(filteredTasks).map((task) => (
-                    <TableRow key={task.task_id}>
-                      <TableCell>
-                        <Button
-                          onClick={() => navigate(`/tasks/${task.task_id}`)}
-                          sx={{ textTransform: 'none', minWidth: 'auto' }}
-                        >
-                          {task.task_id}
-                        </Button>
-                      </TableCell>
-                      <TableCell>{task.title}</TableCell>
-                      <TableCell>
-                        {task.room_info ? (
-                          <Tooltip title={`From Ticket #${task.room_info.ticket_id}`}>
+                  {filteredTasks.length > 0 ? (
+                    sortTasks(filteredTasks).map((task) => (
+                      <TableRow key={task.task_id}>
+                        <TableCell>
+                          <Button
+                            onClick={() => navigate(`/tasks/${task.task_id}`)}
+                            sx={{ textTransform: 'none', minWidth: 'auto' }}
+                          >
+                            {task.task_id}
+                          </Button>
+                        </TableCell>
+                        <TableCell>{task.title}</TableCell>
+                        <TableCell>
+                          {task.room_info ? (
+                            <Tooltip title={`From Ticket #${task.room_info.ticket_id}`}>
+                              <Chip 
+                                label={task.room_info.room_name}
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                              />
+                            </Tooltip>
+                          ) : (
+                            'N/A'
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {task.ticket_id ? (
                             <Chip 
-                              label={task.room_info.room_name}
+                              label={`Ticket #${task.ticket_id}`}
                               size="small"
-                              color="info"
+                              color="secondary"
                               variant="outlined"
+                              onClick={() => {
+                                if (navigatingToTicket !== task.ticket_id) {
+                                  setNavigatingToTicket(task.ticket_id);
+                                  navigate(`/tickets/${task.ticket_id}`);
+                                }
+                              }}
+                              sx={{ cursor: 'pointer' }}
                             />
-                          </Tooltip>
-                        ) : (
-                          'N/A'
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {task.ticket_id ? (
+                          ) : (
+                            'N/A'
+                          )}
+                        </TableCell>
+                        <TableCell>
                           <Chip 
-                            label={`Ticket #${task.ticket_id}`}
-                            size="small"
-                            color="secondary"
-                            variant="outlined"
-                            onClick={() => {
-                              if (navigatingToTicket !== task.ticket_id) {
-                                setNavigatingToTicket(task.ticket_id);
-                                navigate(`/tickets/${task.ticket_id}`);
-                              }
-                            }}
+                            label={task.status}
+                            color={getStatusColor(task.status)}
+                            onClick={() => handleFilterChange('status', task.status)}
                             sx={{ cursor: 'pointer' }}
                           />
-                        ) : (
-                          'N/A'
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={task.status}
-                          color={
-                            task.status.toLowerCase() === 'pending' ? 'warning' :
-                            task.status.toLowerCase() === 'in progress' ? 'info' :
-                            task.status.toLowerCase() === 'completed' ? 'success' :
-                            'default'
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={task.priority}
-                          color={
-                            task.priority === 'Critical' ? 'error' :
-                            task.priority === 'High' ? 'warning' :
-                            task.priority === 'Medium' ? 'info' :
-                            'success'
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        {users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unassigned'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={users.find(u => u.user_id === task.assigned_to_id)?.group || 'N/A'} 
-                          variant="outlined"
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          {!showCompleted ? (
-                            <>
-                              <Button
-                                startIcon={<EditIcon />}
-                                onClick={() => handleOpenDialog(task)}
-                                size="small"
-                              >
-                                Edit
-                              </Button>
-                              <Button
-                                startIcon={<CheckCircleIcon />}
-                                onClick={() => handleStatusChange(task.task_id, 'completed')}
-                                size="small"
-                                color="success"
-                              >
-                                Mark Complete
-                              </Button>
-                              {(auth?.user?.role === 'super_admin' || 
-                                managers.some(m => m.user_id === auth?.user?.user_id)) && (
-                                <Button
-                                  startIcon={<DeleteIcon />}
-                                  onClick={() => handleDeleteTask(task.task_id)}
-                                  size="small"
-                                  color="error"
-                                >
-                                  Delete
-                                </Button>
-                              )}
-                            </>
-                          ) : (
-                            <Button
-                              startIcon={<RestoreIcon />}
-                              onClick={() => handleStatusChange(task.task_id, 'pending')}
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={task.priority}
+                            color={
+                              task.priority === 'Critical' ? 'error' :
+                              task.priority === 'High' ? 'warning' :
+                              task.priority === 'Medium' ? 'info' :
+                              'success'
+                            }
+                            onClick={() => handleFilterChange('priority', task.priority)}
+                            sx={{ cursor: 'pointer' }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          {task.assigned_to_id ? (
+                            <Chip
+                              label={users.find(u => u.user_id === task.assigned_to_id)?.username || 'Unknown'}
+                              variant="outlined"
                               size="small"
-                              color="primary"
-                            >
-                              Reopen
-                            </Button>
-                          )}
-                        </Box>
+                              onClick={() => handleFilterChange('assigned_user', task.assigned_to_id)}
+                              sx={{ cursor: 'pointer' }}
+                            />
+                          ) : 'Unassigned'}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const assignedUser = users.find(u => u.user_id === task.assigned_to_id);
+                            return assignedUser?.group ? (
+                              <Chip 
+                                label={assignedUser.group} 
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleFilterChange('assigned_group', assignedUser.group)}
+                                sx={{ cursor: 'pointer' }}
+                              />
+                            ) : 'N/A';
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            {!showCompleted ? (
+                              <>
+                                <Button
+                                  startIcon={<EditIcon />}
+                                  onClick={() => handleOpenDialog(task)}
+                                  size="small"
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  startIcon={<CheckCircleIcon />}
+                                  onClick={() => handleStatusChange(task.task_id, 'completed')}
+                                  size="small"
+                                  color="success"
+                                >
+                                  Mark Complete
+                                </Button>
+                                {(auth?.user?.role === 'super_admin' || 
+                                  managers.some(m => m.user_id === auth?.user?.user_id)) && (
+                                  <Button
+                                    startIcon={<DeleteIcon />}
+                                    onClick={() => handleDeleteTask(task.task_id)}
+                                    size="small"
+                                    color="error"
+                                  >
+                                    Delete
+                                  </Button>
+                                )}
+                              </>
+                            ) : (
+                              <Button
+                                startIcon={<RestoreIcon />}
+                                onClick={() => handleStatusChange(task.task_id, 'pending')}
+                                size="small"
+                                color="primary"
+                              >
+                                Reopen
+                              </Button>
+                            )}
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={10} align="center">
+                        <Typography variant="body1" sx={{ py: 2 }}>
+                          No tasks match the selected filters
+                        </Typography>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           )}
         </>
       )}
+
+      {/* Render the filter dialog */}
+      <FilterDialog />
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
