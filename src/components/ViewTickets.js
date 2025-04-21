@@ -633,9 +633,7 @@ const ViewTickets = () => {
         >
           Edit
         </Button>
-        {(auth?.user?.role === 'super_admin' || 
-          managers.some(m => m.user_id === auth?.user?.user_id) || 
-          ticket.created_by_id === auth?.user?.user_id) && (
+        {(auth?.user?.role === 'super_admin') && (
           <Button
             startIcon={<DeleteIcon />}
             onClick={() => handleDeleteTicket(ticket.ticket_id)}
@@ -1108,9 +1106,7 @@ const ViewTickets = () => {
                                 >
                                   Mark Complete
                                 </Button>
-                                {(auth?.user?.role === 'super_admin' || 
-                                  managers.some(m => m.user_id === auth?.user?.user_id) || 
-                                  ticket.created_by_id === auth?.user?.user_id) && (
+                                {(auth?.user?.role === 'super_admin') && (
                                   <Button
                                     startIcon={<DeleteIcon />}
                                     onClick={() => handleDeleteTicket(ticket.ticket_id)}

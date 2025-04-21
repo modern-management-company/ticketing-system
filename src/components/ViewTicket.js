@@ -586,8 +586,7 @@ const ViewTicket = () => {
                 </Button>
               )}
 
-              {(auth?.user?.role === 'super_admin' || 
-                ticket.created_by_id === auth?.user?.user_id) && (
+              {(auth?.user?.role === 'super_admin') && (
                 <Button
                   startIcon={<DeleteIcon />}
                   onClick={handleDeleteTicket}

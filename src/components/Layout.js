@@ -132,17 +132,7 @@ const Layout = () => {
       }
     ];
 
-    // Add management console link for property managers
-    if (auth.user.role === 'manager') {
-      managerItems.push({
-        text: 'Management Console',
-        icon: <SettingsIcon />,
-        path: '/manage',
-        description: 'Configure property settings and management tools'
-      });
-    }
-
-    // Add management console link for super_admins
+    // Add management console link for super_admins only
     if (auth.user.role === 'super_admin') {
       managerItems.push({
         text: 'Management Console',

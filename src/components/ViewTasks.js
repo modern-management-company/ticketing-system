@@ -638,8 +638,7 @@ const ViewTasks = () => {
         >
           Edit
         </Button>
-        {(auth?.user?.role === 'super_admin' || 
-          managers.some(m => m.user_id === auth?.user?.user_id)) && (
+        {(auth?.user?.role === 'super_admin') && (
           <Button
             startIcon={<DeleteIcon />}
             onClick={() => handleDeleteTask(task.task_id)}
@@ -1126,8 +1125,7 @@ const ViewTasks = () => {
                                 >
                                   Mark Complete
                                 </Button>
-                                {(auth?.user?.role === 'super_admin' || 
-                                  managers.some(m => m.user_id === auth?.user?.user_id)) && (
+                                {(auth?.user?.role === 'super_admin') && (
                                   <Button
                                     startIcon={<DeleteIcon />}
                                     onClick={() => handleDeleteTask(task.task_id)}

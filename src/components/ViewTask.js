@@ -497,8 +497,7 @@ const ViewTask = () => {
                 </Button>
               )}
 
-              {(auth?.user?.role === 'super_admin' || 
-                task.created_by_id === auth?.user?.user_id) && (
+              {(auth?.user?.role === 'super_admin') && (
                 <Button
                   startIcon={<DeleteIcon />}
                   onClick={handleDeleteTask}
