@@ -46,6 +46,7 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useNavigate } from "react-router-dom";
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import RoomServiceIcon from '@mui/icons-material/RoomService';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { getFriendlyRoomName, getHotelRoomTypes } from '../utils/roomMappings';
 
 const ViewRooms = () => {
@@ -84,6 +85,9 @@ const ViewRooms = () => {
   const [displayRoomType, setDisplayRoomType] = useState('');
   const [selectedType, setSelectedType] = useState('all');
   const [availableTypes, setAvailableTypes] = useState([]);
+  const [roomTickets, setRoomTickets] = useState([]);
+  const [roomTasks, setRoomTasks] = useState([]);
+  const [loadingRoomData, setLoadingRoomData] = useState(false);
 
   const roomStatuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];
   
@@ -389,9 +393,36 @@ const ViewRooms = () => {
   };
 
   const handleRoomCardClick = (room) => {
-    // Show dialog to choose between ticket or service request
     setSelectedRoom(room);
     setActionDialogOpen(true);
+    fetchRoomTicketsAndTasks(room.room_id);
+  };
+
+  const fetchRoomTicketsAndTasks = async (roomId) => {
+    try {
+      setLoadingRoomData(true);
+      // Fetch tickets related to this room
+      const ticketsResponse = await apiClient.get(`/rooms/${roomId}/tickets`);
+      if (ticketsResponse.data && Array.isArray(ticketsResponse.data.tickets)) {
+        setRoomTickets(ticketsResponse.data.tickets);
+      } else {
+        setRoomTickets([]);
+      }
+      
+      // Fetch tasks related to this room
+      const tasksResponse = await apiClient.get(`/rooms/${roomId}/tasks`);
+      if (tasksResponse.data && Array.isArray(tasksResponse.data.tasks)) {
+        setRoomTasks(tasksResponse.data.tasks);
+      } else {
+        setRoomTasks([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch room data:', error);
+      setRoomTickets([]);
+      setRoomTasks([]);
+    } finally {
+      setLoadingRoomData(false);
+    }
   };
 
   const navigateToTickets = () => {
@@ -737,6 +768,60 @@ const ViewRooms = () => {
     </Dialog>
   );
 
+  // Utility function to calculate time elapsed
+  const getTimeElapsed = (dateString) => {
+    if (!dateString) return 'Unknown';
+    
+    const createdDate = new Date(dateString);
+    const now = new Date();
+    
+    // Calculate the time difference in milliseconds
+    const diffMs = now - createdDate;
+    
+    // Convert to days, hours, minutes
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffDays > 0) {
+      return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
+    } else if (diffHours > 0) {
+      return `${diffHours} hour${diffHours > 1 ? 's' : ''}`;
+    } else {
+      return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''}`;
+    }
+  };
+
+  // Get a color for the pending time based on urgency
+  const getPendingTimeColor = (dateString, priority = 'Medium') => {
+    if (!dateString) return 'inherit';
+    
+    const createdDate = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - createdDate;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Adjust thresholds based on priority
+    const priorityMultiplier = {
+      'Critical': 0.5, // Critical items turn red 2x faster
+      'High': 0.75,    // High priority items turn red 1.33x faster
+      'Medium': 1,     // Standard threshold
+      'Low': 1.5       // Low priority items have more grace time
+    };
+    
+    const multiplier = priorityMultiplier[priority] || 1;
+    
+    if (diffDays >= 7 * multiplier) {
+      return 'error.main'; // Red after 7 days (adjusted by priority)
+    } else if (diffDays >= 3 * multiplier) {
+      return 'warning.main'; // Orange after 3 days (adjusted by priority)
+    } else if (diffDays >= 1 * multiplier) {
+      return 'info.main'; // Blue after 1 day (adjusted by priority)
+    } else {
+      return 'success.main'; // Green for recent items
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -995,23 +1080,61 @@ const ViewRooms = () => {
       <Dialog
         open={actionDialogOpen}
         onClose={() => setActionDialogOpen(false)}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
       >
         <DialogTitle>
-          {selectedRoom ? `Actions for ${selectedRoom.name}` : 'Choose Action'}
+          {selectedRoom ? `Room Details: ${selectedRoom.name}` : 'Room Details'}
         </DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            What would you like to create for this room?
+          {selectedRoom && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Type: {getFriendlyRoomName(selectedRoom.type, hotelChain)} ({selectedRoom.type})
+              </Typography>
+              <Typography variant="subtitle1" gutterBottom>
+                Status: <Chip 
+                  label={selectedRoom.status} 
+                  size="small" 
+                  color={
+                    selectedRoom.status === 'Available' ? 'success' :
+                    selectedRoom.status === 'Occupied' ? 'error' :
+                    selectedRoom.status === 'Maintenance' ? 'warning' :
+                    'default'
+                  } 
+                />
+              </Typography>
+              {selectedRoom.floor && (
+                <Typography variant="subtitle1" gutterBottom>
+                  Floor: {selectedRoom.floor}
+                </Typography>
+              )}
+              {selectedRoom.capacity && (
+                <Typography variant="subtitle1" gutterBottom>
+                  Capacity: {selectedRoom.capacity}
+                </Typography>
+              )}
+              {selectedRoom.last_cleaned && (
+                <Typography variant="subtitle1" gutterBottom>
+                  Last Cleaned: {new Date(selectedRoom.last_cleaned).toLocaleDateString()}
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          <Divider sx={{ my: 2 }} />
+          
+          <Typography variant="h6" gutterBottom>
+            Create New
           </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          
+          <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
             <Button
               variant="contained"
               color="primary"
               onClick={navigateToTickets}
               startIcon={<AssignmentIcon />}
-              size="large"
+              fullWidth
             >
               Create Ticket
             </Button>
@@ -1020,15 +1143,150 @@ const ViewRooms = () => {
               color="secondary"
               onClick={navigateToServiceRequests}
               startIcon={<RoomServiceIcon />}
-              size="large"
+              fullWidth
             >
               Create Service Request
             </Button>
           </Box>
+
+          <Divider sx={{ my: 2 }} />
+          
+          <Typography variant="h6" gutterBottom>
+            Related Tickets
+          </Typography>
+          
+          {loadingRoomData ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : roomTickets.length > 0 ? (
+            <Paper variant="outlined" sx={{ mb: 3 }}>
+              <List dense>
+                {roomTickets.map((ticket) => (
+                  <ListItem 
+                    key={ticket.ticket_id}
+                    secondaryAction={
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        {ticket.status !== 'completed' && (
+                          <Tooltip title="Time since created">
+                            <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+                              <AccessTimeIcon sx={{ fontSize: '1rem', mr: 0.5, color: getPendingTimeColor(ticket.created_at, ticket.priority) }} />
+                              <Typography variant="caption" sx={{ color: getPendingTimeColor(ticket.created_at, ticket.priority) }}>
+                                {getTimeElapsed(ticket.created_at)}
+                              </Typography>
+                            </Box>
+                          </Tooltip>
+                        )}
+                        <Chip 
+                          label={ticket.status} 
+                          size="small" 
+                          color={
+                            ticket.status === 'open' ? 'error' :
+                            ticket.status === 'in progress' ? 'warning' :
+                            ticket.status === 'completed' ? 'success' :
+                            'default'
+                          } 
+                        />
+                      </Box>
+                    }
+                    button
+                    onClick={() => {
+                      setActionDialogOpen(false);
+                      navigate(`/tickets/${ticket.ticket_id}`);
+                    }}
+                  >
+                    <ListItemText 
+                      primary={ticket.title} 
+                      secondary={
+                        <React.Fragment>
+                          <Typography variant="body2" component="span" sx={{ display: 'block' }}>
+                            Priority: {ticket.priority} | Category: {ticket.category}
+                          </Typography>
+                          <Typography variant="body2" component="span" sx={{ display: 'block' }}>
+                            Created: {new Date(ticket.created_at).toLocaleDateString()} | By: {ticket.created_by_username}
+                          </Typography>
+                        </React.Fragment>
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          ) : (
+            <Typography color="text.secondary" sx={{ mb: 3 }}>
+              No tickets found for this room.
+            </Typography>
+          )}
+          
+          <Typography variant="h6" gutterBottom>
+            Related Tasks
+          </Typography>
+          
+          {loadingRoomData ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : roomTasks.length > 0 ? (
+            <Paper variant="outlined">
+              <List dense>
+                {roomTasks.map((task) => (
+                  <ListItem 
+                    key={task.task_id}
+                    secondaryAction={
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        {task.status !== 'completed' && (
+                          <Tooltip title="Time since created">
+                            <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+                              <AccessTimeIcon sx={{ fontSize: '1rem', mr: 0.5, color: getPendingTimeColor(task.created_at, task.priority) }} />
+                              <Typography variant="caption" sx={{ color: getPendingTimeColor(task.created_at, task.priority) }}>
+                                {getTimeElapsed(task.created_at)}
+                              </Typography>
+                            </Box>
+                          </Tooltip>
+                        )}
+                        <Chip 
+                          label={task.status} 
+                          size="small" 
+                          color={
+                            task.status === 'pending' ? 'warning' :
+                            task.status === 'completed' ? 'success' :
+                            'default'
+                          } 
+                        />
+                      </Box>
+                    }
+                    button
+                    onClick={() => {
+                      setActionDialogOpen(false);
+                      navigate(`/tasks/${task.task_id}`);
+                    }}
+                  >
+                    <ListItemText 
+                      primary={task.title} 
+                      secondary={
+                        <React.Fragment>
+                          <Typography variant="body2" component="span" sx={{ display: 'block' }}>
+                            Priority: {task.priority} | Assigned to: {task.assigned_to_username}
+                          </Typography>
+                          <Typography variant="body2" component="span" sx={{ display: 'block' }}>
+                            {task.due_date ? `Due: ${new Date(task.due_date).toLocaleDateString()}` : 'No due date'} 
+                          </Typography>
+                        </React.Fragment>
+                      } 
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          ) : (
+            <Typography color="text.secondary">
+              No tasks found for this room.
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setActionDialogOpen(false)}>
-            Cancel
+            Close
           </Button>
         </DialogActions>
       </Dialog>

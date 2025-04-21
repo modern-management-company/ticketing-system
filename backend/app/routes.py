@@ -5176,3 +5176,99 @@ def update_security_settings():
         app.logger.error(f"Error in update_security_settings: {str(e)}")
         db.session.rollback()
         return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/rooms/<int:room_id>/tickets', methods=['GET'])
+@jwt_required()
+def get_room_tickets(room_id):
+    """Get all tickets for a specific room"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Verify the room exists
+        room = Room.query.get_or_404(room_id)
+        
+        # Get all tickets for the room
+        tickets = Ticket.query.filter_by(room_id=room_id).all()
+        
+        ticket_list = []
+        for ticket in tickets:
+            creator = User.query.get(ticket.user_id)
+            assigned_task = TaskAssignment.query.filter_by(ticket_id=ticket.ticket_id).first()
+            assigned_user = None
+            if assigned_task:
+                assigned_user = User.query.get(assigned_task.assigned_to_user_id)
+            
+            ticket_data = {
+                'ticket_id': ticket.ticket_id,
+                'title': ticket.title,
+                'description': ticket.description,
+                'status': ticket.status,
+                'priority': ticket.priority,
+                'category': ticket.category,
+                'created_by_id': ticket.user_id,
+                'created_by_username': creator.username if creator else 'Unknown',
+                'assigned_to_username': assigned_user.username if assigned_user else 'Unassigned',
+                'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+                'updated_at': ticket.updated_at.isoformat() if ticket.updated_at else None,
+                'property_id': ticket.property_id
+            }
+            ticket_list.append(ticket_data)
+        
+        return jsonify({'tickets': ticket_list}), 200
+    
+    except Exception as e:
+        app.logger.error(f"Error getting room tickets: {str(e)}")
+        return jsonify({'msg': 'Failed to get room tickets'}), 500
+
+@app.route('/rooms/<int:room_id>/tasks', methods=['GET'])
+@jwt_required()
+def get_room_tasks(room_id):
+    """Get all tasks related to tickets for a specific room"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Verify the room exists
+        room = Room.query.get_or_404(room_id)
+        
+        # First get all tickets for the room
+        tickets = Ticket.query.filter_by(room_id=room_id).all()
+        
+        # Get task assignments for these tickets
+        ticket_ids = [ticket.ticket_id for ticket in tickets]
+        task_assignments = TaskAssignment.query.filter(TaskAssignment.ticket_id.in_(ticket_ids)).all()
+        
+        # Get task IDs
+        task_ids = [ta.task_id for ta in task_assignments]
+        
+        # Get all tasks
+        tasks = Task.query.filter(Task.task_id.in_(task_ids)).all()
+        
+        task_list = []
+        for task in tasks:
+            assignee = User.query.get(task.assigned_to_id) if task.assigned_to_id else None
+            
+            task_data = {
+                'task_id': task.task_id,
+                'title': task.title,
+                'description': task.description,
+                'status': task.status,
+                'priority': task.priority,
+                'due_date': task.due_date.isoformat() if task.due_date else None,
+                'assigned_to_id': task.assigned_to_id,
+                'assigned_to_username': assignee.username if assignee else 'Unassigned',
+                'created_at': task.created_at.isoformat() if task.created_at else None,
+                'updated_at': task.updated_at.isoformat() if task.updated_at else None,
+                'completed_at': task.completed_at.isoformat() if task.completed_at else None,
+                'property_id': task.property_id
+            }
+            task_list.append(task_data)
+        
+        return jsonify({'tasks': task_list}), 200
+    
+    except Exception as e:
+        app.logger.error(f"Error getting room tasks: {str(e)}")
+        return jsonify({'msg': 'Failed to get room tasks'}), 500
