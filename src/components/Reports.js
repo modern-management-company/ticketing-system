@@ -41,6 +41,7 @@ import PropertySwitcher from './PropertySwitcher';
 import { toast } from 'react-hot-toast';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import CloseIcon from '@mui/icons-material/Close';
+import * as XLSX from 'xlsx';
 
 const TabPanel = (props) => {
   const { children, value, index, ...other } = props;
@@ -544,6 +545,114 @@ const Reports = () => {
     });
   };
 
+  const generateExcel = (type) => {
+    try {
+      const property = properties.find(p => p.property_id === selectedProperty);
+      const title = `${type.charAt(0).toUpperCase() + type.slice(1)} Report - ${property?.name}`;
+      const date = format(dateRange.start, 'MM/dd/yyyy') + ' to ' + format(dateRange.end, 'MM/dd/yyyy');
+      
+      // Get filtered data
+      const data = getFilteredData(reportData[type] || [], type);
+      
+      // Create worksheet data with header
+      let wsData = [];
+      
+      // Add title and date rows
+      wsData.push([title]);
+      wsData.push(['Date Range: ' + date]);
+      wsData.push([]);  // Empty row for spacing
+      
+      // Define headers based on report type
+      let headers = [];
+      if (type === 'tickets') {
+        headers = ['ID', 'Title', 'Room', 'Status', 'Priority', 'Category', 'Subcategory', 'Created By', 'Created At'];
+      } else if (type === 'tasks') {
+        headers = ['ID', 'Title', 'Room', 'Status', 'Priority', 'Category', 'Created By', 'Assigned To', 'Linked To', 'Due Date', 'Completed At', 'Completed By'];
+      } else if (type === 'requests') {
+        headers = ['ID', 'Type', 'Room', 'Group', 'Status', 'Priority', 'Guest', 'Created At'];
+      }
+      
+      // Add headers row
+      wsData.push(headers);
+      
+      // Add data rows
+      data.forEach(item => {
+        let row = [];
+        if (type === 'tickets') {
+          row = [
+            item.ticket_id,
+            item.title,
+            item.room_name || 'N/A',
+            item.status,
+            item.priority,
+            item.category || 'N/A',
+            item.subcategory || 'N/A',
+            item.created_by || 'Unknown',
+            item.created_at ? format(new Date(item.created_at), 'MM/dd/yyyy HH:mm') : 'N/A'
+          ];
+        } else if (type === 'tasks') {
+          const assignmentInfo = item.assignmentHistory && item.assignmentHistory.length > 0 
+            ? item.assignmentHistory[0].assignedTo
+            : 'Unassigned';
+            
+          row = [
+            item.task_id,
+            item.title,
+            item.room_info?.room_name || 'N/A',
+            item.status,
+            item.priority,
+            item.category || 'N/A',
+            item.created_by || 'Unknown',
+            assignmentInfo,
+            item.ticket_id ? `Ticket #${item.ticket_id}` : 'None',
+            item.due_date ? format(new Date(item.due_date), 'MM/dd/yyyy') : 'No due date',
+            item.completed_at ? format(new Date(item.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A',
+            item.completed_by || 'N/A'
+          ];
+        } else if (type === 'requests') {
+          row = [
+            item.request_id,
+            item.request_type,
+            item.room_number || 'N/A',
+            item.request_group,
+            item.status,
+            item.priority,
+            item.guest_name || 'N/A',
+            format(new Date(item.created_at), 'MM/dd/yyyy HH:mm')
+          ];
+        }
+        wsData.push(row);
+      });
+      
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      
+      // Set column widths
+      const colWidths = headers.map(h => ({ wch: Math.max(20, h.length * 1.5) }));
+      ws['!cols'] = colWidths;
+      
+      // Style the header cells (in Excel, styling is limited with this library)
+      // We can at least make the headers bold
+      for (let i = 0; i < headers.length; i++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 3, c: i }); // Headers are on row 4 (index 3)
+        if (!ws[cellRef]) ws[cellRef] = {};
+        ws[cellRef].s = { font: { bold: true } };
+      }
+      
+      // Add the worksheet to the workbook
+      XLSX.utils.book_append_sheet(wb, ws, type.charAt(0).toUpperCase() + type.slice(1));
+      
+      // Generate Excel file and trigger download
+      XLSX.writeFile(wb, `${type}_report_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+      
+      toast.success(`Excel report downloaded successfully`);
+    } catch (error) {
+      console.error('Error generating Excel:', error);
+      toast.error('Failed to generate Excel file');
+    }
+  };
+
   return (
     <Box sx={{ width: '100%' }}>
       <Typography variant="h4" gutterBottom>
@@ -703,6 +812,14 @@ const Reports = () => {
                 </Button>
                 <Button
                   variant="contained"
+                  color="success"
+                  onClick={() => generateExcel('tickets')}
+                  disabled={!reportData.tickets?.length}
+                >
+                  Export Excel
+                </Button>
+                <Button
+                  variant="contained"
                   color="secondary"
                   onClick={() => setOpenEmailDialog(true)}
                   disabled={!reportData.tickets?.length}
@@ -788,6 +905,14 @@ const Reports = () => {
                   disabled={!reportData.tasks?.length}
                 >
                   Generate PDF
+                </Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={() => generateExcel('tasks')}
+                  disabled={!reportData.tasks?.length}
+                >
+                  Export Excel
                 </Button>
                 <Button
                   variant="contained"
@@ -888,6 +1013,14 @@ const Reports = () => {
                   disabled={!reportData.requests?.length}
                 >
                   Generate PDF
+                </Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={() => generateExcel('requests')}
+                  disabled={!reportData.requests?.length}
+                >
+                  Export Excel
                 </Button>
                 <Button
                   variant="contained"
