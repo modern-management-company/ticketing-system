@@ -28,7 +28,8 @@ import {
   Autocomplete,
   FormControlLabel,
   Switch,
-  Chip
+  Chip,
+  IconButton
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -38,6 +39,8 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import PropertySwitcher from './PropertySwitcher';
 import { toast } from 'react-hot-toast';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import CloseIcon from '@mui/icons-material/Close';
 
 const TabPanel = (props) => {
   const { children, value, index, ...other } = props;
@@ -80,6 +83,13 @@ const Reports = () => {
     end: new Date()
   });
   const [openDateRangePicker, setOpenDateRangePicker] = useState(false);
+  const [filters, setFilters] = useState({
+    tickets: {},
+    tasks: {},
+    requests: {}
+  });
+  const [openFilterDialog, setOpenFilterDialog] = useState(false);
+  const [currentFilterType, setCurrentFilterType] = useState('');
 
   useEffect(() => {
     fetchProperties();
@@ -289,6 +299,8 @@ const Reports = () => {
           item.room_name || 'N/A',
           item.status,
           item.priority,
+          item.category || 'N/A',
+          item.subcategory || 'N/A',
           item.created_by || 'Unknown',
           format(new Date(item.created_at), 'MM/dd/yyyy HH:mm')
         ];
@@ -303,6 +315,7 @@ const Reports = () => {
           item.room_info?.room_name || 'N/A',
           item.status,
           item.priority,
+          item.category || 'N/A',
           item.created_by || 'Unknown',
           assignmentInfo,
           item.ticket_id ? `Ticket #${item.ticket_id}` : 'None',
@@ -325,9 +338,9 @@ const Reports = () => {
     });
 
     const columns = type === 'tickets' 
-      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Created At']
+      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Category', 'Subcategory', 'Created By', 'Created At']
       : type === 'tasks'
-      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Created By', 'Assigned To', 'Linked To', 'Due Date', 'Completed At', 'Completed By']
+      ? ['ID', 'Title', 'Room', 'Status', 'Priority', 'Category', 'Created By', 'Assigned To', 'Linked To', 'Due Date', 'Completed At', 'Completed By']
       : ['ID', 'Type', 'Room', 'Group', 'Status', 'Priority', 'Guest', 'Created At'];
 
     doc.autoTable({
@@ -384,6 +397,151 @@ const Reports = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFilterChange = (reportType, column, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [reportType]: {
+        ...prev[reportType],
+        [column]: value
+      }
+    }));
+  };
+
+  const clearFilters = (reportType) => {
+    setFilters(prev => ({
+      ...prev,
+      [reportType]: {}
+    }));
+  };
+
+  const FilterDialog = () => {
+    const [tempFilters, setTempFilters] = useState({});
+    
+    useEffect(() => {
+      if (currentFilterType) {
+        setTempFilters(filters[currentFilterType] || {});
+      }
+    }, [currentFilterType, openFilterDialog]);
+    
+    const handleSaveFilters = () => {
+      setFilters(prev => ({
+        ...prev,
+        [currentFilterType]: tempFilters
+      }));
+      setOpenFilterDialog(false);
+    };
+    
+    const getFilterFields = () => {
+      if (currentFilterType === 'tickets') {
+        return [
+          { field: 'ticket_id', label: 'Ticket ID' },
+          { field: 'title', label: 'Title' },
+          { field: 'room_name', label: 'Room' },
+          { field: 'status', label: 'Status' },
+          { field: 'priority', label: 'Priority' },
+          { field: 'category', label: 'Category' },
+          { field: 'subcategory', label: 'Subcategory' },
+          { field: 'created_by', label: 'Created By' }
+        ];
+      } else if (currentFilterType === 'tasks') {
+        return [
+          { field: 'task_id', label: 'Task ID' },
+          { field: 'title', label: 'Title' },
+          { field: 'room_name', label: 'Room' },
+          { field: 'status', label: 'Status' },
+          { field: 'priority', label: 'Priority' },
+          { field: 'category', label: 'Category' },
+          { field: 'created_by', label: 'Created By' },
+          { field: 'current_assigned_to', label: 'Assigned To' }
+        ];
+      } else if (currentFilterType === 'requests') {
+        return [
+          { field: 'request_id', label: 'Request ID' },
+          { field: 'request_type', label: 'Type' },
+          { field: 'room_number', label: 'Room' },
+          { field: 'request_group', label: 'Group' },
+          { field: 'status', label: 'Status' },
+          { field: 'priority', label: 'Priority' },
+          { field: 'guest_name', label: 'Guest' }
+        ];
+      }
+      return [];
+    };
+    
+    return (
+      <Dialog 
+        open={openFilterDialog} 
+        onClose={() => setOpenFilterDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Filter {currentFilterType}</Typography>
+            <IconButton onClick={() => setOpenFilterDialog(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          
+          <Grid container spacing={2}>
+            {getFilterFields().map((field) => (
+              <Grid item xs={12} md={6} key={field.field}>
+                <TextField
+                  fullWidth
+                  label={field.label}
+                  value={tempFilters[field.field] || ''}
+                  onChange={(e) => setTempFilters({
+                    ...tempFilters,
+                    [field.field]: e.target.value
+                  })}
+                  variant="outlined"
+                  size="small"
+                />
+              </Grid>
+            ))}
+          </Grid>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2, gap: 1 }}>
+            <Button 
+              onClick={() => setTempFilters({})} 
+              color="secondary"
+            >
+              Clear
+            </Button>
+            <Button 
+              onClick={handleSaveFilters} 
+              variant="contained"
+            >
+              Apply Filters
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
+  const getFilteredData = (data, reportType) => {
+    const currentFilters = filters[reportType];
+    if (!currentFilters || Object.keys(currentFilters).length === 0) {
+      return data;
+    }
+    
+    return data.filter(item => {
+      return Object.entries(currentFilters).every(([field, value]) => {
+        if (!value) return true;
+        
+        const itemValue = item[field];
+        if (itemValue === undefined || itemValue === null) return false;
+        
+        if (typeof itemValue === 'number') {
+          return itemValue.toString().includes(value.toString());
+        }
+        
+        return String(itemValue).toLowerCase().includes(String(value).toLowerCase());
+      });
+    });
   };
 
   return (
@@ -551,6 +709,24 @@ const Reports = () => {
                 >
                   Send to Email
                 </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<FilterListIcon />}
+                  onClick={() => {
+                    setCurrentFilterType('tickets');
+                    setOpenFilterDialog(true);
+                  }}
+                >
+                  Filter
+                </Button>
+                {Object.keys(filters.tickets || {}).length > 0 && (
+                  <Button
+                    color="secondary"
+                    onClick={() => clearFilters('tickets')}
+                  >
+                    Clear Filters ({Object.keys(filters.tickets).length})
+                  </Button>
+                )}
               </Box>
               <TableContainer>
                 <Table>
@@ -561,19 +737,23 @@ const Reports = () => {
                       <TableCell>Room</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
+                      <TableCell>Category</TableCell>
+                      <TableCell>Subcategory</TableCell>
                       <TableCell>Created By</TableCell>
                       <TableCell>Created At</TableCell>
                       <TableCell>History</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {(reportData.tickets || []).map((ticket) => (
+                    {getFilteredData(reportData.tickets || [], 'tickets').map((ticket) => (
                       <TableRow key={ticket.ticket_id}>
                         <TableCell>{ticket.ticket_id}</TableCell>
                         <TableCell>{ticket.title}</TableCell>
                         <TableCell>{ticket.room_name || 'N/A'}</TableCell>
                         <TableCell>{ticket.status}</TableCell>
                         <TableCell>{ticket.priority}</TableCell>
+                        <TableCell>{ticket.category || 'N/A'}</TableCell>
+                        <TableCell>{ticket.subcategory || 'N/A'}</TableCell>
                         <TableCell>{ticket.created_by}</TableCell>
                         <TableCell>
                           {ticket.created_at ? format(new Date(ticket.created_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
@@ -617,6 +797,24 @@ const Reports = () => {
                 >
                   Send to Email
                 </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<FilterListIcon />}
+                  onClick={() => {
+                    setCurrentFilterType('tasks');
+                    setOpenFilterDialog(true);
+                  }}
+                >
+                  Filter
+                </Button>
+                {Object.keys(filters.tasks || {}).length > 0 && (
+                  <Button
+                    color="secondary"
+                    onClick={() => clearFilters('tasks')}
+                  >
+                    Clear Filters ({Object.keys(filters.tasks).length})
+                  </Button>
+                )}
               </Box>
               <TableContainer>
                 <Table>
@@ -627,6 +825,7 @@ const Reports = () => {
                       <TableCell>Room</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
+                      <TableCell>Category</TableCell>
                       <TableCell>Created By</TableCell>
                       <TableCell>Current Assignee</TableCell>
                       <TableCell>Completed At/By</TableCell>
@@ -634,13 +833,14 @@ const Reports = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {(reportData.tasks || []).map((task) => (
+                    {getFilteredData(reportData.tasks || [], 'tasks').map((task) => (
                       <TableRow key={task.task_id}>
                         <TableCell>{task.task_id}</TableCell>
                         <TableCell>{task.title}</TableCell>
                         <TableCell>{task.room_info?.room_name || 'N/A'}</TableCell>
                         <TableCell>{task.status}</TableCell>
                         <TableCell>{task.priority}</TableCell>
+                        <TableCell>{task.category || 'N/A'}</TableCell>
                         <TableCell>{task.created_by}</TableCell>
                         <TableCell>{task.current_assigned_to}</TableCell>
                         <TableCell>
@@ -697,6 +897,24 @@ const Reports = () => {
                 >
                   Send to Email
                 </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<FilterListIcon />}
+                  onClick={() => {
+                    setCurrentFilterType('requests');
+                    setOpenFilterDialog(true);
+                  }}
+                >
+                  Filter
+                </Button>
+                {Object.keys(filters.requests || {}).length > 0 && (
+                  <Button
+                    color="secondary"
+                    onClick={() => clearFilters('requests')}
+                  >
+                    Clear Filters ({Object.keys(filters.requests).length})
+                  </Button>
+                )}
               </Box>
               <TableContainer>
                 <Table>
@@ -713,7 +931,7 @@ const Reports = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {(reportData.requests || []).map((request) => (
+                    {getFilteredData(reportData.requests || [], 'requests').map((request) => (
                       <TableRow key={request.request_id}>
                         <TableCell>{request.request_id}</TableCell>
                         <TableCell>{request.request_type}</TableCell>
@@ -768,6 +986,8 @@ const Reports = () => {
           </Box>
         </DialogContent>
       </Dialog>
+
+      <FilterDialog />
     </Box>
   );
 };
