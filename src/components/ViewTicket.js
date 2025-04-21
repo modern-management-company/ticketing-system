@@ -128,6 +128,31 @@ const ViewTicket = () => {
     }
   }, [ticketId]);
 
+  useEffect(() => {
+    if (tasks.length > 0) {
+      const sortedTasks = [...tasks].sort((a, b) => {
+        const priorityOrder = {
+          'Critical': 0,
+          'High': 1,
+          'Medium': 2,
+          'Low': 3
+        };
+        
+        // First, sort by priority
+        if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
+        
+        // If priority is the same, sort by duration (oldest first)
+        const aDate = new Date(a.created_at);
+        const bDate = new Date(b.created_at);
+        return aDate - bDate;
+      });
+      
+      setTasks(sortedTasks);
+    }
+  }, [tasks]);
+
   const fetchTicket = async () => {
     try {
       setLoading(true);
@@ -161,7 +186,34 @@ const ViewTicket = () => {
       if (response.data?.tasks) {
         // Filter tasks to only show those linked to this ticket
         const linkedTasks = response.data.tasks.filter(task => task.ticket_id === parseInt(ticketId));
-        setTasks(linkedTasks);
+        
+        // Sort tasks by priority and then by duration (created_at date)
+        const sortedTasks = linkedTasks.sort((a, b) => {
+          const priorityOrder = {
+            'Critical': 0,
+            'High': 1,
+            'Medium': 2,
+            'Low': 3
+          };
+          
+          // First, sort by priority
+          if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+          }
+          
+          // If priority is the same, sort by duration (oldest first)
+          const aDate = new Date(a.created_at);
+          const bDate = new Date(b.created_at);
+          return aDate - bDate;
+        });
+        
+        console.log('Sorted tasks by priority and duration: ', sortedTasks.map(t => ({ 
+          id: t.task_id, 
+          priority: t.priority, 
+          created: t.created_at 
+        })));
+        
+        setTasks(sortedTasks);
       }
     } catch (error) {
       console.error('Failed to fetch tasks:', error);
@@ -429,6 +481,60 @@ const ViewTicket = () => {
     }
   };
 
+  // Add a helper function after existing functions to calculate time elapsed
+  const getTimeElapsed = (dateString) => {
+    if (!dateString) return 'Unknown';
+    
+    const createdDate = new Date(dateString);
+    const now = new Date();
+    
+    // Calculate the time difference in milliseconds
+    const diffMs = now - createdDate;
+    
+    // Convert to days, hours, minutes
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffDays > 0) {
+      return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
+    } else if (diffHours > 0) {
+      return `${diffHours} hour${diffHours > 1 ? 's' : ''}`;
+    } else {
+      return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''}`;
+    }
+  };
+
+  // Get color based on elapsed time and priority
+  const getPendingTimeColor = (dateString, priority = 'Medium') => {
+    if (!dateString) return 'inherit';
+    
+    const createdDate = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - createdDate;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Adjust thresholds based on priority
+    const priorityMultiplier = {
+      'Critical': 0.5, // Critical items turn red 2x faster
+      'High': 0.75,    // High priority items turn red 1.33x faster
+      'Medium': 1,     // Standard threshold
+      'Low': 1.5       // Low priority items have more grace time
+    };
+    
+    const multiplier = priorityMultiplier[priority] || 1;
+    
+    if (diffDays >= 7 * multiplier) {
+      return 'error';  // Red after 7 days (adjusted by priority)
+    } else if (diffDays >= 3 * multiplier) {
+      return 'warning'; // Orange after 3 days (adjusted by priority)
+    } else if (diffDays >= 1 * multiplier) {
+      return 'info';   // Blue after 1 day (adjusted by priority)
+    } else {
+      return 'success'; // Green for recent items
+    }
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" p={3}>
@@ -660,6 +766,14 @@ const ViewTicket = () => {
                               label={`Due: ${new Date(task.due_date).toLocaleDateString()}`}
                               variant="outlined"
                               size="small"
+                            />
+                          )}
+                          {task.status.toLowerCase() !== 'completed' && (
+                            <Chip 
+                              label={`Pending: ${getTimeElapsed(task.created_at)}`}
+                              variant="outlined"
+                              size="small"
+                              color={getPendingTimeColor(task.created_at, task.priority)}
                             />
                           )}
                         </Box>

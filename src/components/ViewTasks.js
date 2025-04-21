@@ -83,7 +83,7 @@ const ViewTasks = () => {
   const [openDueDatePicker, setOpenDueDatePicker] = useState(false);
   const [managers, setManagers] = useState([]);
   const isMobile = useIsMobile();
-  const [orderBy, setOrderBy] = useState('task_id');
+  const [orderBy, setOrderBy] = useState('priority');
   const [order, setOrder] = useState('asc');
   const [viewMode, setViewMode] = useState('table');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -169,15 +169,33 @@ const ViewTasks = () => {
       console.log('Tasks response:', tasksResponse.data);
 
       if (tasksResponse.data?.tasks) {
-        // Log task details with ticket and room information
-        console.log('Tasks with ticket info:', tasksResponse.data.tasks.map(task => ({
-          task_id: task.task_id,
-          ticket_id: task.ticket_id,
-          room_info: task.room_info,
-          title: task.title
+        // Sort tasks by priority and then by duration (created_at date)
+        const sortedTasks = tasksResponse.data.tasks.sort((a, b) => {
+          const priorityOrder = {
+            'Critical': 0,
+            'High': 1,
+            'Medium': 2,
+            'Low': 3
+          };
+          
+          // First, sort by priority
+          if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+          }
+          
+          // If priority is the same, sort by duration (oldest first)
+          const aDate = new Date(a.created_at);
+          const bDate = new Date(b.created_at);
+          return aDate - bDate;
+        });
+        
+        console.log('Sorted tasks by priority and duration: ', sortedTasks.map(t => ({ 
+          id: t.task_id, 
+          priority: t.priority, 
+          created: t.created_at 
         })));
         
-        setTasks(tasksResponse.data.tasks);
+        setTasks(sortedTasks);
       } else {
         console.warn('No tasks data in response');
         setTasks([]);
@@ -440,8 +458,30 @@ const ViewTasks = () => {
       let aValue = a[orderBy];
       let bValue = b[orderBy];
 
+      // Special handling for priority-duration sorting
+      if (orderBy === 'priority') {
+        const priorityOrder = {
+          'Critical': 0,
+          'High': 1,
+          'Medium': 2,
+          'Low': 3
+        };
+        
+        // First sort by priority
+        if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+          return order === 'asc' 
+            ? priorityOrder[a.priority] - priorityOrder[b.priority]
+            : priorityOrder[b.priority] - priorityOrder[a.priority];
+        }
+        
+        // Then by duration (created date)
+        const aDate = new Date(a.created_at);
+        const bDate = new Date(b.created_at);
+        return order === 'asc' ? aDate - bDate : bDate - aDate;
+      }
+      
       // Special handling for room sorting
-      if (orderBy === 'room_name') {
+      else if (orderBy === 'room_name') {
         aValue = a.room_info?.room_name || '';
         bValue = b.room_info?.room_name || '';
       } else if (orderBy === 'assigned_to') {
@@ -548,6 +588,60 @@ const ViewTasks = () => {
     }
   };
 
+  // Add helper function to calculate time elapsed for pending tasks
+  const getTimeElapsed = (dateString) => {
+    if (!dateString) return 'Unknown';
+    
+    const createdDate = new Date(dateString);
+    const now = new Date();
+    
+    // Calculate the time difference in milliseconds
+    const diffMs = now - createdDate;
+    
+    // Convert to days, hours, minutes
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffDays > 0) {
+      return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
+    } else if (diffHours > 0) {
+      return `${diffHours} hour${diffHours > 1 ? 's' : ''}`;
+    } else {
+      return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''}`;
+    }
+  };
+
+  // Get color based on elapsed time and priority
+  const getPendingTimeColor = (dateString, priority = 'Medium') => {
+    if (!dateString) return 'inherit';
+    
+    const createdDate = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - createdDate;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Adjust thresholds based on priority
+    const priorityMultiplier = {
+      'Critical': 0.5, // Critical items turn red 2x faster
+      'High': 0.75,    // High priority items turn red 1.33x faster
+      'Medium': 1,     // Standard threshold
+      'Low': 1.5       // Low priority items have more grace time
+    };
+    
+    const multiplier = priorityMultiplier[priority] || 1;
+    
+    if (diffDays >= 7 * multiplier) {
+      return 'error';  // Red after 7 days (adjusted by priority)
+    } else if (diffDays >= 3 * multiplier) {
+      return 'warning'; // Orange after 3 days (adjusted by priority)
+    } else if (diffDays >= 1 * multiplier) {
+      return 'info';   // Blue after 1 day (adjusted by priority)
+    } else {
+      return 'success'; // Green for recent items
+    }
+  };
+
   const TaskCard = ({ task }) => (
     <Card sx={{ mb: 2 }}>
       <CardContent>
@@ -628,6 +722,18 @@ const ViewTasks = () => {
               {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}
             </Typography>
           </Grid>
+          {task.status.toLowerCase() !== 'completed' && (
+            <Grid item xs={12}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                <Typography variant="subtitle2" sx={{ mr: 1 }}>Pending:</Typography>
+                <Chip 
+                  label={getTimeElapsed(task.created_at)}
+                  size="small"
+                  color={getPendingTimeColor(task.created_at, task.priority)}
+                />
+              </Box>
+            </Grid>
+          )}
         </Grid>
       </CardContent>
       <CardActions>
@@ -1008,6 +1114,15 @@ const ViewTasks = () => {
                         Group
                       </TableSortLabel>
                     </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={orderBy === 'pending_duration'}
+                        direction={orderBy === 'pending_duration' ? order : 'asc'}
+                        onClick={() => handleRequestSort('pending_duration')}
+                      >
+                        Pending Duration
+                      </TableSortLabel>
+                    </TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -1105,6 +1220,15 @@ const ViewTasks = () => {
                               />
                             ) : 'N/A';
                           })()}
+                        </TableCell>
+                        <TableCell>
+                          {task.status.toLowerCase() !== 'completed' && (
+                            <Chip 
+                              label={getTimeElapsed(task.created_at)}
+                              size="small"
+                              color={getPendingTimeColor(task.created_at, task.priority)}
+                            />
+                          )}
                         </TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', gap: 1 }}>

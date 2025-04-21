@@ -404,7 +404,33 @@ const ViewRooms = () => {
       // Fetch tickets related to this room
       const ticketsResponse = await apiClient.get(`/rooms/${roomId}/tickets`);
       if (ticketsResponse.data && Array.isArray(ticketsResponse.data.tickets)) {
-        setRoomTickets(ticketsResponse.data.tickets);
+        // Sort tickets by priority and then by duration (created_at date)
+        const sortedTickets = ticketsResponse.data.tickets.sort((a, b) => {
+          const priorityOrder = {
+            'Critical': 0,
+            'High': 1,
+            'Medium': 2,
+            'Low': 3
+          };
+          
+          // First, sort by priority
+          if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+          }
+          
+          // If priority is the same, sort by duration (oldest first)
+          const aDate = new Date(a.created_at);
+          const bDate = new Date(b.created_at);
+          return aDate - bDate;
+        });
+        
+        console.log('Sorted tickets:', sortedTickets.map(t => ({
+          id: t.ticket_id,
+          priority: t.priority,
+          created: t.created_at
+        })));
+        
+        setRoomTickets(sortedTickets);
       } else {
         setRoomTickets([]);
       }
@@ -412,7 +438,33 @@ const ViewRooms = () => {
       // Fetch tasks related to this room
       const tasksResponse = await apiClient.get(`/rooms/${roomId}/tasks`);
       if (tasksResponse.data && Array.isArray(tasksResponse.data.tasks)) {
-        setRoomTasks(tasksResponse.data.tasks);
+        // Sort tasks by priority and then by duration (created_at date)
+        const sortedTasks = tasksResponse.data.tasks.sort((a, b) => {
+          const priorityOrder = {
+            'Critical': 0,
+            'High': 1,
+            'Medium': 2,
+            'Low': 3
+          };
+          
+          // First, sort by priority
+          if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+          }
+          
+          // If priority is the same, sort by duration (oldest first)
+          const aDate = new Date(a.created_at);
+          const bDate = new Date(b.created_at);
+          return aDate - bDate;
+        });
+        
+        console.log('Sorted tasks:', sortedTasks.map(t => ({
+          id: t.task_id,
+          priority: t.priority,
+          created: t.created_at
+        })));
+        
+        setRoomTasks(sortedTasks);
       } else {
         setRoomTasks([]);
       }
@@ -1169,9 +1221,15 @@ const ViewRooms = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {ticket.status !== 'completed' && (
                           <Tooltip title="Time since created">
-                            <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-                              <AccessTimeIcon sx={{ fontSize: '1rem', mr: 0.5, color: getPendingTimeColor(ticket.created_at, ticket.priority) }} />
-                              <Typography variant="caption" sx={{ color: getPendingTimeColor(ticket.created_at, ticket.priority) }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mr: 2, gap: 0.5 }}>
+                              <AccessTimeIcon sx={{ fontSize: '1rem', color: getPendingTimeColor(ticket.created_at, ticket.priority) }} />
+                              <Typography 
+                                variant="caption" 
+                                sx={{ 
+                                  color: getPendingTimeColor(ticket.created_at, ticket.priority),
+                                  fontWeight: 'bold'
+                                }}
+                              >
                                 {getTimeElapsed(ticket.created_at)}
                               </Typography>
                             </Box>
@@ -1196,7 +1254,21 @@ const ViewRooms = () => {
                     }}
                   >
                     <ListItemText 
-                      primary={ticket.title} 
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body1">{ticket.title}</Typography>
+                          <Chip 
+                            label={ticket.priority} 
+                            size="small" 
+                            color={
+                              ticket.priority === 'Critical' ? 'error' :
+                              ticket.priority === 'High' ? 'warning' :
+                              ticket.priority === 'Medium' ? 'info' :
+                              'success'
+                            }
+                          />
+                        </Box>
+                      }
                       secondary={
                         <React.Fragment>
                           <Typography variant="body2" component="span" sx={{ display: 'block' }}>
@@ -1236,9 +1308,15 @@ const ViewRooms = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {task.status !== 'completed' && (
                           <Tooltip title="Time since created">
-                            <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-                              <AccessTimeIcon sx={{ fontSize: '1rem', mr: 0.5, color: getPendingTimeColor(task.created_at, task.priority) }} />
-                              <Typography variant="caption" sx={{ color: getPendingTimeColor(task.created_at, task.priority) }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mr: 2, gap: 0.5 }}>
+                              <AccessTimeIcon sx={{ fontSize: '1rem', color: getPendingTimeColor(task.created_at, task.priority) }} />
+                              <Typography 
+                                variant="caption" 
+                                sx={{ 
+                                  color: getPendingTimeColor(task.created_at, task.priority),
+                                  fontWeight: 'bold'
+                                }}
+                              >
                                 {getTimeElapsed(task.created_at)}
                               </Typography>
                             </Box>
@@ -1262,11 +1340,25 @@ const ViewRooms = () => {
                     }}
                   >
                     <ListItemText 
-                      primary={task.title} 
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body1">{task.title}</Typography>
+                          <Chip 
+                            label={task.priority} 
+                            size="small" 
+                            color={
+                              task.priority === 'Critical' ? 'error' :
+                              task.priority === 'High' ? 'warning' :
+                              task.priority === 'Medium' ? 'info' :
+                              'success'
+                            }
+                          />
+                        </Box>
+                      }
                       secondary={
                         <React.Fragment>
                           <Typography variant="body2" component="span" sx={{ display: 'block' }}>
-                            Priority: {task.priority} | Assigned to: {task.assigned_to_username}
+                            Priority: {task.priority} | Assigned to: {task.assigned_to_username || 'Unassigned'}
                           </Typography>
                           <Typography variant="body2" component="span" sx={{ display: 'block' }}>
                             {task.due_date ? `Due: ${new Date(task.due_date).toLocaleDateString()}` : 'No due date'} 
