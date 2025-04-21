@@ -56,9 +56,13 @@ const EmailSettings = ({ onError, onSuccess }) => {
   const [notificationTestResults, setNotificationTestResults] = useState([]);
   const [resendingReport, setResendingReport] = useState(false);
   const [verifyingScheduler, setVerifyingScheduler] = useState(false);
+  const [executiveUsers, setExecutiveUsers] = useState([]);
+  const [selectedExecutiveId, setSelectedExecutiveId] = useState('');
+  const [sendingTestReport, setSendingTestReport] = useState(false);
 
   useEffect(() => {
     fetchSettings();
+    fetchExecutiveUsers();
   }, []);
 
   const fetchSettings = async () => {
@@ -71,6 +75,16 @@ const EmailSettings = ({ onError, onSuccess }) => {
       if (onError) onError('Failed to load email settings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchExecutiveUsers = async () => {
+    try {
+      const response = await apiClient.get('/users?group=Executive');
+      setExecutiveUsers(response.data.users || []);
+    } catch (error) {
+      console.error('Failed to fetch executive users:', error);
+      if (onError) onError('Failed to load executive users');
     }
   };
 
@@ -164,6 +178,26 @@ const EmailSettings = ({ onError, onSuccess }) => {
       if (onError) onError(error.response?.data?.message || 'Failed to run notification tests');
     } finally {
       setTestingEmail(false);
+    }
+  };
+
+  const handleSendTestReport = async () => {
+    if (!selectedExecutiveId) {
+      if (onError) onError('Please select an executive user');
+      return;
+    }
+
+    try {
+      setSendingTestReport(true);
+      await apiClient.post('/api/settings/test-executive-report', {
+        user_id: selectedExecutiveId
+      });
+      if (onSuccess) onSuccess('Test executive report sent successfully');
+    } catch (error) {
+      console.error('Failed to send test executive report:', error);
+      if (onError) onError(error.response?.data?.message || 'Failed to send test executive report');
+    } finally {
+      setSendingTestReport(false);
     }
   };
 
@@ -325,7 +359,7 @@ const EmailSettings = ({ onError, onSuccess }) => {
       </Box>
 
       <Box sx={{ display: activeTab === 3 ? 'block' : 'none' }}>
-        <Paper sx={{ p: 3 }}>
+        <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" gutterBottom>
             Daily Report Schedule
           </Typography>
@@ -401,6 +435,48 @@ const EmailSettings = ({ onError, onSuccess }) => {
                   {verifyingScheduler ? 'Verifying...' : 'Verify Scheduler Settings'}
                 </Button>
               </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Test Executive Report
+          </Typography>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Send a test daily report to a specific executive user to verify the email format and content.
+          </Alert>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <TextField
+                select
+                fullWidth
+                label="Select Executive User"
+                value={selectedExecutiveId}
+                onChange={(e) => setSelectedExecutiveId(e.target.value)}
+                margin="normal"
+                SelectProps={{
+                  native: true,
+                }}
+              >
+                <option value="">Select an executive user</option>
+                {executiveUsers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} ({user.email})
+                  </option>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12}>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleSendTestReport}
+                disabled={!selectedExecutiveId || sendingTestReport}
+                startIcon={<SendIcon />}
+              >
+                {sendingTestReport ? 'Sending...' : 'Send Test Report'}
+              </Button>
             </Grid>
           </Grid>
         </Paper>

@@ -142,30 +142,37 @@ from app import routes, models
 with app.app_context():
     db.create_all()
     app.logger.info('Database tables created')
-
-def init_scheduler():
+    
+    # Initialize the scheduler
     try:
-        scheduler = BackgroundScheduler(timezone=pytz.timezone('America/New_York'))
-        
-        # Schedule daily reports to run at 6 PM Eastern Time
-        scheduler.add_job(
-            send_daily_reports,
-            trigger=CronTrigger(hour=18, minute=0),  # 6 PM Eastern Time
-            id='daily_reports',
-            name='Send daily property reports',
-            replace_existing=True,
-            misfire_grace_time=3600  # Allow job to run up to 1 hour late if server was down
-        )
-        
-        scheduler.start()
-        app.logger.info("Scheduler started successfully. Daily reports will run at 6 PM Eastern Time.")
-        app.logger.info("Next run time: %s", 
-            scheduler.get_job('daily_reports').next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z"))
-            
+        from app.scheduler import init_scheduler
+        init_scheduler()
+        app.logger.info('Scheduler initialized successfully')
     except Exception as e:
-        app.logger.error(f"Failed to initialize scheduler: {str(e)}")
-        # Re-raise the exception to ensure the error is noticed
-        raise
-
-# Add this to your app initialization
-init_scheduler()
+        app.logger.error(f'Failed to initialize scheduler: {str(e)}')
+        app.logger.warning('Application will continue without automated reports')
+    
+    # Verify the email settings exist, create default if not
+    try:
+        from app.models import EmailSettings
+        settings = EmailSettings.query.first()
+        if not settings:
+            app.logger.warning('No email settings found, creating default settings')
+            from app.models import EmailSettings
+            settings = EmailSettings(
+                smtp_server='',
+                smtp_port=587,
+                smtp_username='',
+                smtp_password='',
+                sender_email='',
+                enable_email_notifications=True,
+                daily_report_hour=18,  # 6 PM
+                daily_report_minute=0,
+                daily_report_timezone='America/New_York',
+                enable_daily_reports=True
+            )
+            db.session.add(settings)
+            db.session.commit()
+            app.logger.info('Default email settings created')
+    except Exception as e:
+        app.logger.error(f'Failed to setup email settings: {str(e)}')

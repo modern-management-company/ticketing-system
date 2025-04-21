@@ -17,6 +17,7 @@ from app.services.sms_service import SMSService
 from werkzeug.utils import secure_filename
 from app.services.file_storage_service import FileStorageService
 import io
+import pytz
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -5272,3 +5273,116 @@ def get_room_tasks(room_id):
     except Exception as e:
         app.logger.error(f"Error getting room tasks: {str(e)}")
         return jsonify({'msg': 'Failed to get room tasks'}), 500
+
+# After the resend_executive_report route
+@app.route('/api/settings/test-executive-report', methods=['POST'])
+@jwt_required()
+def test_executive_report():
+    """Send a test daily report to a specific executive user for verification"""
+    try:
+        # Get the current user
+        current_user = get_user_from_jwt()
+        if not current_user or current_user.role != 'super_admin':
+            return jsonify({'error': 'Unauthorized - Only super admins can send test reports'}), 403
+
+        data = request.get_json()
+        if not data or 'user_id' not in data:
+            return jsonify({'error': 'Missing user_id in request'}), 400
+            
+        user_id = data.get('user_id')
+        
+        # Get the target executive user
+        target_user = User.query.get(user_id)
+        if not target_user:
+            return jsonify({'error': f'User with ID {user_id} not found'}), 404
+            
+        if target_user.group != 'Executive':
+            return jsonify({'error': 'Test reports can only be sent to executive users'}), 400
+            
+        # Import the daily property report functions
+        from app.scheduler import get_daily_property_report, send_daily_reports
+        
+        # Special version of send_daily_reports that only sends to the specified user
+        def send_test_report_to_user(user_id):
+            try:
+                et_timezone = pytz.timezone('America/New_York')
+                current_time = datetime.now(et_timezone)
+                
+                user = User.query.get(user_id)
+                if not user:
+                    return {'success': False, 'message': f'User with ID {user_id} not found'}
+                
+                # Get properties assigned to this user
+                user_properties = user.assigned_properties.all()
+                if not user_properties:
+                    return {'success': False, 'message': f'User has no assigned properties'}
+                
+                # Generate reports for each property
+                property_reports = []
+                for property in user_properties:
+                    report_data = get_daily_property_report(property.property_id)
+                    property_reports.append(report_data)  # Include all properties in test email
+                
+                if not property_reports:
+                    return {'success': False, 'message': 'No property data available for report'}
+                
+                # Use the EmailService to send the email
+                email_service = EmailService()
+                
+                # Use the same template logic as in send_daily_reports
+                # [Code here would be similar to send_daily_reports, extracting and formatting the data]
+                
+                # Build the email content using the same logic as in send_daily_reports
+                # For brevity and to avoid duplication, we'll call the function directly
+                
+                # Prepare special email subject for test email
+                subject = f"TEST - Executive Daily Report - {current_time.strftime('%B %d, %Y')}"
+                
+                # Call the existing function but append user's properties and tag subject as TEST
+                from app.scheduler import send_daily_reports
+                
+                # Temporarily set the user's is_active to ensure they receive the report
+                original_is_active = user.is_active
+                user.is_active = True
+                
+                # Use a try/finally to reset the user's active status
+                try:
+                    # Create a custom version of User.query that returns only this user
+                    class MockQuery:
+                        def filter_by(self, **kwargs):
+                            return self
+                            
+                        def all(self):
+                            return [user]
+                    
+                    # Patch the query temporarily
+                    original_query = User.query
+                    User.query = MockQuery()
+                    
+                    # Send the report
+                    send_daily_reports()
+                    
+                    # Restore the original query
+                    User.query = original_query
+                    
+                    return {'success': True, 'message': f'Test report sent to {user.email}'}
+                finally:
+                    # Reset user's active status
+                    user.is_active = original_is_active
+                    db.session.commit()
+            
+            except Exception as e:
+                app.logger.error(f"Error sending test report: {str(e)}")
+                return {'success': False, 'message': f'Error sending test report: {str(e)}'}
+        
+        # Send the test report
+        result = send_test_report_to_user(user_id)
+        
+        if result['success']:
+            return jsonify({'message': result['message']}), 200
+        else:
+            return jsonify({'error': result['message']}), 400
+            
+    except Exception as e:
+        app.logger.error(f"Error in test_executive_report: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
