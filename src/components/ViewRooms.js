@@ -47,6 +47,7 @@ import { useNavigate } from "react-router-dom";
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import RoomServiceIcon from '@mui/icons-material/RoomService';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import SyncIcon from '@mui/icons-material/Sync';
 import { getFriendlyRoomName, getHotelRoomTypes } from '../utils/roomMappings';
 
 const ViewRooms = () => {
@@ -88,6 +89,9 @@ const ViewRooms = () => {
   const [roomTickets, setRoomTickets] = useState([]);
   const [roomTasks, setRoomTasks] = useState([]);
   const [loadingRoomData, setLoadingRoomData] = useState(false);
+  const [syncInProgress, setSyncInProgress] = useState(false);
+  const [syncResults, setSyncResults] = useState(null);
+  const [syncMessage, setSyncMessage] = useState(null);
 
   const roomStatuses = ['Available', 'Occupied', 'Maintenance', 'Cleaning'];
   
@@ -874,6 +878,101 @@ const ViewRooms = () => {
     }
   };
 
+  // New function to synchronize room statuses
+  const syncRoomStatuses = async () => {
+    if (!selectedProperty) return;
+    
+    try {
+      setSyncInProgress(true);
+      setSyncMessage(null);
+      setSyncResults(null);
+      
+      let updatedCount = 0;
+      let skippedCount = 0;
+      let errorCount = 0;
+      const statusUpdates = [];
+      
+      // For each room, check if it has active tickets and update status accordingly
+      for (const room of rooms) {
+        try {
+          // Get tickets for this room
+          const ticketsResponse = await apiClient.get(`/rooms/${room.room_id}/tickets`);
+          const tickets = ticketsResponse.data.tickets || [];
+          
+          // Check if there are any active tickets
+          const activeTickets = tickets.filter(ticket => 
+            ticket.status === 'open' || ticket.status === 'in progress'
+          );
+          
+          let newStatus = room.status;
+          let shouldUpdate = false;
+          
+          // If room is marked as maintenance/cleaning but no active tickets
+          if ((room.status === 'Maintenance' || room.status === 'Cleaning') && activeTickets.length === 0) {
+            newStatus = 'Available';
+            shouldUpdate = true;
+          }
+          // If room has maintenance tickets but isn't marked as maintenance
+          else if (activeTickets.some(ticket => ticket.category === 'Maintenance') && room.status !== 'Maintenance') {
+            newStatus = 'Maintenance';
+            shouldUpdate = true;
+          }
+          // If room has housekeeping tickets but isn't marked as cleaning
+          else if (activeTickets.some(ticket => ticket.category === 'Housekeeping') && room.status !== 'Cleaning') {
+            newStatus = 'Cleaning';
+            shouldUpdate = true;
+          }
+          
+          if (shouldUpdate) {
+            const response = await apiClient.patch(`/properties/${selectedProperty}/rooms/${room.room_id}`, {
+              status: newStatus
+            });
+            
+            if (response.status === 200) {
+              updatedCount++;
+              statusUpdates.push({
+                room: room.name,
+                oldStatus: room.status,
+                newStatus: newStatus,
+                success: true
+              });
+            }
+          } else {
+            skippedCount++;
+          }
+        } catch (error) {
+          console.error(`Error syncing room ${room.name}:`, error);
+          errorCount++;
+          statusUpdates.push({
+            room: room.name,
+            oldStatus: room.status,
+            error: error.response?.data?.msg || 'Unknown error',
+            success: false
+          });
+        }
+      }
+      
+      setSyncResults({
+        updated: updatedCount,
+        skipped: skippedCount,
+        errors: errorCount,
+        details: statusUpdates
+      });
+      
+      // Refresh the room list
+      await fetchRooms();
+      
+      setSyncMessage(
+        `Synchronization complete: ${updatedCount} rooms updated, ${skippedCount} rooms skipped, ${errorCount} errors.`
+      );
+    } catch (error) {
+      console.error('Room status synchronization failed:', error);
+      setSyncMessage(`Synchronization failed: ${error.response?.data?.msg || error.message}`);
+    } finally {
+      setSyncInProgress(false);
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -934,6 +1033,19 @@ const ViewRooms = () => {
               >
                 Add Room
               </Button>
+              
+              <Tooltip title="Synchronize room statuses with ticket status">
+                <Button
+                  variant="outlined"
+                  color="info"
+                  startIcon={<SyncIcon />}
+                  onClick={syncRoomStatuses}
+                  disabled={syncInProgress}
+                >
+                  {syncInProgress ? 'Syncing...' : 'Sync Status'}
+                </Button>
+              </Tooltip>
+              
               <Tooltip title="Download a CSV template to fill with room data">
                 <Button
                   variant="outlined"
@@ -1012,6 +1124,7 @@ const ViewRooms = () => {
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       {uploadError && <Alert severity="error" sx={{ mb: 2 }}>{uploadError}</Alert>}
       {uploadSuccess && <Alert severity="success" sx={{ mb: 2 }}>{uploadSuccess}</Alert>}
+      {syncMessage && <Alert severity={syncResults && syncResults.errors === 0 ? "success" : "info"} sx={{ mb: 2 }}>{syncMessage}</Alert>}
 
       {selectedProperty ? (
         loading ? (

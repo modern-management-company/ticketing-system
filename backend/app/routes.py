@@ -786,13 +786,31 @@ def manage_property_room(property_id, room_id):
 
         elif request.method == 'PATCH':
             data = request.get_json()
-            app.logger.info(f"Received PATCH request for room {room_id} with data: {data}")
             old_status = room.status
 
             # Update basic fields
             for field in ['name', 'type', 'floor', 'status', 'description']:
                 if field in data:
                     setattr(room, field, data[field])
+            
+            # Handle status change with special logic
+            if 'status' in data:
+                # If trying to set room to Available, check for active tickets
+                if data['status'] == 'Available':
+                    active_tickets = Ticket.query.filter(
+                        Ticket.room_id == room_id,
+                        Ticket.status.in_(['open', 'in progress'])
+                    ).count()
+                    
+                    if active_tickets > 0:
+                        app.logger.warning(f"Cannot set room {room_id} to Available as it has {active_tickets} active tickets")
+                        return jsonify({
+                            "msg": "Cannot set room to Available when it has active tickets. Please complete all tickets first.",
+                            "active_tickets": active_tickets
+                        }), 400
+                
+                room.status = data['status']
+                app.logger.info(f"Updated room {room_id} status from {old_status} to {room.status}")
             
             # Handle capacity - ensure it's properly converted to an integer
             if 'capacity' in data:
@@ -805,6 +823,9 @@ def manage_property_room(property_id, room_id):
                 except (ValueError, TypeError) as e:
                     app.logger.warning(f"Invalid capacity value: {data['capacity']}, error: {str(e)}")
                     return jsonify({"msg": f"Invalid capacity value: {str(e)}"}), 400
+            
+            if 'description' in data:
+                room.description = data['description']
             
             # Handle amenities - ensure it's properly stored as a list
             if 'amenities' in data:
@@ -2150,9 +2171,33 @@ def manage_room(room_id):
 
     if request.method == 'PUT':
         data = request.get_json()
+        old_status = room.status
+        
+        # Special handling for status change to Available
+        if 'status' in data and data['status'] == 'Available' and room.status != 'Available':
+            # Check if there are any active tickets for this room
+            active_tickets = Ticket.query.filter(
+                Ticket.room_id == room_id,
+                Ticket.status.in_(['open', 'in progress'])
+            ).count()
+            
+            if active_tickets > 0:
+                app.logger.warning(f"Cannot set room {room_id} to Available as it has {active_tickets} active tickets")
+                return jsonify({
+                    "msg": "Cannot set room to Available when it has active tickets. Please complete all tickets first.",
+                    "active_tickets": active_tickets
+                }), 400
+        
+        # Apply all changes if validation passes
         for key, value in data.items():
             setattr(room, key, value)
+        
         db.session.commit()
+        
+        # Log status change if it happened
+        if 'status' in data and old_status != room.status:
+            app.logger.info(f"Updated room {room_id} status from {old_status} to {room.status}")
+            
         return jsonify({'message': 'Room updated successfully'})
 
     elif request.method == 'DELETE':
@@ -3033,7 +3078,7 @@ def manage_ticket(ticket_id):
                         user_id=current_user.user_id
                     )
                     db.session.commit()
-                    # If completed, record completion event
+                    # If completed, record completion event and check room status
                     if new_status == 'completed':
                         History.create_entry(
                             entity_type='ticket',
@@ -3042,6 +3087,23 @@ def manage_ticket(ticket_id):
                             user_id=current_user.user_id
                         )
                         db.session.commit()
+                        
+                        # Check if room should be updated to Available
+                        if ticket.room_id:
+                            # Check if there are any other active tickets for this room
+                            active_tickets = Ticket.query.filter(
+                                Ticket.room_id == ticket.room_id,
+                                Ticket.ticket_id != ticket.ticket_id,
+                                Ticket.status.in_(['open', 'in progress'])
+                            ).count()
+                            
+                            # If no other active tickets, set room to Available
+                            if active_tickets == 0:
+                                room = Room.query.get(ticket.room_id)
+                                if room:
+                                    room.status = 'Available'
+                                    app.logger.info(f"Updated room {room.name} status to Available as all tickets are completed")
+                    
                     # Update associated task status
                     task_assignment = TaskAssignment.query.filter_by(ticket_id=ticket_id).first()
                     if task_assignment:
@@ -3191,7 +3253,19 @@ def manage_ticket(ticket_id):
                 if ticket.room_id:
                     room = Room.query.get(ticket.room_id)
                     if room:
-                        room.status = 'Available'
+                        # Check if there are any other active tickets for this room
+                        active_tickets = Ticket.query.filter(
+                            Ticket.room_id == ticket.room_id,
+                            Ticket.ticket_id != ticket.ticket_id,
+                            Ticket.status.in_(['open', 'in progress'])
+                        ).count()
+                        
+                        # If no other active tickets, set room to Available
+                        if active_tickets == 0:
+                            room.status = 'Available'
+                            app.logger.info(f"Updated room {room.name} status to Available as all tickets are completed or deleted")
+                        else:
+                            app.logger.info(f"Room {room.name} status not changed to Available as there are still {active_tickets} active tickets")
 
                 # Delete the ticket
                 db.session.delete(ticket)
