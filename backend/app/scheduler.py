@@ -7,6 +7,79 @@ import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+# HTML helper functions for email template generation
+def build_open_ticket_html(ticket):
+    return f"""
+    <div class="item {ticket['priority'].lower()}">
+        <div class="flex-row">
+            <strong>{ticket['title']}</strong>
+            <span class="badge {ticket['priority'].lower()}">{ticket['priority']}</span>
+        </div>
+        <div>Category: {ticket['category']}</div>
+        <div>Status: {ticket['status']}</div>
+    </div>
+    """
+
+def build_open_task_html(task):
+    return f"""
+    <div class="item {task['priority'].lower()}">
+        <div class="flex-row">
+            <strong>{task['title']}</strong>
+            <span class="badge {task['priority'].lower()}">{task['priority']}</span>
+        </div>
+        <div>Status: {task['status']}</div>
+    </div>
+    """
+
+def build_open_service_request_html(sr):
+    return f"""
+    <div class="item {sr['priority'].lower()}">
+        <div class="flex-row">
+            <strong>{sr['title']}</strong>
+            <span class="badge {sr['priority'].lower()}">{sr['priority']}</span>
+        </div>
+        <div>Room: {sr['room_name']}</div>
+        <div>Category: {sr['category']}</div>
+        <div>Status: {sr['status']}</div>
+    </div>
+    """
+
+def build_closed_ticket_html(ticket):
+    return f"""
+    <div class="item {ticket['priority'].lower()}">
+        <div class="flex-row">
+            <strong>{ticket['title']}</strong>
+            <span class="badge {ticket['priority'].lower()}">{ticket['priority']}</span>
+        </div>
+        <div>Category: {ticket['category']}</div>
+        <div class="resolved-by">Resolved by: {ticket['resolved_by']}</div>
+    </div>
+    """
+
+def build_closed_task_html(task):
+    return f"""
+    <div class="item {task['priority'].lower()}">
+        <div class="flex-row">
+            <strong>{task['title']}</strong>
+            <span class="badge {task['priority'].lower()}">{task['priority']}</span>
+        </div>
+        <div class="resolved-by">Completed by: {task['resolved_by']}</div>
+    </div>
+    """
+
+def build_closed_service_request_html(sr):
+    return f"""
+    <div class="item {sr['priority'].lower()}">
+        <div class="flex-row">
+            <strong>{sr['title']}</strong>
+            <span class="badge {sr['priority'].lower()}">{sr['priority']}</span>
+        </div>
+        <div>Room: {sr['room_name']}</div>
+        <div>Category: {sr['category']}</div>
+        <div class="resolved-by">Completed by: {sr.get('completed_by', 'Unassigned')}</div>
+    </div>
+    """
+
 # Global scheduler instance
 scheduler = None
 
@@ -432,46 +505,19 @@ def send_daily_reports():
                             <div id="Open{report['property_name'].replace(' ', '')}" class="tabcontent active">
                                 <h3>Open Tickets ({len(report['open_tickets'])})</h3>
                                 <div class="item-list">
-                                    {''.join(f"""
-                                    <div class="item {ticket['priority'].lower()}">
-                                        <div class="flex-row">
-                                            <strong>{ticket['title']}</strong>
-                                            <span class="badge {ticket['priority'].lower()}">{ticket['priority']}</span>
-                                        </div>
-                                        <div>Category: {ticket['category']}</div>
-                                        <div>Status: {ticket['status']}</div>
-                                    </div>
-                                    """ for ticket in report['open_tickets'][:5]) if report['open_tickets'] else '<p>No open tickets</p>'}
+                                    {"".join([build_open_ticket_html(ticket) for ticket in report['open_tickets'][:5]]) if report['open_tickets'] else '<p>No open tickets</p>'}
                                     {f'<p><em>+ {len(report["open_tickets"]) - 5} more open tickets...</em></p>' if len(report['open_tickets']) > 5 else ''}
                                 </div>
                                 
                                 <h3>Open Tasks ({len(report['open_tasks'])})</h3>
                                 <div class="item-list">
-                                    {''.join(f"""
-                                    <div class="item {task['priority'].lower()}">
-                                        <div class="flex-row">
-                                            <strong>{task['title']}</strong>
-                                            <span class="badge {task['priority'].lower()}">{task['priority']}</span>
-                                        </div>
-                                        <div>Status: {task['status']}</div>
-                                    </div>
-                                    """ for task in report['open_tasks'][:5]) if report['open_tasks'] else '<p>No open tasks</p>'}
+                                    {"".join([build_open_task_html(task) for task in report['open_tasks'][:5]]) if report['open_tasks'] else '<p>No open tasks</p>'}
                                     {f'<p><em>+ {len(report["open_tasks"]) - 5} more open tasks...</em></p>' if len(report['open_tasks']) > 5 else ''}
                                 </div>
                                 
                                 <h3>Open Service Requests ({len(report['open_service_requests'])})</h3>
                                 <div class="item-list">
-                                    {''.join(f"""
-                                    <div class="item {sr['priority'].lower()}">
-                                        <div class="flex-row">
-                                            <strong>{sr['title']}</strong>
-                                            <span class="badge {sr['priority'].lower()}">{sr['priority']}</span>
-                                        </div>
-                                        <div>Room: {sr['room_name']}</div>
-                                        <div>Category: {sr['category']}</div>
-                                        <div>Status: {sr['status']}</div>
-                                    </div>
-                                    """ for sr in report['open_service_requests'][:5]) if report['open_service_requests'] else '<p>No open service requests</p>'}
+                                    {"".join([build_open_service_request_html(sr) for sr in report['open_service_requests'][:5]]) if report['open_service_requests'] else '<p>No open service requests</p>'}
                                     {f'<p><em>+ {len(report["open_service_requests"]) - 5} more open service requests...</em></p>' if len(report['open_service_requests']) > 5 else ''}
                                 </div>
                             </div>
@@ -479,44 +525,17 @@ def send_daily_reports():
                             <div id="Closed{report['property_name'].replace(' ', '')}" class="tabcontent">
                                 <h3>Tickets Closed Today ({len(report['closed_tickets_today'])})</h3>
                                 <div class="item-list">
-                                    {''.join(f"""
-                                    <div class="item {ticket['priority'].lower()}">
-                                        <div class="flex-row">
-                                            <strong>{ticket['title']}</strong>
-                                            <span class="badge {ticket['priority'].lower()}">{ticket['priority']}</span>
-                                        </div>
-                                        <div>Category: {ticket['category']}</div>
-                                        <div class="resolved-by">Resolved by: {ticket['resolved_by']}</div>
-                                    </div>
-                                    """ for ticket in report['closed_tickets_today']) if report['closed_tickets_today'] else '<p>No tickets closed today</p>'}
+                                    {"".join([build_closed_ticket_html(ticket) for ticket in report['closed_tickets_today']]) if report['closed_tickets_today'] else '<p>No tickets closed today</p>'}
                                 </div>
                                 
                                 <h3>Tasks Completed Today ({len(report['closed_tasks_today'])})</h3>
                                 <div class="item-list">
-                                    {''.join(f"""
-                                    <div class="item {task['priority'].lower()}">
-                                        <div class="flex-row">
-                                            <strong>{task['title']}</strong>
-                                            <span class="badge {task['priority'].lower()}">{task['priority']}</span>
-                                        </div>
-                                        <div class="resolved-by">Completed by: {task['resolved_by']}</div>
-                                    </div>
-                                    """ for task in report['closed_tasks_today']) if report['closed_tasks_today'] else '<p>No tasks completed today</p>'}
+                                    {"".join([build_closed_task_html(task) for task in report['closed_tasks_today']]) if report['closed_tasks_today'] else '<p>No tasks completed today</p>'}
                                 </div>
                                 
                                 <h3>Service Requests Completed Today ({len(report['completed_service_requests_today'])})</h3>
                                 <div class="item-list">
-                                    {''.join(f"""
-                                    <div class="item {sr['priority'].lower()}">
-                                        <div class="flex-row">
-                                            <strong>{sr['title']}</strong>
-                                            <span class="badge {sr['priority'].lower()}">{sr['priority']}</span>
-                                        </div>
-                                        <div>Room: {sr['room_name']}</div>
-                                        <div>Category: {sr['category']}</div>
-                                        <div class="resolved-by">Completed by: {sr.get('completed_by', 'Unassigned')}</div>
-                                    </div>
-                                    """ for sr in report['completed_service_requests_today']) if report['completed_service_requests_today'] else '<p>No service requests completed today</p>'}
+                                    {"".join([build_closed_service_request_html(sr) for sr in report['completed_service_requests_today']]) if report['completed_service_requests_today'] else '<p>No service requests completed today</p>'}
                                 </div>
                             </div>
                         </div>
