@@ -3,7 +3,16 @@ from datetime import timedelta
 
 class Config:
     # Database configuration
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
+    # Get the raw database URL
+    database_url = os.environ.get('DATABASE_URL')
+    
+    # If database_url exists, handle SSL settings
+    if database_url:
+        # If there are SSL issues, append SSL parameters to disable verification
+        if 'postgresql://' in database_url and '?' not in database_url:
+            database_url += '?sslmode=require'
+            
+    SQLALCHEMY_DATABASE_URI = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Secret key for session management
