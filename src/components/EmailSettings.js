@@ -189,12 +189,18 @@ const EmailSettings = ({ onError, onSuccess }) => {
 
     try {
       setSendingTestReport(true);
-      await apiClient.post('/api/settings/test-executive-report', {
-        user_id: selectedExecutiveId
+      console.log('Sending test report to user ID:', selectedExecutiveId);
+      console.log('Type of user_id:', typeof selectedExecutiveId);
+      
+      const response = await apiClient.post('/api/settings/test-executive-report', {
+        user_id: parseInt(selectedExecutiveId, 10) // Ensure it's an integer
       });
+      
+      console.log('Test report response:', response);
       if (onSuccess) onSuccess('Test executive report sent successfully');
     } catch (error) {
       console.error('Failed to send test executive report:', error);
+      console.error('Error response:', error.response?.data);
       if (onError) onError(error.response?.data?.message || 'Failed to send test executive report');
     } finally {
       setSendingTestReport(false);
@@ -461,8 +467,8 @@ const EmailSettings = ({ onError, onSuccess }) => {
               >
                 <option value="">Select an executive user</option>
                 {executiveUsers.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name} ({user.email})
+                  <option key={user.user_id} value={user.user_id}>
+                    {user.username} ({user.email})
                   </option>
                 ))}
               </TextField>

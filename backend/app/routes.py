@@ -5289,14 +5289,26 @@ def test_executive_report():
         if not data or 'user_id' not in data:
             return jsonify({'error': 'Missing user_id in request'}), 400
             
-        user_id = data.get('user_id')
+        # Ensure user_id is an integer
+        try:
+            user_id = int(data.get('user_id'))
+            app.logger.info(f"Received test report request for user_id: {user_id}")
+        except (ValueError, TypeError) as e:
+            error_message = f"Invalid user_id format: {data.get('user_id')} - {str(e)}"
+            app.logger.error(error_message)
+            return jsonify({'error': error_message}), 400
         
         # Get the target executive user
         target_user = User.query.get(user_id)
         if not target_user:
-            return jsonify({'error': f'User with ID {user_id} not found'}), 404
+            error_message = f"User with ID {user_id} not found"
+            app.logger.error(error_message)
+            return jsonify({'error': error_message}), 404
             
+        app.logger.info(f"Found target user: {target_user.username}, group: {target_user.group}")
         if target_user.group != 'Executive':
+            error_message = f"User {target_user.username} is not an Executive (group: {target_user.group})"
+            app.logger.error(error_message)
             return jsonify({'error': 'Test reports can only be sent to executive users'}), 400
             
         # Import the daily property report functions
@@ -5308,74 +5320,92 @@ def test_executive_report():
                 et_timezone = pytz.timezone('America/New_York')
                 current_time = datetime.now(et_timezone)
                 
-                user = User.query.get(user_id)
-                if not user:
-                    return {'success': False, 'message': f'User with ID {user_id} not found'}
+                # Import Flask app to ensure we have an application context
+                from app import app
                 
-                # Get properties assigned to this user
-                user_properties = user.assigned_properties.all()
-                if not user_properties:
-                    return {'success': False, 'message': f'User has no assigned properties'}
-                
-                # Generate reports for each property
-                property_reports = []
-                for property in user_properties:
-                    report_data = get_daily_property_report(property.property_id)
-                    property_reports.append(report_data)  # Include all properties in test email
-                
-                if not property_reports:
-                    return {'success': False, 'message': 'No property data available for report'}
-                
-                # Use the EmailService to send the email
-                email_service = EmailService()
-                
-                # Use the same template logic as in send_daily_reports
-                # [Code here would be similar to send_daily_reports, extracting and formatting the data]
-                
-                # Build the email content using the same logic as in send_daily_reports
-                # For brevity and to avoid duplication, we'll call the function directly
-                
-                # Prepare special email subject for test email
-                subject = f"TEST - Executive Daily Report - {current_time.strftime('%B %d, %Y')}"
-                
-                # Call the existing function but append user's properties and tag subject as TEST
-                from app.scheduler import send_daily_reports
-                
-                # Temporarily set the user's is_active to ensure they receive the report
-                original_is_active = user.is_active
-                user.is_active = True
-                
-                # Use a try/finally to reset the user's active status
-                try:
-                    # Create a custom version of User.query that returns only this user
-                    class MockQuery:
-                        def filter_by(self, **kwargs):
-                            return self
-                            
-                        def all(self):
-                            return [user]
+                # Use the app context to ensure database operations work properly
+                with app.app_context():
+                    user = User.query.get(user_id)
+                    if not user:
+                        error_message = f"User with ID {user_id} not found in send_test_report_to_user"
+                        app.logger.error(error_message)
+                        return {'success': False, 'message': error_message}
                     
-                    # Patch the query temporarily
-                    original_query = User.query
-                    User.query = MockQuery()
+                    app.logger.info(f"Processing test report for user: {user.username} ({user.email})")
                     
-                    # Send the report
-                    send_daily_reports()
+                    # Get properties assigned to this user
+                    user_properties = user.assigned_properties.all()
+                    if not user_properties:
+                        error_message = f"User {user.username} has no assigned properties"
+                        app.logger.error(error_message)
+                        return {'success': False, 'message': error_message}
                     
-                    # Restore the original query
-                    User.query = original_query
+                    app.logger.info(f"Found {len(user_properties)} properties for user {user.username}")
                     
-                    return {'success': True, 'message': f'Test report sent to {user.email}'}
-                finally:
-                    # Reset user's active status
-                    user.is_active = original_is_active
-                    db.session.commit()
+                    # Generate reports for each property
+                    property_reports = []
+                    for property in user_properties:
+                        app.logger.info(f"Generating report for property: {property.name} (ID: {property.property_id})")
+                        try:
+                            report_data = get_daily_property_report(property.property_id)
+                            property_reports.append(report_data)  # Include all properties in test email
+                        except Exception as prop_error:
+                            app.logger.error(f"Error generating property report: {str(prop_error)}")
+                            continue
+                    
+                    if not property_reports:
+                        error_message = 'No property data available for report'
+                        app.logger.error(error_message)
+                        return {'success': False, 'message': error_message}
+                    
+                    app.logger.info(f"Generated {len(property_reports)} property reports")
+                    
+                    # Use the EmailService to send the email
+                    email_service = EmailService()
+                    
+                    # Temporarily set the user's is_active to ensure they receive the report
+                    original_is_active = user.is_active
+                    user.is_active = True
+                    
+                    # Use a try/finally to reset the user's active status
+                    try:
+                        # Create a custom version of User.query that returns only this user
+                        class MockQuery:
+                            def filter_by(self, **kwargs):
+                                return self
+                                
+                            def all(self):
+                                return [user]
+                        
+                        # Patch the query temporarily
+                        original_query = User.query
+                        User.query = MockQuery()
+                        
+                        app.logger.info(f"Sending test report to {user.email}")
+                        
+                        # Send the report
+                        send_daily_reports()
+                        
+                        # Restore the original query
+                        User.query = original_query
+                        
+                        success_message = f'Test report sent to {user.email}'
+                        app.logger.info(success_message)
+                        return {'success': True, 'message': success_message}
+                    finally:
+                        # Reset user's active status
+                        user.is_active = original_is_active
+                        db.session.commit()
             
             except Exception as e:
-                app.logger.error(f"Error sending test report: {str(e)}")
-                return {'success': False, 'message': f'Error sending test report: {str(e)}'}
+                error_message = f"Error sending test report: {str(e)}"
+                app.logger.error(error_message)
+                import traceback
+                app.logger.error(traceback.format_exc())
+                return {'success': False, 'message': error_message}
         
         # Send the test report
+        app.logger.info(f"Calling send_test_report_to_user for user_id: {user_id}")
         result = send_test_report_to_user(user_id)
         
         if result['success']:
@@ -5384,5 +5414,8 @@ def test_executive_report():
             return jsonify({'error': result['message']}), 400
             
     except Exception as e:
-        app.logger.error(f"Error in test_executive_report: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+        error_message = f"Error in test_executive_report: {str(e)}"
+        app.logger.error(error_message)
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'error': error_message}), 500
