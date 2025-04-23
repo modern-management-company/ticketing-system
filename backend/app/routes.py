@@ -324,8 +324,16 @@ def create_ticket():
             ).all()
             super_admins = User.query.filter_by(role='super_admin').all()
             
+            # Get general managers assigned to this property
+            general_managers = User.query.filter_by(
+                role='general_manager',
+                is_active=True
+            ).join(PropertyManager).filter(
+                PropertyManager.property_id == data['property_id']
+            ).all()
+            
             # Combine recipients and remove duplicates
-            recipients = list(set(property_managers + super_admins))
+            recipients = list(set(property_managers + general_managers + super_admins))
             
             # Get property name for notification
             property_name = Property.query.get(data['property_id']).name
@@ -1290,22 +1298,45 @@ def manage_task(task_id):
                 db.session.commit()
                 app.logger.info(f"Successfully updated task {task_id}")
 
-                # Send email notification if assignee was changed
+                # Flag to track if any task-related notifications were sent
                 notifications_sent = False
+                property = Property.query.get(task.property_id)
+                property_name = property.name if property else "Unknown Property"
+
+                # Send email notification if assignee was changed
                 if 'assigned_to_id' in data and data['assigned_to_id'] != old_assignee_id:
                     try:
                         assigned_user = User.query.get(data['assigned_to_id'])
-                        property = Property.query.get(task.property_id)
                         if assigned_user and property:
                             email_service = EmailService()
                             notifications_sent = email_service.send_task_assignment_notification(
                                 assigned_user,
                                 task,
-                                property.name
+                                property_name
                             )
                             app.logger.info(f"Task assignment email {'sent successfully' if notifications_sent else 'failed to send'} to {assigned_user.email}")
                     except Exception as e:
                         app.logger.error(f"Failed to send task assignment email: {str(e)}")
+                
+                # Send task update notification for other changes (status, priority, etc.)
+                if ('status' in data and data['status'] != old_status) or ('priority' in data and data['priority'] != old_priority):
+                    try:
+                        # Send notification for task update to all relevant parties
+                        email_service = EmailService()
+                        update_type = "status" if 'status' in data else "priority"
+                        notification_result = email_service.send_task_update_notification(
+                            current_user, 
+                            task,
+                            property_name,
+                            update_type
+                        )
+                        if notification_result > 0:
+                            notifications_sent = True
+                            app.logger.info(f"Task update email sent successfully to {notification_result} recipients")
+                        else:
+                            app.logger.warning(f"No task update emails were sent")
+                    except Exception as e:
+                        app.logger.error(f"Failed to send task update email: {str(e)}")
 
                 # Get the updated task with user information
                 task_data = task.to_dict()
@@ -3194,7 +3225,16 @@ def manage_ticket(ticket_id):
                         PropertyManager.property_id == ticket.property_id
                     ).all()
                     super_admins = User.query.filter_by(role='super_admin').all()
-                    recipients = list(set(property_managers + super_admins))
+                    
+                    # Get general managers assigned to this property
+                    general_managers = User.query.filter_by(
+                        role='general_manager',
+                        is_active=True
+                    ).join(PropertyManager).filter(
+                        PropertyManager.property_id == ticket.property_id
+                    ).all()
+                    
+                    recipients = list(set(property_managers + general_managers + super_admins))
 
                     # Get property name
                     property_name = Property.query.get(ticket.property_id).name
@@ -3241,7 +3281,16 @@ def manage_ticket(ticket_id):
                     PropertyManager.property_id == ticket.property_id
                 ).all()
                 super_admins = User.query.filter_by(role='super_admin').all()
-                recipients = list(set(property_managers + super_admins))
+                
+                # Get general managers assigned to this property
+                general_managers = User.query.filter_by(
+                    role='general_manager',
+                    is_active=True
+                ).join(PropertyManager).filter(
+                    PropertyManager.property_id == ticket.property_id
+                ).all()
+                
+                recipients = list(set(property_managers + general_managers + super_admins))
 
                 # Get property name
                 property_name = Property.query.get(ticket.property_id).name

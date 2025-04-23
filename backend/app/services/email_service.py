@@ -115,6 +115,11 @@ class EmailService:
             PropertyManager.property_id == task.property_id
         ).all()
         
+        # Get general managers who manage this property
+        general_managers = User.query.filter_by(role='general_manager').join(PropertyManager).filter(
+            PropertyManager.property_id == task.property_id
+        ).all()
+        
         # Get department managers based on task category if available
         department_managers = []
         if hasattr(task, 'category'):
@@ -124,7 +129,7 @@ class EmailService:
             ).all()
         
         # Combine all recipients
-        recipients = list(set(super_admins + property_managers + department_managers + [user]))  # Include assigned user
+        recipients = list(set(super_admins + property_managers + general_managers + department_managers + [user]))  # Include assigned user
         
         # Send to all recipients
         for recipient in recipients:
@@ -183,6 +188,11 @@ class EmailService:
             PropertyManager.property_id == task.property_id
         ).all()
         
+        # Get general managers who manage this property
+        general_managers = User.query.filter_by(role='general_manager').join(PropertyManager).filter(
+            PropertyManager.property_id == task.property_id
+        ).all()
+        
         # Get department managers based on task category if available
         department_managers = []
         if hasattr(task, 'category'):
@@ -205,6 +215,7 @@ class EmailService:
         recipients = list(set(
             super_admins + 
             property_managers + 
+            general_managers +
             department_managers + 
             ([assignee] if assignee else []) +
             ([creator] if creator else []) +
@@ -369,6 +380,20 @@ class EmailService:
                     self.logger.info(f"✓ Ticket notification sent to super admin {recipient.email}")
                 else:
                     self.logger.error(f"❌ Failed to send ticket notification to super admin {recipient.email}")
+
+        # Send to general managers
+        for recipient in recipients:
+            if recipient.role == 'general_manager' and recipient.email not in sent_to:
+                # Only send to general managers if they manage this property
+                is_property_manager = any(pm.property_id == ticket.property_id for pm in recipient.managed_properties)
+                
+                if is_property_manager:
+                    if self.send_email(recipient.email, subject, html_content):
+                        successful_sends += 1
+                        sent_to.add(recipient.email)
+                        self.logger.info(f"✓ Ticket notification sent to general manager {recipient.email}")
+                    else:
+                        self.logger.error(f"❌ Failed to send ticket notification to general manager {recipient.email}")
 
         # Then send to property managers
         for recipient in recipients:
