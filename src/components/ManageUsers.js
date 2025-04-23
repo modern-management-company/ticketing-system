@@ -34,9 +34,14 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import GroupIcon from '@mui/icons-material/Group';
+import BuildIcon from '@mui/icons-material/Build';
 
 const ManageUsers = () => {
   const { auth } = useAuth();
+  
+  // Add debugging console log
+  console.log('Auth object in ManageUsers:', auth);
+  
   const [users, setUsers] = useState([]);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -103,8 +108,28 @@ const ManageUsers = () => {
     }
   };
 
+  const handleFixManagerProperties = async () => {
+    try {
+      setError('');
+      setSuccess('');
+      setLoading(true);
+      
+      const response = await apiClient.post('/fix-manager-properties');
+      
+      if (response.data) {
+        setSuccess(response.data.msg);
+        await fetchData(); // Refresh the user list
+      }
+    } catch (error) {
+      console.error('Failed to fix manager properties:', error);
+      setError(error.response?.data?.msg || 'Failed to fix manager properties');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRoleChange = async (userId, newRole) => {
-    if (auth.role !== 'super_admin') return;
+    if (auth?.user?.role !== 'super_admin') return;
 
     try {
       setError('');
@@ -376,17 +401,29 @@ const ManageUsers = () => {
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={() => {
-          resetUserForm();
-          setOpenUserDialog(true);
-        }}
-        sx={{ mb: 2 }}
-      >
-        Add User
-      </Button>
+      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => {
+            resetUserForm();
+            setOpenUserDialog(true);
+          }}
+        >
+          Add User
+        </Button>
+        
+        {auth?.user?.role === 'super_admin' && (
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={<BuildIcon />}
+            onClick={handleFixManagerProperties}
+          >
+            Fix Manager Properties
+          </Button>
+        )}
+      </Box>
 
       <TableContainer component={Paper}>
         <Table>
@@ -409,7 +446,7 @@ const ManageUsers = () => {
                 <TableCell>{user.email}</TableCell>
                 <TableCell>{user.phone || 'Not set'}</TableCell>
                 <TableCell>
-                  {auth.role === 'super_admin' ? (
+                  {auth?.user?.role === 'super_admin' ? (
                     <Select
                       value={user.role}
                       onChange={(e) => handleRoleChange(user.user_id, e.target.value)}
@@ -478,7 +515,7 @@ const ManageUsers = () => {
                 </TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', gap: 1 }}>
-                    {auth.role === 'super_admin' && !user.is_active && (
+                    {auth?.user?.role === 'super_admin' && !user.is_active && (
                       <Tooltip title="Activate User">
                         <IconButton
                           onClick={() => handleActivateUser(user.user_id)}
