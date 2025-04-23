@@ -2666,9 +2666,51 @@ def admin_change_password(user_id):
     # Send email if requested
     if data.get('send_email', True):
         email_service = EmailService()
-        email_sent = email_service.send_user_registration_email(user, data['new_password'], current_user)
+        # Generate a reset token for the user
+        reset_token = generate_password_reset_token()
+        user.reset_token = reset_token
+        user.reset_token_expires = datetime.now() + timedelta(hours=1)
+        db.session.commit()
+        
+        # Use send_password_reset_link to send a secure reset link to the user
+        email_sent = email_service.send_password_reset_link(user, reset_token)
+        
+        # Also send notifications to admins and the user about the password change
+        try:
+            # Get super admin emails
+            super_admins = User.query.filter_by(role='super_admin').all()
+            admin_emails = [admin.email for admin in super_admins]
+            
+            # Create changes list for the notification
+            changes = [f"Password reset by administrator {current_user.username}"]
+            
+            # Store old values (not including the password for security)
+            old_values = {
+                'role': user.role,
+                'username': user.username,
+                'email': user.email,
+                'group': user.group,
+                'status': user.is_active
+            }
+            
+            # Send user change notification
+            email_service.send_user_change_notification(
+                user=user,
+                changes=changes,
+                old_values=old_values,
+                updated_by=current_user.username,
+                admin_emails=admin_emails,
+                change_type="password_reset"
+            )
+            
+            app.logger.info(f"Password reset notifications sent for user {user.username}")
+            
+        except Exception as e:
+            app.logger.error(f"Failed to send password reset notifications: {str(e)}")
+            # Continue even if notification emails fail
+        
         if not email_sent:
-            app.logger.error(f"Failed to send password change email to user {user.username}")
+            app.logger.error(f"Failed to send password reset email to user {user.username}")
             return jsonify({'message': 'Password updated but failed to send email'}), 200
     
     return jsonify({'message': 'Password updated successfully'}), 200
@@ -4079,6 +4121,14 @@ def update_user(user_id):
 
         # Track changes for history and notifications
         changes = []
+        old_values = {
+            'role': user.role,
+            'username': user.username,
+            'email': user.email,
+            'group': user.group,
+            'phone': user.phone,
+            'status': user.is_active
+        }
         old_role = user.role
         old_username = user.username
         old_email = user.email
@@ -4328,6 +4378,67 @@ def update_user(user_id):
                     )
 
         db.session.commit()
+        
+        # Send email notifications for the changes if any changes were made
+        if changes:
+            try:
+                # Determine change type for more specific emails
+                change_type = "update"  # Default change type
+                
+                if 'role' in data and data['role'] != old_values['role']:
+                    change_type = "role_change"
+                elif 'email' in data and data['email'] != old_values['email']:
+                    change_type = "email_change"
+                elif 'username' in data and data['username'] != old_values['username']:
+                    change_type = "username_change"
+                elif 'group' in data and data['group'] != old_values['group']:
+                    change_type = "group_change"
+                elif 'is_active' in data:
+                    change_type = "activation" if data['is_active'] else "deactivation"
+                elif 'property_ids' in data:
+                    change_type = "property_assignment"
+                    
+                # Get super admin emails
+                super_admins = User.query.filter_by(role='super_admin').all()
+                admin_emails = [admin.email for admin in super_admins]
+                
+                # Get general manager emails for properties the user is assigned to
+                property_gm_emails = []
+                if hasattr(user, 'assigned_properties') and user.assigned_properties:
+                    # Get property IDs user is assigned to
+                    property_ids = [p.property_id for p in user.assigned_properties]
+                    
+                    # Find general managers for these properties
+                    for property_id in property_ids:
+                        # Get general managers assigned to this property
+                        gms = User.query.filter_by(role='general_manager').join(
+                            PropertyManager, User.user_id == PropertyManager.user_id
+                        ).filter(PropertyManager.property_id == property_id).all()
+                        
+                        # Add their emails to the list
+                        property_gm_emails.extend([gm.email for gm in gms if gm.email])
+                
+                # Remove duplicates
+                property_gm_emails = list(set(property_gm_emails))
+                
+                # Create email service and send notifications
+                email_service = EmailService()
+                email_service.send_user_change_notification(
+                    user=user,
+                    changes=changes,
+                    old_values=old_values,
+                    updated_by=current_user.username,
+                    admin_emails=admin_emails,
+                    property_gm_emails=property_gm_emails, 
+                    change_type=change_type
+                )
+                
+                app.logger.info(f"User change notifications sent for user {user.username}")
+                
+            except Exception as e:
+                app.logger.error(f"Failed to send user change notifications: {str(e)}")
+                # Continue with the response even if emails fail
+        
         return jsonify({
             "msg": "User updated successfully",
             "user": user.to_dict()

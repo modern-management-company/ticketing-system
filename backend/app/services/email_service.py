@@ -2,7 +2,7 @@ from flask import current_app
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 class EmailService:
@@ -533,6 +533,106 @@ class EmailService:
 
         return self.send_email(user.email, subject, html_content)
 
+    def send_password_reset_link(self, user, reset_token):
+        """Send a password reset link to a user"""
+        frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:3000')
+        reset_url = f"{frontend_url}/reset-password?token={reset_token}&email={user.email}"
+        
+        subject = "Password Reset Link - Modern Management System"
+        
+        html_content = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #1976d2;">Password Reset Link</h2>
+                    <p>Hello {user.username},</p>
+                    <p>You requested a password reset for your Modern Management System account.</p>
+                    <p>Click the button below to reset your password:</p>
+                    <div style="text-align: center; margin: 25px 0;">
+                        <a href="{reset_url}" style="background-color: #1976d2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+                    </div>
+                    <p>Or copy and paste this URL into your browser:</p>
+                    <p style="word-break: break-all;">{reset_url}</p>
+                    <p>This link will expire in 1 hour.</p>
+                    <p>If you did not request this password reset, please ignore this email.</p>
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                        <p style="color: #666;">Best regards,<br>Property Management System</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+        
+        success = self.send_email(user.email, subject, html_content)
+        if success:
+            self.logger.info(f"✓ Password reset link sent successfully to {user.username} ({user.email})")
+        else:
+            self.logger.error(f"❌ Failed to send password reset link to {user.username} ({user.email})")
+        return success
+
+    def send_welcome_email(self, user, password=None, sender=None):
+        """Send welcome email with account creation link or password"""
+        frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:3000')
+        
+        # Check if we're sending a password or a setup link
+        if password:
+            return self.send_user_registration_email(user, password, requested_by=sender)
+        
+        # Generate a token for password setup
+        from secrets import token_urlsafe
+        setup_token = token_urlsafe(32)
+        
+        # Store token in user record (you need to ensure this field exists in your user model)
+        try:
+            user.reset_token = setup_token
+            user.reset_token_expires = datetime.now() + timedelta(hours=24)
+            from flask import current_app
+            with current_app.app_context():
+                from app import db
+                db.session.commit()
+        except Exception as e:
+            self.logger.error(f"Error saving setup token: {str(e)}")
+            # Continue anyway, we'll just mention it in the email
+        
+        setup_url = f"{frontend_url}/setup-password?token={setup_token}&email={user.email}"
+        sender_info = f"This account was created by {sender}." if sender else ""
+        
+        subject = "Welcome to Modern Management System - Account Setup"
+        
+        html_content = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #1976d2;">Welcome to Modern Management System</h2>
+                    <p>Hello {user.username},</p>
+                    <p>Your account has been created successfully. {sender_info}</p>
+                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <p><strong>Username:</strong> {user.username}</p>
+                        <p><strong>Email:</strong> {user.email}</p>
+                        <p><strong>Role:</strong> {user.role.capitalize()}</p>
+                    </div>
+                    <p>Click the button below to set up your password:</p>
+                    <div style="text-align: center; margin: 25px 0;">
+                        <a href="{setup_url}" style="background-color: #1976d2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Set Up Password</a>
+                    </div>
+                    <p>Or copy and paste this URL into your browser:</p>
+                    <p style="word-break: break-all;">{setup_url}</p>
+                    <p>This link will expire in 24 hours.</p>
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                        <p style="color: #666;">Best regards,<br>Property Management System</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+        
+        success = self.send_email(user.email, subject, html_content)
+        if success:
+            self.logger.info(f"✓ Welcome email with setup link sent to {user.username} ({user.email})")
+        else:
+            self.logger.error(f"❌ Failed to send welcome email to {user.username} ({user.email})")
+        return success
+
     def send_admin_alert(self, subject, message, admin_emails):
         """Send alert notifications to administrators"""
         html_content = f"""
@@ -641,4 +741,140 @@ class EmailService:
             
         except Exception as e:
             self.logger.error(f"Error sending report email: {str(e)}")
-            return False 
+            return False
+
+    def send_user_change_notification(self, user, changes, old_values, updated_by, admin_emails=None, property_gm_emails=None, change_type="update"):
+        """
+        Send notifications about user detail changes to both old and new emails if email changed,
+        and to admins and general managers of properties.
+        
+        Parameters:
+        - user: The user whose details were changed
+        - changes: List of changes made (text descriptions)
+        - old_values: Dictionary containing old values (email, username, etc.)
+        - updated_by: Username of the person who made the changes
+        - admin_emails: List of admin email addresses
+        - property_gm_emails: List of general manager emails for properties the user is assigned to
+        - change_type: Type of change (update, role_change, email_change, username_change, etc.)
+        """
+        action = {
+            "update": "updated",
+            "role_change": "role changed",
+            "email_change": "email changed",
+            "username_change": "username changed",
+            "name_change": "name changed",
+            "property_assignment": "property assignments changed",
+            "group_change": "group changed",
+            "activation": "activated",
+            "deactivation": "deactivated",
+            "password_reset": "password reset"
+        }.get(change_type, "updated")
+
+        # Prepare the subject
+        subject = f"User Account {action.title()}: {user.username}"
+
+        # Build changes section
+        changes_html = ""
+        if changes and len(changes) > 0:
+            changes_html = f"""
+                <div style="margin: 15px 0;">
+                    <p><strong>Changes Made:</strong></p>
+                    <ul>
+                        {"".join(f"<li>{change}</li>" for change in changes)}
+                    </ul>
+                </div>
+            """
+
+        # Create HTML content for the email
+        html_content = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #1976d2;">User Account {action.title()}</h2>
+                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <p><strong>Username:</strong> {user.username}</p>
+                        <p><strong>Email:</strong> {user.email}</p>
+                        <p><strong>Role:</strong> {user.role}</p>
+                        <p><strong>Group:</strong> {user.group or 'N/A'}</p>
+                        <p><strong>Updated By:</strong> {updated_by}</p>
+                    </div>
+                    {changes_html}
+                    <p>Please log in to the system to view the complete account details.</p>
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                        <p style="color: #666;">Best regards,<br>Property Management System</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+
+        # Track successful sends
+        successful_sends = 0
+        sent_to = set()  # Track unique recipients
+
+        # If email was changed, send to both old and new email addresses
+        if 'email' in old_values and old_values['email'] != user.email:
+            # Send to old email
+            old_email = old_values['email']
+            if old_email and old_email not in sent_to:
+                old_email_subject = f"Your account email has been changed"
+                old_email_html = f"""
+                <html>
+                    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <h2 style="color: #1976d2;">Account Email Changed</h2>
+                            <p>Hello,</p>
+                            <p>Your email address in the Property Management System has been changed.</p>
+                            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                                <p><strong>Old Email:</strong> {old_email}</p>
+                                <p><strong>New Email:</strong> {user.email}</p>
+                                <p><strong>Username:</strong> {user.username}</p>
+                                <p><strong>Updated By:</strong> {updated_by}</p>
+                            </div>
+                            <p>If you did not authorize this change, please contact your system administrator immediately.</p>
+                            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                                <p style="color: #666;">Best regards,<br>Property Management System</p>
+                            </div>
+                        </div>
+                    </body>
+                </html>
+                """
+                if self.send_email(old_email, old_email_subject, old_email_html):
+                    successful_sends += 1
+                    sent_to.add(old_email)
+                    self.logger.info(f"✓ Email change notification sent to old email {old_email}")
+                else:
+                    self.logger.error(f"❌ Failed to send email change notification to old email {old_email}")
+
+        # Send to admin emails
+        if admin_emails:
+            for admin_email in admin_emails:
+                if admin_email not in sent_to:
+                    if self.send_email(admin_email, subject, html_content):
+                        successful_sends += 1
+                        sent_to.add(admin_email)
+                        self.logger.info(f"✓ User change notification sent to admin {admin_email}")
+                    else:
+                        self.logger.error(f"❌ Failed to send user change notification to admin {admin_email}")
+
+        # Send to property general managers if provided
+        if property_gm_emails:
+            for gm_email in property_gm_emails:
+                if gm_email not in sent_to:
+                    if self.send_email(gm_email, subject, html_content):
+                        successful_sends += 1
+                        sent_to.add(gm_email)
+                        self.logger.info(f"✓ User change notification sent to property GM {gm_email}")
+                    else:
+                        self.logger.error(f"❌ Failed to send user change notification to property GM {gm_email}")
+
+        # Finally, send to the affected user (current email)
+        if user.email and user.email not in sent_to:
+            if self.send_email(user.email, subject, html_content):
+                successful_sends += 1
+                sent_to.add(user.email)
+                self.logger.info(f"✓ User change notification sent to user {user.email}")
+            else:
+                self.logger.error(f"❌ Failed to send user change notification to user {user.email}")
+
+        return successful_sends 
