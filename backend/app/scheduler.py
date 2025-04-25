@@ -348,7 +348,7 @@ def send_daily_reports():
                     <html>
                     <head>
                         <style>
-                            body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f9f9f9; }
+                            body { font-family: Segoe UI, Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f9f9f9; }
                             .container { max-width: 900px; margin: 0 auto; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
                             .header { background-color: #3a5a78; color: white; padding: 20px; text-align: center; }
                             .summary-card { background-color: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); padding: 20px; margin: 20px; }

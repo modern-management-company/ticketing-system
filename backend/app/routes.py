@@ -1502,7 +1502,7 @@ def create_task():
             property_id=data['property_id'],
             status=data.get('status', 'pending'),
             assigned_to_id=data.get('assigned_to_id'),
-            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if 'due_date' in data else None,
+            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ') if data.get('due_date') else None,
             time_spent=float(data.get('time_spent')) if data.get('time_spent') else None,
             cost=float(data.get('cost')) if data.get('cost') else None
         )
