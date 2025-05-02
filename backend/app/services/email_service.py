@@ -75,7 +75,7 @@ class EmailService:
         self.logger.info(f"Task details - ID: {task.task_id}, Title: {task.title}, Priority: {task.priority}")
         self.logger.info(f"Property: {property_name}")
 
-        subject = f"New Task Assignment: {task.title} - {property_name}"
+        subject = f"New Task Assignment: {task.title} - {property_name} [{task.property.hotel_code}]"
         
         html_content = f"""
         <html>
@@ -145,7 +145,7 @@ class EmailService:
 
     def send_task_update_notification(self, user, task, property_name, update_type="status"):
         """Send notifications when a task is updated"""
-        subject = f"Task Update: {task.title} - {property_name}"
+        subject = f"Task Update: {task.title} - {property_name} [{task.property.hotel_code}]"
         
         status_message = f"The status has been updated to: <span style='color: {self._get_status_color(task.status)};'>{task.status}</span>" if update_type == "status" else "The task details have been updated"
         
@@ -235,7 +235,7 @@ class EmailService:
         return successful_sends
 
     def send_task_reminder(self, user, task, property_name):
-        subject = f"Task Reminder: {task.title} - {property_name}"
+        subject = f"Task Reminder: {task.title} - {property_name} [{task.property.hotel_code}]"
         
         html_content = f"""
         <html>
@@ -325,7 +325,7 @@ class EmailService:
             "deleted": "deleted"
         }.get(notification_type, "updated")
 
-        subject = f"Ticket {action.title()}: {ticket.title} - {property_name}"
+        subject = f"Ticket {action.title()}: {ticket.title} - {property_name} [{ticket.property.hotel_code}]"
         
         # Build changes section if available
         changes_html = ""
@@ -433,7 +433,7 @@ class EmailService:
 
     def send_room_status_notification(self, room, property_name, recipients, old_status=None):
         """Send room status change notifications"""
-        subject = f"Room Status Update: {room.name} - {property_name}"
+        subject = f"Room Status Update: {room.name} - {property_name} [{room.property.hotel_code}]"
         
         status_change = f"from {old_status} to {room.status}" if old_status else f"to {room.status}"
         
@@ -464,7 +464,7 @@ class EmailService:
 
     def send_property_status_notification(self, property_obj, recipients, old_status=None):
         """Send property status change notifications"""
-        subject = f"Property Status Update: {property_obj.name}"
+        subject = f"Property Status Update: {property_obj.name} [{property_obj.hotel_code}]"
         
         status_change = f"from {old_status} to {property_obj.status}" if old_status else f"to {property_obj.status}"
         
@@ -669,7 +669,7 @@ class EmailService:
         }.get(change_type, "updated")
 
         # Prepare the subject
-        subject = f"User Account {action.title()}: {user.username}"
+        subject = f"User Account {action.title()}: {user.username} [{user.property.hotel_code}]"
 
         # Build changes section
         changes_html = ""
@@ -771,7 +771,7 @@ class EmailService:
         }.get(change_type, "updated")
 
         # Prepare the subject
-        subject = f"User Account {action.title()}: {user.username}"
+        subject = f"User Account {action.title()}: {user.username} [{user.property.hotel_code}]"
 
         # Build changes section
         changes_html = ""

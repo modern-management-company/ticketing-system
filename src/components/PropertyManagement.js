@@ -54,7 +54,8 @@ const PropertyManagement = () => {
     status: 'active',
     description: '',
     subscription_plan: 'basic', // 'basic' or 'premium'
-    has_attachments: false
+    has_attachments: false,
+    hotel_code: ''
   });
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [managersDialogOpen, setManagersDialogOpen] = useState(false);
@@ -97,8 +98,8 @@ const PropertyManagement = () => {
       setError('');
       setSuccess('');
       
-      if (!propertyFormData.name || !propertyFormData.address) {
-        setError('Name and address are required fields');
+      if (!propertyFormData.name || !propertyFormData.address || !propertyFormData.hotel_code) {
+        setError('Name, address, and hotel code are required fields');
         return;
       }
       
@@ -109,7 +110,8 @@ const PropertyManagement = () => {
         status: propertyFormData.status || 'active',
         description: propertyFormData.description || '',
         subscription_plan: propertyFormData.subscription_plan,
-        has_attachments: propertyFormData.has_attachments
+        has_attachments: propertyFormData.has_attachments,
+        hotel_code: propertyFormData.hotel_code.trim()
       };
 
       let response;
@@ -140,7 +142,8 @@ const PropertyManagement = () => {
       status: property.status || 'active',
       description: property.description || '',
       subscription_plan: property.subscription_plan || 'basic',
-      has_attachments: property.has_attachments || false
+      has_attachments: property.has_attachments || false,
+      hotel_code: property.hotel_code || ''
     });
     setOpenPropertyDialog(true);
   };
@@ -191,7 +194,8 @@ const PropertyManagement = () => {
       status: 'active',
       description: '',
       subscription_plan: 'basic',
-      has_attachments: false
+      has_attachments: false,
+      hotel_code: ''
     });
   };
 
@@ -266,6 +270,7 @@ const PropertyManagement = () => {
                   <CardContent>
                     <Typography variant="h6">{property.name}</Typography>
                     <Typography color="textSecondary">{property.address}</Typography>
+                    <Typography>Hotel Code: {property.hotel_code}</Typography>
                     <Typography>Type: {property.type || 'N/A'}</Typography>
                     <Typography>Status: {property.status}</Typography>
                     <Box sx={{ mt: 1, mb: 2 }}>
@@ -371,6 +376,15 @@ const PropertyManagement = () => {
               onChange={(e) => setPropertyFormData({ ...propertyFormData, name: e.target.value })}
               margin="normal"
               required
+            />
+            <TextField
+              fullWidth
+              label="Hotel Code"
+              value={propertyFormData.hotel_code}
+              onChange={(e) => setPropertyFormData({ ...propertyFormData, hotel_code: e.target.value })}
+              margin="normal"
+              required
+              helperText="Unique identifier for the hotel (e.g., HOTEL001)"
             />
             <TextField
               fullWidth

@@ -122,6 +122,7 @@ class Property(db.Model):
     __tablename__ = 'properties'
     property_id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    hotel_code = db.Column(db.String(20), unique=True, nullable=False)  # Added hotel code field
     address = db.Column(db.String(200))
     type = db.Column(db.String(50))
     status = db.Column(db.String(20), default='active')
@@ -139,6 +140,7 @@ class Property(db.Model):
         return {
             'property_id': self.property_id,
             'name': self.name,
+            'hotel_code': self.hotel_code,
             'address': self.address,
             'type': self.type,
             'status': self.status,

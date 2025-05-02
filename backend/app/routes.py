@@ -521,6 +521,7 @@ def create_property():
         new_property = Property(
             name=data['name'],
             address=data['address'],
+            hotel_code=data['hotel_code'],
             type=data.get('type', 'residential'),
             status=data.get('status', 'active'),
             description=data.get('description', ''),
@@ -1976,6 +1977,7 @@ def properties():
                 'address': p.address,
                 'type': p.type,
                 'status': p.status,
+                'hotel_code': p.hotel_code,
                 'managers': [{'user_id': m.user_id, 'username': m.username} for m in p.managers]
             } for p in properties]
         })
@@ -1989,6 +1991,7 @@ def properties():
             name=data['name'],
             address=data['address'],
             type=data['type'],
+            hotel_code=data['hotel_code'],
             status=data.get('status', 'active')
         )
         db.session.add(new_property)
@@ -2029,7 +2032,7 @@ def manage_property(property_id):
                 return jsonify({"msg": "Attachments are only available with premium subscription"}), 400
 
             # Update allowed fields
-            allowed_fields = ['name', 'address', 'type', 'status', 'description', 'subscription_plan', 'has_attachments']
+            allowed_fields = ['name', 'address', 'type', 'status', 'description', 'subscription_plan', 'has_attachments', 'hotel_code']
             for field in allowed_fields:
                 if field in data:
                     setattr(property, field, data[field])
@@ -2112,7 +2115,7 @@ def manage_property(property_id):
                 return jsonify({"msg": "Attachments are only available with premium subscription"}), 400
 
             # Update property fields
-            for field in ['name', 'address', 'status', 'description', 'subscription_plan', 'has_attachments']:
+            for field in ['name', 'address', 'status', 'description', 'subscription_plan', 'has_attachments', 'hotel_code']:
                 if field in data:
                     setattr(property, field, data[field])
 
