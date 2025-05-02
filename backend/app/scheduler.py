@@ -347,83 +347,50 @@ def send_daily_reports():
                     <!DOCTYPE html>
                     <html>
                     <head>
-                        <style>
-                            body { font-family: Segoe UI, Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f9f9f9; }
-                            .container { max-width: 900px; margin: 0 auto; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-                            .header { background-color: #3a5a78; color: white; padding: 20px; text-align: center; }
-                            .summary-card { background-color: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); padding: 20px; margin: 20px; }
-                            .property-section { margin: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
-                            .property-header { background-color: #f5f5f5; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
-                            .metrics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-                            .metric-box { background-color: #f8f9fa; border-radius: 6px; padding: 15px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-                            .metric-value { font-size: 24px; font-weight: bold; color: #3a5a78; margin: 5px 0; }
-                            .metric-label { font-size: 14px; color: #666; }
-                            .item-list { margin-top: 10px; }
-                            .item { background-color: white; border-radius: 6px; padding: 15px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-                            .item.critical { border-left: 4px solid #dc3545; }
-                            .item.high { border-left: 4px solid #fd7e14; }
-                            .item.medium { border-left: 4px solid #ffc107; }
-                            .item.low { border-left: 4px solid #28a745; }
-                            .tab-container { overflow: hidden; margin: 20px 0; }
-                            .tab { overflow: hidden; background-color: #f1f1f1; border-radius: 6px 6px 0 0; }
-                            .tab button { background-color: inherit; float: left; border: none; outline: none; cursor: pointer; padding: 14px 16px; transition: 0.3s; font-size: 16px; }
-                            .tab button:hover { background-color: #ddd; }
-                            .tab button.active { background-color: #3a5a78; color: white; }
-                            .tabcontent { display: none; padding: 15px; border: 1px solid #ccc; border-top: none; border-radius: 0 0 6px 6px; }
-                            .tabcontent.active { display: block; }
-                            .resolved-by { font-style: italic; color: #6c757d; margin-top: 5px; }
-                            .footer { text-align: center; padding: 20px; color: #6c757d; font-size: 14px; background-color: #f9f9f9; }
-                            .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-                            .badge.critical { background-color: #ffdddd; color: #dc3545; }
-                            .badge.high { background-color: #fff3cd; color: #fd7e14; }
-                            .badge.medium { background-color: #fff8dd; color: #ffc107; }
-                            .badge.low { background-color: #d4edda; color: #28a745; }
-                            .flex-row { display: flex; justify-content: space-between; align-items: center; }
-                            h3, h4 { color: #3a5a78; }
-                            .star-performer { background-color: #f0f7ff; border: 1px solid #cfe2ff; border-radius: 6px; padding: 10px; margin-top: 15px; }
-                        </style>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
                     </head>
-                    <body>
-                        <div class="container">
-                            <div class="header">
-                                <h1>Executive Daily Report</h1>
-                                <h3>{current_time}</h3>
+                    <body style="font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f9f9f9;">
+                        <div style="max-width: 900px; margin: 0 auto; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+                            <div style="background-color: #3a5a78; color: white; padding: 20px; text-align: center;">
+                                <h1 style="margin: 0;">Executive Daily Report</h1>
+                                <h3 style="margin: 10px 0 0 0;">{current_time}</h3>
                             </div>
                             
-                            <div class="summary-card">
-                                <h2>Daily Summary</h2>
-                                <div class="metrics-grid">
-                                    <div class="metric-box">
-                                        <div class="metric-value">{total_properties}</div>
-                                        <div class="metric-label">Properties with Activity</div>
+                            <div style="background-color: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); padding: 20px; margin: 20px;">
+                                <h2 style="color: #3a5a78; margin-top: 0;">Daily Summary</h2>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                                    <div style="background-color: #f8f9fa; border-radius: 6px; padding: 15px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                                        <div style="font-size: 24px; font-weight: bold; color: #3a5a78; margin: 5px 0;">{total_properties}</div>
+                                        <div style="font-size: 14px; color: #666;">Properties with Activity</div>
                                     </div>
-                                    <div class="metric-box">
-                                        <div class="metric-value">{total_open_tickets}</div>
-                                        <div class="metric-label">Open Tickets</div>
+                                    <div style="background-color: #f8f9fa; border-radius: 6px; padding: 15px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                                        <div style="font-size: 24px; font-weight: bold; color: #3a5a78; margin: 5px 0;">{total_open_tickets}</div>
+                                        <div style="font-size: 14px; color: #666;">Open Tickets</div>
                                     </div>
-                                    <div class="metric-box">
-                                        <div class="metric-value">{total_closed_tickets}</div>
-                                        <div class="metric-label">Tickets Closed Today</div>
+                                    <div style="background-color: #f8f9fa; border-radius: 6px; padding: 15px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                                        <div style="font-size: 24px; font-weight: bold; color: #3a5a78; margin: 5px 0;">{total_closed_tickets}</div>
+                                        <div style="font-size: 14px; color: #666;">Tickets Closed Today</div>
                                     </div>
-                                    <div class="metric-box">
-                                        <div class="metric-value">{total_open_tasks}</div>
-                                        <div class="metric-label">Open Tasks</div>
+                                    <div style="background-color: #f8f9fa; border-radius: 6px; padding: 15px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                                        <div style="font-size: 24px; font-weight: bold; color: #3a5a78; margin: 5px 0;">{total_open_tasks}</div>
+                                        <div style="font-size: 14px; color: #666;">Open Tasks</div>
                                     </div>
-                                    <div class="metric-box">
-                                        <div class="metric-value">{total_closed_tasks}</div>
-                                        <div class="metric-label">Tasks Completed Today</div>
+                                    <div style="background-color: #f8f9fa; border-radius: 6px; padding: 15px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                                        <div style="font-size: 24px; font-weight: bold; color: #3a5a78; margin: 5px 0;">{total_closed_tasks}</div>
+                                        <div style="font-size: 14px; color: #666;">Tasks Completed Today</div>
                                     </div>
                                 </div>
                                 
-                                <div class="star-performer">
-                                    <h3>Top Performers Today</h3>
+                                <div style="background-color: #f0f7ff; border: 1px solid #cfe2ff; border-radius: 6px; padding: 10px; margin-top: 15px;">
+                                    <h3 style="color: #3a5a78; margin-top: 0;">Top Performers Today</h3>
                                     {top_performers_html}
                                 </div>
                             </div>
                             
                             {property_reports}
                             
-                            <div class="footer">
+                            <div style="text-align: center; padding: 20px; color: #6c757d; font-size: 14px; background-color: #f9f9f9;">
                                 <p>This is an automated report. Please do not reply to this email.</p>
                                 <p>© {current_year} Property Management System</p>
                             </div>

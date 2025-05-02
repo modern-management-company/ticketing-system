@@ -75,7 +75,7 @@ class EmailService:
         self.logger.info(f"Task details - ID: {task.task_id}, Title: {task.title}, Priority: {task.priority}")
         self.logger.info(f"Property: {property_name}")
 
-        subject = f"New Task Assignment: {task.title}"
+        subject = f"New Task Assignment: {task.title} - {property_name}"
         
         html_content = f"""
         <html>
@@ -145,7 +145,7 @@ class EmailService:
 
     def send_task_update_notification(self, user, task, property_name, update_type="status"):
         """Send notifications when a task is updated"""
-        subject = f"Task Update: {task.title}"
+        subject = f"Task Update: {task.title} - {property_name}"
         
         status_message = f"The status has been updated to: <span style='color: {self._get_status_color(task.status)};'>{task.status}</span>" if update_type == "status" else "The task details have been updated"
         
@@ -235,7 +235,7 @@ class EmailService:
         return successful_sends
 
     def send_task_reminder(self, user, task, property_name):
-        subject = f"Task Reminder: {task.title}"
+        subject = f"Task Reminder: {task.title} - {property_name}"
         
         html_content = f"""
         <html>
