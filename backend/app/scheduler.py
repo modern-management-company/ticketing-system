@@ -269,10 +269,18 @@ def get_daily_property_report(property_id):
                 # Get service requests that were completed today
                 db.and_(
                     ServiceRequest.status == 'completed',
-                    db.func.date(ServiceRequest.created_at) == today  # Using created_at instead of updated_at
+                    db.func.date(ServiceRequest.created_at) == today
                 )
             )
         ).all()
+
+        # Calculate labor time and cost metrics
+        total_labor_time = sum(task.time_spent or 0 for task in tasks if task.time_spent)
+        total_cost = sum(task.cost or 0 for task in tasks if task.cost)
+        
+        # Calculate today's metrics
+        today_labor_time = sum(task.time_spent or 0 for task in tasks if task.time_spent and task.updated_at.date() == today)
+        today_cost = sum(task.cost or 0 for task in tasks if task.cost and task.updated_at.date() == today)
 
         # Organize data - include resolver information for completed items
         report_data = {
@@ -288,20 +296,26 @@ def get_daily_property_report(property_id):
                 'resolved_by': User.query.get(task.assigned_to_id).username if task.assigned_to_id else 'Unassigned'
             } for task in tasks if task.status == 'completed' and task.updated_at.date() == today],
             'open_service_requests': [{
-                'title': sr.request_type,  # Use request_type as title
+                'title': sr.request_type,
                 'priority': sr.priority,
                 'status': sr.status,
-                'category': sr.request_group,  # Use request_group as category
+                'category': sr.request_group,
                 'room_name': sr.room.name if sr.room else 'N/A'
             } for sr in service_requests if sr.status != 'completed'],
             'completed_service_requests_today': [{
-                'title': sr.request_type,  # Use request_type as title
+                'title': sr.request_type,
                 'priority': sr.priority,
                 'status': sr.status,
-                'category': sr.request_group,  # Use request_group as category
+                'category': sr.request_group,
                 'room_name': sr.room.name if sr.room else 'N/A',
                 'completed_by': User.query.get(sr.created_by_id).username if sr.created_by_id else 'Unassigned'
-            } for sr in service_requests if sr.status == 'completed' and sr.created_at.date() == today]
+            } for sr in service_requests if sr.status == 'completed' and sr.created_at.date() == today],
+            'labor_metrics': {
+                'total_labor_time': total_labor_time,
+                'total_cost': total_cost,
+                'today_labor_time': today_labor_time,
+                'today_cost': today_cost
+            }
         }
 
         return report_data
@@ -334,10 +348,20 @@ def send_daily_reports():
                     
                     # Generate reports for each property
                     property_reports = []
+                    total_labor_time = 0
+                    total_cost = 0
+                    today_total_labor_time = 0
+                    today_total_cost = 0
+                    
                     for property in user_properties:
                         report_data = get_daily_property_report(property.property_id)
                         if has_activity(report_data):
                             property_reports.append(report_data)
+                            # Add to totals
+                            total_labor_time += report_data['labor_metrics']['total_labor_time']
+                            total_cost += report_data['labor_metrics']['total_cost']
+                            today_total_labor_time += report_data['labor_metrics']['today_labor_time']
+                            today_total_cost += report_data['labor_metrics']['today_cost']
                     
                     if not property_reports:
                         continue
@@ -380,6 +404,22 @@ def send_daily_reports():
                                         <div style="font-size: 24px; font-weight: bold; color: #3a5a78; margin: 5px 0;">{total_closed_tasks}</div>
                                         <div style="font-size: 14px; color: #666;">Tasks Completed Today</div>
                                     </div>
+                                    <div style="background-color: #f8f9fa; border-radius: 6px; padding: 15px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                                        <div style="font-size: 24px; font-weight: bold; color: #3a5a78; margin: 5px 0;">{today_labor_time:.1f}h</div>
+                                        <div style="font-size: 14px; color: #666;">Labor Hours Today</div>
+                                    </div>
+                                    <div style="background-color: #f8f9fa; border-radius: 6px; padding: 15px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                                        <div style="font-size: 24px; font-weight: bold; color: #3a5a78; margin: 5px 0;">${today_cost:.2f}</div>
+                                        <div style="font-size: 14px; color: #666;">Cost Today</div>
+                                    </div>
+                                </div>
+                                
+                                <div style="background-color: #f0f7ff; border: 1px solid #cfe2ff; border-radius: 6px; padding: 10px; margin-top: 15px;">
+                                    <h3 style="color: #3a5a78; margin-top: 0;">Labor & Cost Summary</h3>
+                                    <p><strong>Total Labor Hours:</strong> {total_labor_time:.1f}h</p>
+                                    <p><strong>Total Cost:</strong> ${total_cost:.2f}</p>
+                                    <p><strong>Today's Labor Hours:</strong> {today_labor_time:.1f}h</p>
+                                    <p><strong>Today's Cost:</strong> ${today_cost:.2f}</p>
                                 </div>
                                 
                                 <div style="background-color: #f0f7ff; border: 1px solid #cfe2ff; border-radius: 6px; padding: 10px; margin-top: 15px;">
@@ -416,7 +456,7 @@ def send_daily_reports():
                             resolver = ticket.get('resolved_by', 'Unassigned')
                             if resolver != 'Unassigned':
                                 if resolver not in top_performers:
-                                    top_performers[resolver] = {'tickets': 0, 'tasks': 0}
+                                    top_performers[resolver] = {'tickets': 0, 'tasks': 0, 'labor_time': 0, 'cost': 0}
                                 top_performers[resolver]['tickets'] += 1
                         
                         # Count completed tasks by resolver
@@ -424,8 +464,10 @@ def send_daily_reports():
                             resolver = task.get('resolved_by', 'Unassigned')
                             if resolver != 'Unassigned':
                                 if resolver not in top_performers:
-                                    top_performers[resolver] = {'tickets': 0, 'tasks': 0}
+                                    top_performers[resolver] = {'tickets': 0, 'tasks': 0, 'labor_time': 0, 'cost': 0}
                                 top_performers[resolver]['tasks'] += 1
+                                top_performers[resolver]['labor_time'] += task.get('time_spent', 0) or 0
+                                top_performers[resolver]['cost'] += task.get('cost', 0) or 0
                     
                     # Sort by total (tickets + tasks)
                     sorted_performers = sorted(
@@ -440,6 +482,7 @@ def send_daily_reports():
                         for i, (name, stats) in enumerate(sorted_performers[:3], 1):
                             top_performers_html += f"""
                             <p><strong>#{i} {name}</strong> - Resolved {stats['tickets']} tickets and completed {stats['tasks']} tasks</p>
+                            <p style="margin-left: 20px;">Labor: {stats['labor_time']:.1f}h, Cost: ${stats['cost']:.2f}</p>
                             """
                     else:
                         top_performers_html = "<p>No tickets or tasks were completed today</p>"
@@ -467,6 +510,14 @@ def send_daily_reports():
                                     <div class="metric-box">
                                         <div class="metric-value">{len(report['closed_tasks_today'])}</div>
                                         <div class="metric-label">Tasks Completed Today</div>
+                                    </div>
+                                    <div class="metric-box">
+                                        <div class="metric-value">{report['labor_metrics']['today_labor_time']:.1f}h</div>
+                                        <div class="metric-label">Labor Hours Today</div>
+                                    </div>
+                                    <div class="metric-box">
+                                        <div class="metric-value">${report['labor_metrics']['today_cost']:.2f}</div>
+                                        <div class="metric-label">Cost Today</div>
                                     </div>
                                 </div>
                             </div>
@@ -555,6 +606,10 @@ def send_daily_reports():
                         total_closed_tickets=total_closed_tickets,
                         total_open_tasks=total_open_tasks,
                         total_closed_tasks=total_closed_tasks,
+                        total_labor_time=total_labor_time,
+                        total_cost=total_cost,
+                        today_labor_time=today_total_labor_time,
+                        today_cost=today_total_cost,
                         top_performers_html=top_performers_html,
                         property_reports=property_reports_html
                     )
