@@ -47,7 +47,7 @@ const Welcome = () => {
               mb: 4
             }}
           >
-            Welcome to Ticketing System
+            Ticketing System
           </Typography>
 
           <Typography 
