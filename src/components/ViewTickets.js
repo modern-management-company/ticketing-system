@@ -975,6 +975,15 @@ const ViewTickets = () => {
                     </TableCell>
                     <TableCell>
                       <TableSortLabel
+                        active={orderBy === 'created_at'}
+                        direction={orderBy === 'created_at' ? order : 'asc'}
+                        onClick={() => handleRequestSort('created_at')}
+                      >
+                        Created At
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
                         active={orderBy === 'linked_tasks'}
                         direction={orderBy === 'linked_tasks' ? order : 'asc'}
                         onClick={() => handleRequestSort('linked_tasks')}
@@ -1056,6 +1065,9 @@ const ViewTickets = () => {
                               sx={{ cursor: 'pointer' }}
                             />
                           ) : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          {new Date(ticket.created_at).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           {(() => {
