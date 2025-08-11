@@ -34,7 +34,10 @@ import {
   Tooltip,
   ToggleButtonGroup,
   ToggleButton,
-  Autocomplete
+  Autocomplete,
+  Divider,
+  FormControlLabel,
+  Checkbox
 } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -51,6 +54,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RestoreIcon from '@mui/icons-material/Restore';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import { format } from 'date-fns';
 
 const ViewTickets = () => {
   const { auth } = useAuth();
@@ -74,7 +78,20 @@ const ViewTickets = () => {
     category: 'General',
     subcategory: '',
     property_id: '',
-    room_id: ''
+    room_id: '',
+    // Incident Report fields
+    is_incident_report: false,
+    incident_type: '',
+    incident_location: '',
+    incident_date: null,
+    injury_type: '',
+    severity: '',
+    witness_names: '',
+    police_report_filed: false,
+    insurance_claim_filed: false,
+    claim_number: '',
+    follow_up_required: true,
+    follow_up_date: null
   });
   const [orderBy, setOrderBy] = useState('ticket_id');
   const [order, setOrder] = useState('asc');
@@ -378,7 +395,20 @@ const ViewTickets = () => {
         category: ticket.category,
         subcategory: ticket.subcategory || '',
         property_id: ticket.property_id,
-        room_id: ticket.room_id || ''
+        room_id: ticket.room_id || '',
+        // Incident Report fields
+        is_incident_report: ticket.is_incident_report || false,
+        incident_type: ticket.incident_type || '',
+        incident_location: ticket.incident_location || '',
+        incident_date: ticket.incident_date ? new Date(ticket.incident_date) : null,
+        injury_type: ticket.injury_type || '',
+        severity: ticket.severity || '',
+        witness_names: ticket.witness_names || '',
+        police_report_filed: ticket.police_report_filed || false,
+        insurance_claim_filed: ticket.insurance_claim_filed || false,
+        claim_number: ticket.claim_number || '',
+        follow_up_required: ticket.follow_up_required || true,
+        follow_up_date: ticket.follow_up_date ? new Date(ticket.follow_up_date) : null
       });
     } else {
       if (!selectedProperty) {
@@ -393,7 +423,20 @@ const ViewTickets = () => {
         category: 'General',
         subcategory: '',
         property_id: selectedProperty,
-        room_id: ''
+        room_id: '',
+        // Incident Report fields
+        is_incident_report: false,
+        incident_type: '',
+        incident_location: '',
+        incident_date: null,
+        injury_type: '',
+        severity: '',
+        witness_names: '',
+        police_report_filed: false,
+        insurance_claim_filed: false,
+        claim_number: '',
+        follow_up_required: true,
+        follow_up_date: null
       });
     }
     setOpenDialog(true);
@@ -409,7 +452,20 @@ const ViewTickets = () => {
       category: 'General',
       subcategory: '',
       property_id: selectedProperty || '',
-      room_id: ''
+      room_id: '',
+      // Incident Report fields
+      is_incident_report: false,
+      incident_type: '',
+      incident_location: '',
+      incident_date: null,
+      injury_type: '',
+      severity: '',
+      witness_names: '',
+      police_report_filed: false,
+      insurance_claim_filed: false,
+      claim_number: '',
+      follow_up_required: true,
+      follow_up_date: null
     });
     
     // Clear the location state to prevent dialog from reopening on refresh
@@ -1277,6 +1333,157 @@ const ViewTickets = () => {
                 ))}
               </Select>
             </FormControl>
+
+            {/* Incident Report Section */}
+            <Divider sx={{ my: 2 }}>
+              <Chip label="Incident Report Details" color="warning" />
+            </Divider>
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={ticketForm.is_incident_report}
+                  onChange={(e) => setTicketForm({ 
+                    ...ticketForm, 
+                    is_incident_report: e.target.checked 
+                  })}
+                />
+              }
+              label="This is an incident report"
+            />
+
+            {ticketForm.is_incident_report && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Incident Type</InputLabel>
+                  <Select
+                    value={ticketForm.incident_type}
+                    onChange={(e) => setTicketForm({ ...ticketForm, incident_type: e.target.value })}
+                    label="Incident Type"
+                  >
+                    <MenuItem value="guest_injury">Guest Injury</MenuItem>
+                    <MenuItem value="employee_injury">Employee Injury</MenuItem>
+                    <MenuItem value="property_damage">Property Damage</MenuItem>
+                    <MenuItem value="security_incident">Security Incident</MenuItem>
+                    <MenuItem value="other">Other</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <TextField
+                  label="Incident Location"
+                  value={ticketForm.incident_location}
+                  onChange={(e) => setTicketForm({ ...ticketForm, incident_location: e.target.value })}
+                  fullWidth
+                  placeholder="e.g., Room 101, Lobby, Parking Lot"
+                />
+
+                <TextField
+                  label="Incident Date & Time"
+                  type="datetime-local"
+                  value={ticketForm.incident_date ? format(ticketForm.incident_date, "yyyy-MM-dd'T'HH:mm") : ''}
+                  onChange={(e) => setTicketForm({ 
+                    ...ticketForm, 
+                    incident_date: e.target.value ? new Date(e.target.value) : null 
+                  })}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                />
+
+                <TextField
+                  label="Injury Type (if applicable)"
+                  value={ticketForm.injury_type}
+                  onChange={(e) => setTicketForm({ ...ticketForm, injury_type: e.target.value })}
+                  fullWidth
+                  placeholder="e.g., Bruise, Cut, Sprain"
+                />
+
+                <FormControl fullWidth>
+                  <InputLabel>Severity</InputLabel>
+                  <Select
+                    value={ticketForm.severity}
+                    onChange={(e) => setTicketForm({ ...ticketForm, severity: e.target.value })}
+                    label="Severity"
+                  >
+                    <MenuItem value="minor">Minor</MenuItem>
+                    <MenuItem value="moderate">Moderate</MenuItem>
+                    <MenuItem value="severe">Severe</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <TextField
+                  label="Witness Names"
+                  value={ticketForm.witness_names}
+                  onChange={(e) => setTicketForm({ ...ticketForm, witness_names: e.target.value })}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  placeholder="Names of any witnesses to the incident"
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={ticketForm.police_report_filed}
+                      onChange={(e) => setTicketForm({ 
+                        ...ticketForm, 
+                        police_report_filed: e.target.checked 
+                      })}
+                    />
+                  }
+                  label="Police report filed"
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={ticketForm.insurance_claim_filed}
+                      onChange={(e) => setTicketForm({ 
+                        ...ticketForm, 
+                        insurance_claim_filed: e.target.checked 
+                      })}
+                    />
+                  }
+                  label="Insurance claim filed"
+                />
+
+                {ticketForm.insurance_claim_filed && (
+                  <TextField
+                    label="Claim Number"
+                    value={ticketForm.claim_number}
+                    onChange={(e) => setTicketForm({ ...ticketForm, claim_number: e.target.value })}
+                    fullWidth
+                    placeholder="Insurance claim number"
+                  />
+                )}
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={ticketForm.follow_up_required}
+                      onChange={(e) => setTicketForm({ 
+                        ...ticketForm, 
+                        follow_up_required: e.target.checked 
+                      })}
+                    />
+                  }
+                  label="Follow-up required"
+                />
+
+                {ticketForm.follow_up_required && (
+                  <TextField
+                    label="Follow-up Date"
+                    type="datetime-local"
+                    value={ticketForm.follow_up_date ? format(ticketForm.follow_up_date, "yyyy-MM-dd'T'HH:mm") : ''}
+                    onChange={(e) => setTicketForm({ 
+                      ...ticketForm, 
+                      follow_up_date: e.target.value ? new Date(e.target.value) : null 
+                    })}
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                  />
+                )}
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

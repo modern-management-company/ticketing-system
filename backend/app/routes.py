@@ -1,7 +1,7 @@
 from flask import request, jsonify
 from app import app
 from app.extensions import db
-from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment, History, SMSSettings, AttachmentSettings, GeneralSettings, SecuritySettings
+from app.models import User, Ticket, Property, TaskAssignment, Room, UserProperty, Task, PropertyManager, EmailSettings, ServiceRequest, TicketAttachment, History, SMSSettings, AttachmentSettings, GeneralSettings, SecuritySettings, Checklist, ChecklistItem, ChecklistCompletion
 from app.services import EmailService, EmailTestService
 import os
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
@@ -214,7 +214,20 @@ def create_ticket():
             subcategory=data.get('subcategory'),  # Optional field
             property_id=data['property_id'],
             user_id=current_user.user_id,
-            room_id=data.get('room_id')  # Optional field
+            room_id=data.get('room_id'),  # Optional field
+            # Incident Report fields
+            is_incident_report=data.get('is_incident_report', False),
+            incident_type=data.get('incident_type'),
+            incident_location=data.get('incident_location'),
+            incident_date=datetime.fromisoformat(data['incident_date']) if data.get('incident_date') else None,
+            injury_type=data.get('injury_type'),
+            severity=data.get('severity'),
+            witness_names=data.get('witness_names'),
+            police_report_filed=data.get('police_report_filed', False),
+            insurance_claim_filed=data.get('insurance_claim_filed', False),
+            claim_number=data.get('claim_number'),
+            follow_up_required=data.get('follow_up_required', True),
+            follow_up_date=datetime.fromisoformat(data['follow_up_date']) if data.get('follow_up_date') else None
         )
 
         # If room_id is provided, validate it exists and belongs to the property
@@ -251,7 +264,8 @@ def create_ticket():
                 'IT': 'IT',
                 'Security': 'Security',
                 'Food & Beverage': 'Food & Beverage',
-                'Accounting': 'Accounting'
+                'Accounting': 'Accounting',
+                'Incident Report': 'Management'  # Add incident report mapping
                 # Add more mappings as needed
             }
             
@@ -3270,6 +3284,39 @@ def manage_ticket(ticket_id):
                         user_id=current_user.user_id
                     )
 
+            # Handle incident report fields
+            incident_fields = [
+                'is_incident_report', 'incident_type', 'incident_location', 'injury_type',
+                'severity', 'witness_names', 'police_report_filed', 'insurance_claim_filed',
+                'claim_number', 'follow_up_required', 'follow_up_required'
+            ]
+            
+            for field in incident_fields:
+                if field in data:
+                    old_value = getattr(ticket, field)
+                    new_value = data[field]
+                    
+                    # Handle date fields
+                    if field in ['incident_date', 'follow_up_date'] and data.get(field):
+                        try:
+                            new_value = datetime.fromisoformat(data[field])
+                        except ValueError:
+                            return jsonify({'msg': f'Invalid date format for {field}'}), 400
+                    
+                    if old_value != new_value:
+                        setattr(ticket, field, new_value)
+                        changes.append(f"{field.replace('_', ' ').title()}: {old_value} → {new_value}")
+                        # Record history for each field change
+                        History.create_entry(
+                            entity_type='ticket',
+                            entity_id=ticket_id,
+                            action='updated',
+                            field_name=field,
+                            old_value=str(old_value),
+                            new_value=str(new_value),
+                            user_id=current_user.user_id
+                        )
+
             try:
                 db.session.commit()
 
@@ -5666,3 +5713,316 @@ def test_executive_report():
         import traceback
         app.logger.error(traceback.format_exc())
         return jsonify({'error': error_message}), 500
+
+@app.route('/api/checklists', methods=['GET'])
+@jwt_required()
+def get_checklists():
+    """Get all checklists for the current user's properties"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        # Get user's assigned properties
+        user_properties = [up.property_id for up in current_user.assigned_properties]
+        
+        if not user_properties:
+            return jsonify({'msg': 'No properties assigned to user'}), 400
+
+        # Get checklists for user's properties
+        checklists = Checklist.query.filter(
+            Checklist.property_id.in_(user_properties),
+            Checklist.is_active == True
+        ).all()
+
+        return jsonify({
+            'checklists': [checklist.to_dict() for checklist in checklists]
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting checklists: {str(e)}")
+        return jsonify({'msg': 'Internal server error'}), 500
+
+@app.route('/api/checklists', methods=['POST'])
+@jwt_required()
+def create_checklist():
+    """Create a new checklist"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'msg': 'No data provided'}), 400
+
+        # Validate required fields
+        required_fields = ['title', 'checklist_type', 'department']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'msg': f'Missing required field: {field}'}), 400
+
+        # Create checklist
+        checklist = Checklist(
+            title=data['title'],
+            description=data.get('description', ''),
+            checklist_type=data['checklist_type'],
+            property_id=data.get('property_id'),
+            department=data['department'],
+            created_by_id=current_user.user_id
+        )
+
+        db.session.add(checklist)
+        db.session.commit()
+
+        # Add checklist items if provided
+        if data.get('items'):
+            for i, item_data in enumerate(data['items']):
+                item = ChecklistItem(
+                    checklist_id=checklist.checklist_id,
+                    description=item_data['description'],
+                    order_index=i,
+                    is_required=item_data.get('is_required', True),
+                    expected_duration=item_data.get('expected_duration'),
+                    notes=item_data.get('notes', '')
+                )
+                db.session.add(item)
+            
+            db.session.commit()
+
+        return jsonify({
+            'msg': 'Checklist created successfully',
+            'checklist': checklist.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error creating checklist: {str(e)}")
+        return jsonify({'msg': 'Failed to create checklist'}), 500
+
+@app.route('/api/checklists/<int:checklist_id>', methods=['GET'])
+@jwt_required()
+def get_checklist(checklist_id):
+    """Get a specific checklist by ID"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        checklist = Checklist.query.get_or_404(checklist_id)
+        
+        # Check if user has access to this checklist's property
+        user_properties = [up.property_id for up in current_user.assigned_properties]
+        if checklist.property_id and checklist.property_id not in user_properties:
+            return jsonify({'msg': 'Unauthorized access to checklist'}), 403
+
+        return jsonify(checklist.to_dict()), 200
+
+    except Exception as e:
+        app.logger.error(f"Error getting checklist: {str(e)}")
+        return jsonify({'msg': 'Internal server error'}), 500
+
+@app.route('/api/checklists/<int:checklist_id>', methods=['PUT'])
+@jwt_required()
+def update_checklist(checklist_id):
+    """Update a checklist"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        checklist = Checklist.query.get_or_404(checklist_id)
+        
+        # Check if user has access to this checklist's property
+        user_properties = [up.property_id for up in current_user.assigned_properties]
+        if checklist.property_id and checklist.property_id not in user_properties:
+            return jsonify({'msg': 'Unauthorized access to checklist'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'msg': 'No data provided'}), 400
+
+        # Update checklist fields
+        if 'title' in data:
+            checklist.title = data['title']
+        if 'description' in data:
+            checklist.description = data['description']
+        if 'checklist_type' in data:
+            checklist.checklist_type = data['checklist_type']
+        if 'department' in data:
+            checklist.department = data['department']
+        if 'is_active' in data:
+            checklist.is_active = data['is_active']
+
+        checklist.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({
+            'msg': 'Checklist updated successfully',
+            'checklist': checklist.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating checklist: {str(e)}")
+        return jsonify({'msg': 'Failed to update checklist'}), 500
+
+@app.route('/api/checklists/<int:checklist_id>/complete', methods=['POST'])
+@jwt_required()
+def complete_checklist(checklist_id):
+    """Mark a checklist as completed"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        checklist = Checklist.query.get_or_404(checklist_id)
+        
+        # Check if user has access to this checklist's property
+        user_properties = [up.property_id for up in current_user.assigned_properties]
+        if checklist.property_id and checklist.property_id not in user_properties:
+            return jsonify({'msg': 'Unauthorized access to checklist'}), 403
+
+        data = request.get_json()
+        
+        # Create completion record
+        completion = ChecklistCompletion(
+            checklist_id=checklist_id,
+            completed_by_id=current_user.user_id,
+            property_id=checklist.property_id or current_user.assigned_properties[0].property_id,
+            completion_notes=data.get('notes', '')
+        )
+
+        db.session.add(completion)
+        db.session.commit()
+
+        return jsonify({
+            'msg': 'Checklist marked as completed',
+            'completion': completion.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error completing checklist: {str(e)}")
+        return jsonify({'msg': 'Failed to complete checklist'}), 500
+
+@app.route('/api/checklists/<int:checklist_id>/items', methods=['POST'])
+@jwt_required()
+def add_checklist_item(checklist_id):
+    """Add an item to a checklist"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        checklist = Checklist.query.get_or_404(checklist_id)
+        
+        # Check if user has access to this checklist's property
+        user_properties = [up.property_id for up in current_user.assigned_properties]
+        if checklist.property_id and checklist.property_id not in user_properties:
+            return jsonify({'msg': 'Unauthorized access to checklist'}), 403
+
+        data = request.get_json()
+        if not data or not data.get('description'):
+            return jsonify({'msg': 'Description is required'}), 400
+
+        # Get the next order index
+        max_order = db.session.query(db.func.max(ChecklistItem.order_index)).filter_by(checklist_id=checklist_id).scalar() or 0
+        
+        item = ChecklistItem(
+            checklist_id=checklist_id,
+            description=data['description'],
+            order_index=max_order + 1,
+            is_required=data.get('is_required', True),
+            expected_duration=data.get('expected_duration'),
+            notes=data.get('notes', '')
+        )
+
+        db.session.add(item)
+        db.session.commit()
+
+        return jsonify({
+            'msg': 'Checklist item added successfully',
+            'item': item.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error adding checklist item: {str(e)}")
+        return jsonify({'msg': 'Failed to add checklist item'}), 500
+
+@app.route('/api/checklists/<int:checklist_id>/items/<int:item_id>', methods=['PUT'])
+@jwt_required()
+def update_checklist_item(checklist_id, item_id):
+    """Update a checklist item"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        item = ChecklistItem.query.get_or_404(item_id)
+        if item.checklist_id != checklist_id:
+            return jsonify({'msg': 'Item does not belong to this checklist'}), 400
+
+        checklist = Checklist.query.get_or_404(checklist_id)
+        
+        # Check if user has access to this checklist's property
+        user_properties = [up.property_id for up in current_user.assigned_properties]
+        if checklist.property_id and checklist.property_id not in user_properties:
+            return jsonify({'msg': 'Unauthorized access to checklist'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'msg': 'No data provided'}), 400
+
+        # Update item fields
+        if 'description' in data:
+            item.description = data['description']
+        if 'is_required' in data:
+            item.is_required = data['is_required']
+        if 'expected_duration' in data:
+            item.expected_duration = data['expected_duration']
+        if 'notes' in data:
+            item.notes = data['notes']
+
+        db.session.commit()
+
+        return jsonify({
+            'msg': 'Checklist item updated successfully',
+            'item': item.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating checklist item: {str(e)}")
+        return jsonify({'msg': 'Failed to update checklist item'}), 500
+
+@app.route('/api/checklists/<int:checklist_id>/items/<int:item_id>', methods=['DELETE'])
+@jwt_required()
+def delete_checklist_item(checklist_id, item_id):
+    """Delete a checklist item"""
+    try:
+        current_user = get_user_from_jwt()
+        if not current_user:
+            return jsonify({'msg': 'User not found'}), 404
+
+        item = ChecklistItem.query.get_or_404(item_id)
+        if item.checklist_id != checklist_id:
+            return jsonify({'msg': 'Item does not belong to this checklist'}), 400
+
+        checklist = Checklist.query.get_or_404(checklist_id)
+        
+        # Check if user has access to this checklist's property
+        user_properties = [up.property_id for up in current_user.assigned_properties]
+        if checklist.property_id and checklist.property_id not in user_properties:
+            return jsonify({'msg': 'Unauthorized access to checklist'}), 403
+
+        db.session.delete(item)
+        db.session.commit()
+
+        return jsonify({'msg': 'Checklist item deleted successfully'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting checklist item: {str(e)}")
+        return jsonify({'msg': 'Failed to delete checklist item'}), 500

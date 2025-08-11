@@ -39,6 +39,7 @@ import Welcome from './components/Welcome';
 import ViewTask from './components/ViewTask';
 import HistoryView from './components/HistoryView';
 import Pricing from './components/Pricing';
+import ChecklistManagement from './components/ChecklistManagement';
 
 const App = () => {
   return (
@@ -166,6 +167,12 @@ const App = () => {
               <Route path="/rooms" element={
                 <ProtectedRoute>
                   <ViewRooms />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/checklists" element={
+                <ProtectedRoute>
+                  <ChecklistManagement />
                 </ProtectedRoute>
               } />
 

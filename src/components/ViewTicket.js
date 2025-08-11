@@ -27,7 +27,9 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction
+  ListItemSecondaryAction,
+  Checkbox,
+  FormControlLabel
 } from "@mui/material";
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -51,6 +53,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
 import { format } from 'date-fns';
 import LockIcon from '@mui/icons-material/Lock';
+import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 
 const ViewTicket = () => {
   const { ticketId } = useParams();
@@ -69,7 +72,20 @@ const ViewTicket = () => {
     priority: 'Low',
     category: 'General',
     subcategory: '',
-    room_id: ''
+    room_id: '',
+    // Incident Report fields
+    is_incident_report: false,
+    incident_type: '',
+    incident_location: '',
+    incident_date: null,
+    injury_type: '',
+    severity: '',
+    witness_names: '',
+    police_report_filed: false,
+    insurance_claim_filed: false,
+    claim_number: '',
+    follow_up_required: true,
+    follow_up_date: null
   });
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
@@ -281,7 +297,20 @@ const ViewTicket = () => {
       priority: ticket.priority,
       category: ticket.category,
       subcategory: ticket.subcategory || '',
-      room_id: ticket.room_id || ''
+      room_id: ticket.room_id || '',
+      // Incident Report fields
+      is_incident_report: ticket.is_incident_report || false,
+      incident_type: ticket.incident_type || '',
+      incident_location: ticket.incident_location || '',
+      incident_date: ticket.incident_date ? new Date(ticket.incident_date) : null,
+      injury_type: ticket.injury_type || '',
+      severity: ticket.severity || '',
+      witness_names: ticket.witness_names || '',
+      police_report_filed: ticket.police_report_filed || false,
+      insurance_claim_filed: ticket.insurance_claim_filed || false,
+      claim_number: ticket.claim_number || '',
+      follow_up_required: ticket.follow_up_required || true,
+      follow_up_date: ticket.follow_up_date ? new Date(ticket.follow_up_date) : null
     });
     setOpenDialog(true);
   };
@@ -294,7 +323,20 @@ const ViewTicket = () => {
       priority: 'Low',
       category: 'General',
       subcategory: '',
-      room_id: ''
+      room_id: '',
+      // Incident Report fields
+      is_incident_report: false,
+      incident_type: '',
+      incident_location: '',
+      incident_date: null,
+      injury_type: '',
+      severity: '',
+      witness_names: '',
+      police_report_filed: false,
+      insurance_claim_filed: false,
+      claim_number: '',
+      follow_up_required: true,
+      follow_up_date: null
     });
   };
 
@@ -666,6 +708,105 @@ const ViewTicket = () => {
             </Box>
           </Grid>
 
+          {/* Incident Report Details */}
+          {ticket.is_incident_report && (
+            <>
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }} />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <ReportProblemIcon color="warning" />
+                  <Typography variant="h6" color="warning.main">Incident Report Details</Typography>
+                </Box>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>Incident Type</Typography>
+                <Chip 
+                  label={ticket.incident_type?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'N/A'}
+                  color="warning"
+                  variant="outlined"
+                  size="small"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>Severity</Typography>
+                <Chip 
+                  label={ticket.severity || 'N/A'}
+                  color={
+                    ticket.severity === 'severe' ? 'error' :
+                    ticket.severity === 'moderate' ? 'warning' :
+                    'success'
+                  }
+                  size="small"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>Incident Location</Typography>
+                <Typography variant="body2">{ticket.incident_location || 'N/A'}</Typography>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>Incident Date</Typography>
+                <Typography variant="body2">
+                  {ticket.incident_date ? new Date(ticket.incident_date).toLocaleString() : 'N/A'}
+                </Typography>
+              </Grid>
+
+              {ticket.injury_type && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Injury Type</Typography>
+                  <Typography variant="body2">{ticket.injury_type}</Typography>
+                </Grid>
+              )}
+
+              {ticket.witness_names && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Witnesses</Typography>
+                  <Typography variant="body2">{ticket.witness_names}</Typography>
+                </Grid>
+              )}
+
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>Police Report</Typography>
+                <Chip 
+                  label={ticket.police_report_filed ? 'Filed' : 'Not Filed'}
+                  color={ticket.police_report_filed ? 'success' : 'default'}
+                  size="small"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>Insurance Claim</Typography>
+                <Chip 
+                  label={ticket.insurance_claim_filed ? 'Filed' : 'Not Filed'}
+                  color={ticket.insurance_claim_filed ? 'success' : 'default'}
+                  size="small"
+                />
+              </Grid>
+
+              {ticket.claim_number && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Claim Number</Typography>
+                  <Typography variant="body2">{ticket.claim_number}</Typography>
+                </Grid>
+              )}
+
+              {ticket.follow_up_required && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Follow-up Required</Typography>
+                  <Typography variant="body2" color="warning.main">Yes</Typography>
+                  {ticket.follow_up_date && (
+                    <Typography variant="caption" display="block" color="textSecondary">
+                      Due: {new Date(ticket.follow_up_date).toLocaleDateString()}
+                    </Typography>
+                  )}
+                </Grid>
+              )}
+            </>
+          )}
+
           <Grid item xs={12}>
             <Divider sx={{ my: 2 }} />
           </Grid>
@@ -1016,6 +1157,157 @@ const ViewTicket = () => {
                 ))}
               </Select>
             </FormControl>
+
+            {/* Incident Report Section */}
+            <Divider sx={{ my: 2 }}>
+              <Chip label="Incident Report Details" color="warning" />
+            </Divider>
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={ticketForm.is_incident_report}
+                  onChange={(e) => setTicketForm({ 
+                    ...ticketForm, 
+                    is_incident_report: e.target.checked 
+                  })}
+                />
+              }
+              label="This is an incident report"
+            />
+
+            {ticketForm.is_incident_report && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Incident Type</InputLabel>
+                  <Select
+                    value={ticketForm.incident_type}
+                    onChange={(e) => setTicketForm({ ...ticketForm, incident_type: e.target.value })}
+                    label="Incident Type"
+                  >
+                    <MenuItem value="guest_injury">Guest Injury</MenuItem>
+                    <MenuItem value="employee_injury">Employee Injury</MenuItem>
+                    <MenuItem value="property_damage">Property Damage</MenuItem>
+                    <MenuItem value="security_incident">Security Incident</MenuItem>
+                    <MenuItem value="other">Other</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <TextField
+                  label="Incident Location"
+                  value={ticketForm.incident_location}
+                  onChange={(e) => setTicketForm({ ...ticketForm, incident_location: e.target.value })}
+                  fullWidth
+                  placeholder="e.g., Room 101, Lobby, Parking Lot"
+                />
+
+                <TextField
+                  label="Incident Date & Time"
+                  type="datetime-local"
+                  value={ticketForm.incident_date ? format(ticketForm.incident_date, "yyyy-MM-dd'T'HH:mm") : ''}
+                  onChange={(e) => setTicketForm({ 
+                    ...ticketForm, 
+                    incident_date: e.target.value ? new Date(e.target.value) : null 
+                  })}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                />
+
+                <TextField
+                  label="Injury Type (if applicable)"
+                  value={ticketForm.injury_type}
+                  onChange={(e) => setTicketForm({ ...ticketForm, injury_type: e.target.value })}
+                  fullWidth
+                  placeholder="e.g., Bruise, Cut, Sprain"
+                />
+
+                <FormControl fullWidth>
+                  <InputLabel>Severity</InputLabel>
+                  <Select
+                    value={ticketForm.severity}
+                    onChange={(e) => setTicketForm({ ...ticketForm, severity: e.target.value })}
+                    label="Severity"
+                  >
+                    <MenuItem value="minor">Minor</MenuItem>
+                    <MenuItem value="moderate">Moderate</MenuItem>
+                    <MenuItem value="severe">Severe</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <TextField
+                  label="Witness Names"
+                  value={ticketForm.witness_names}
+                  onChange={(e) => setTicketForm({ ...ticketForm, witness_names: e.target.value })}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  placeholder="Names of any witnesses to the incident"
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={ticketForm.police_report_filed}
+                      onChange={(e) => setTicketForm({ 
+                        ...ticketForm, 
+                        police_report_filed: e.target.checked 
+                      })}
+                    />
+                  }
+                  label="Police report filed"
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={ticketForm.insurance_claim_filed}
+                      onChange={(e) => setTicketForm({ 
+                        ...ticketForm, 
+                        insurance_claim_filed: e.target.checked 
+                      })}
+                    />
+                  }
+                  label="Insurance claim filed"
+                />
+
+                {ticketForm.insurance_claim_filed && (
+                  <TextField
+                    label="Claim Number"
+                    value={ticketForm.claim_number}
+                    onChange={(e) => setTicketForm({ ...ticketForm, claim_number: e.target.value })}
+                    fullWidth
+                    placeholder="Insurance claim number"
+                  />
+                )}
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={ticketForm.follow_up_required}
+                      onChange={(e) => setTicketForm({ 
+                        ...ticketForm, 
+                        follow_up_required: e.target.checked 
+                      })}
+                    />
+                  }
+                  label="Follow-up required"
+                />
+
+                {ticketForm.follow_up_required && (
+                  <TextField
+                    label="Follow-up Date"
+                    type="datetime-local"
+                    value={ticketForm.follow_up_date ? format(ticketForm.follow_up_date, "yyyy-MM-dd'T'HH:mm") : ''}
+                    onChange={(e) => setTicketForm({ 
+                      ...ticketForm, 
+                      follow_up_date: e.target.value ? new Date(e.target.value) : null 
+                    })}
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                  />
+                )}
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

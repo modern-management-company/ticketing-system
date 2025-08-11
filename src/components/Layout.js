@@ -38,6 +38,7 @@ import {
   AttachFile as AttachFileIcon,
   Apartment as ApartmentIcon,
   PeopleAlt as TeamIcon,
+  Checklist as ChecklistIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -92,6 +93,12 @@ const Layout = () => {
         icon: <HousekeepingIcon />,
         path: '/requests',
         description: 'Handle guest service requests and housekeeping needs'
+      },
+      {
+        text: 'Checklists',
+        icon: <ChecklistIcon />,
+        path: '/checklists',
+        description: 'Manage and track property checklists'
       },
     ];
 

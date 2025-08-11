@@ -197,6 +197,20 @@ class Ticket(db.Model):
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
     completed_at = db.Column(db.DateTime)  # When the ticket was completed
 
+    # Incident Report fields
+    is_incident_report = db.Column(db.Boolean, default=False)
+    incident_type = db.Column(db.String(50))  # 'guest_injury', 'employee_injury', 'property_damage', 'security_incident'
+    incident_location = db.Column(db.String(200))
+    incident_date = db.Column(db.DateTime)
+    injury_type = db.Column(db.String(100))
+    severity = db.Column(db.String(20))  # 'minor', 'moderate', 'severe'
+    witness_names = db.Column(db.Text)
+    police_report_filed = db.Column(db.Boolean, default=False)
+    insurance_claim_filed = db.Column(db.Boolean, default=False)
+    claim_number = db.Column(db.String(100))
+    follow_up_required = db.Column(db.Boolean, default=True)
+    follow_up_date = db.Column(db.DateTime)
+
     # Add relationship to attachments
     attachments = db.relationship('TicketAttachment', backref='ticket', lazy=True)
 
@@ -222,6 +236,18 @@ class Ticket(db.Model):
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'property_id': self.property_id,
+            'is_incident_report': self.is_incident_report,
+            'incident_type': self.incident_type,
+            'incident_location': self.incident_location,
+            'incident_date': self.incident_date.isoformat() if self.incident_date else None,
+            'injury_type': self.injury_type,
+            'severity': self.severity,
+            'witness_names': self.witness_names,
+            'police_report_filed': self.police_report_filed,
+            'insurance_claim_filed': self.insurance_claim_filed,
+            'claim_number': self.claim_number,
+            'follow_up_required': self.follow_up_required,
+            'follow_up_date': self.follow_up_date.isoformat() if self.follow_up_date else None,
             'attachments': [attachment.to_dict() for attachment in self.attachments]
         }
 
@@ -601,4 +627,88 @@ class SecuritySettings(db.Model):
             'logLevel': self.log_level,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+class Checklist(db.Model):
+    __tablename__ = 'checklists'
+    checklist_id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    checklist_type = db.Column(db.String(50), nullable=False)  # 'daily', 'weekly', 'monthly', 'custom'
+    property_id = db.Column(db.Integer, db.ForeignKey('properties.property_id'))
+    department = db.Column(db.String(50))  # 'Engineering', 'Housekeeping', 'Front Desk', 'Management'
+    is_active = db.Column(db.Boolean, default=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    items = db.relationship('ChecklistItem', backref='checklist', lazy=True, cascade='all, delete-orphan')
+    property = db.relationship('Property', backref='checklists')
+    created_by = db.relationship('User', foreign_keys=[created_by_id], backref='created_checklists')
+
+    def to_dict(self):
+        """Convert checklist object to dictionary"""
+        return {
+            'checklist_id': self.checklist_id,
+            'title': self.title,
+            'description': self.description,
+            'checklist_type': self.checklist_type,
+            'property_id': self.property_id,
+            'department': self.department,
+            'is_active': self.is_active,
+            'created_by_id': self.created_by_id,
+            'created_by_username': self.created_by.username if self.created_by else 'Unknown',
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'item_count': len(self.items),
+            'items': [item.to_dict() for item in self.items]
+        }
+
+class ChecklistItem(db.Model):
+    __tablename__ = 'checklist_items'
+    item_id = db.Column(db.Integer, primary_key=True)
+    checklist_id = db.Column(db.Integer, db.ForeignKey('checklists.checklist_id'), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    order_index = db.Column(db.Integer, default=0)
+    is_required = db.Column(db.Boolean, default=True)
+    expected_duration = db.Column(db.Integer)  # Duration in minutes
+    notes = db.Column(db.Text)
+    
+    def to_dict(self):
+        """Convert checklist item object to dictionary"""
+        return {
+            'item_id': self.item_id,
+            'checklist_id': self.checklist_id,
+            'description': self.description,
+            'order_index': self.order_index,
+            'is_required': self.is_required,
+            'expected_duration': self.expected_duration,
+            'notes': self.notes
+        }
+
+class ChecklistCompletion(db.Model):
+    __tablename__ = 'checklist_completions'
+    completion_id = db.Column(db.Integer, primary_key=True)
+    checklist_id = db.Column(db.Integer, db.ForeignKey('checklists.checklist_id'), nullable=False)
+    completed_by_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
+    property_id = db.Column(db.Integer, db.ForeignKey('properties.property_id'), nullable=False)
+    completed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completion_notes = db.Column(db.Text)
+    
+    # Relationships
+    checklist = db.relationship('Checklist', backref='completions')
+    completed_by = db.relationship('User', foreign_keys=[completed_by_id], backref='checklist_completions')
+    property = db.relationship('Property', backref='checklist_completions')
+    
+    def to_dict(self):
+        """Convert checklist completion object to dictionary"""
+        return {
+            'completion_id': self.completion_id,
+            'checklist_id': self.checklist_id,
+            'completed_by_id': self.completed_by_id,
+            'completed_by_username': self.completed_by.username if self.completed_by else 'Unknown',
+            'property_id': self.property_id,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'completion_notes': self.completion_notes
         }

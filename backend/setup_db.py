@@ -1,5 +1,10 @@
 from app import app, db
-from app.models import User, Property, Ticket, Task, TaskAssignment, Room, PropertyManager, EmailSettings
+from app.models import (
+    User, Property, Ticket, Task, TaskAssignment, Room, PropertyManager, 
+    EmailSettings, TicketAttachment, UserProperty, SMSSettings, ServiceRequest, 
+    History, AttachmentSettings, GeneralSettings, SecuritySettings, 
+    Checklist, ChecklistItem, ChecklistCompletion
+)
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
 from sqlalchemy import text, inspect
@@ -231,7 +236,18 @@ def setup_database():
                 TaskAssignment.__tablename__: TaskAssignment,
                 Room.__tablename__: Room,
                 PropertyManager.__tablename__: PropertyManager,
-                EmailSettings.__tablename__: EmailSettings
+                EmailSettings.__tablename__: EmailSettings,
+                TicketAttachment.__tablename__: TicketAttachment,
+                UserProperty.__tablename__: UserProperty,
+                SMSSettings.__tablename__: SMSSettings,
+                ServiceRequest.__tablename__: ServiceRequest,
+                History.__tablename__: History,
+                AttachmentSettings.__tablename__: AttachmentSettings,
+                GeneralSettings.__tablename__: GeneralSettings,
+                SecuritySettings.__tablename__: SecuritySettings,
+                Checklist.__tablename__: Checklist,
+                ChecklistItem.__tablename__: ChecklistItem,
+                ChecklistCompletion.__tablename__: ChecklistCompletion
             }
             
             inspector = inspect(db.engine)
