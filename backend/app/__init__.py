@@ -138,6 +138,21 @@ def log_response_info(response):
 # Import routes and models after initializing extensions
 from app import routes, models
 
+# Global error handler for unhandled database errors
+@app.errorhandler(Exception)
+def handle_unhandled_exception(e):
+    app.logger.error(f'Unhandled exception: {str(e)}')
+    # Always try to rollback the session on any unhandled error
+    try:
+        from app.extensions import db
+        if db.session.is_active:
+            db.session.rollback()
+            app.logger.info('Session rolled back due to unhandled exception')
+    except Exception as rollback_error:
+        app.logger.error(f'Error during session rollback: {str(rollback_error)}')
+    
+    return jsonify({'message': 'Internal server error'}), 500
+
 # Create database tables
 with app.app_context():
     db.create_all()

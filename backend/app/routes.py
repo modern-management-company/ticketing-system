@@ -38,6 +38,11 @@ def check_first_user():
         is_first = User.query.count() == 0
         return jsonify({"isFirstUser": is_first}), 200
     except Exception as e:
+        # Rollback session on any error
+        try:
+            db.session.rollback()
+        except Exception as rollback_error:
+            app.logger.error(f"Error during session rollback: {str(rollback_error)}")
         app.logger.error(f"Error checking first user: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500
 
@@ -175,6 +180,11 @@ def login():
         }), 200
 
     except Exception as e:
+        # Rollback session on any error
+        try:
+            db.session.rollback()
+        except Exception as rollback_error:
+            app.logger.error(f"Error during session rollback: {str(rollback_error)}")
         app.logger.error(f"Login error: {str(e)}")
         return jsonify({"msg": "Internal server error"}), 500
 

@@ -15,6 +15,15 @@ class Config:
     SQLALCHEMY_DATABASE_URI = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
+    # SQLAlchemy session management
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,  # Verify connections before use
+        'pool_recycle': 3600,   # Recycle connections every hour
+        'pool_timeout': 20,     # Connection timeout
+        'max_overflow': 10,     # Max overflow connections
+        'pool_size': 10         # Connection pool size
+    }
+    
     # Secret key for session management
     SECRET_KEY = os.environ.get('SECRET_KEY', '')
     
