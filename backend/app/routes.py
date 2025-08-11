@@ -5717,32 +5717,33 @@ def test_executive_report():
 @app.route('/api/checklists', methods=['GET'])
 @jwt_required()
 def get_checklists():
-    """Get all checklists for the current user's properties"""
     try:
         current_user = get_user_from_jwt()
         if not current_user:
             return jsonify({'msg': 'User not found'}), 404
 
-        # Get user's assigned properties
         user_properties = [up.property_id for up in current_user.assigned_properties]
-        
         if not user_properties:
             return jsonify({'msg': 'No properties assigned to user'}), 400
 
-        # Get checklists for user's properties
-        checklists = Checklist.query.filter(
-            Checklist.property_id.in_(user_properties),
-            Checklist.is_active == True
-        ).all()
+        include_archived = request.args.get('include_archived', 'false').lower() == 'true'
+        only_archived    = request.args.get('only_archived', 'false').lower() == 'true'
+        property_id      = request.args.get('property_id', type=int)
 
-        return jsonify({
-            'checklists': [checklist.to_dict() for checklist in checklists]
-        }), 200
+        q = Checklist.query.filter(Checklist.property_id.in_(user_properties))
+        if property_id:
+            q = q.filter(Checklist.property_id == property_id)
 
+        if only_archived:
+            q = q.filter(Checklist.is_active == False)
+        elif not include_archived:
+            q = q.filter(Checklist.is_active == True)
+
+        checklists = q.all()
+        return jsonify({'checklists': [c.to_dict() for c in checklists]}), 200
     except Exception as e:
         app.logger.error(f"Error getting checklists: {str(e)}")
         return jsonify({'msg': 'Internal server error'}), 500
-
 @app.route('/api/checklists', methods=['POST'])
 @jwt_required()
 def create_checklist():
