@@ -42,6 +42,7 @@ import { toast } from 'react-hot-toast';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import CloseIcon from '@mui/icons-material/Close';
 import * as XLSX from 'xlsx';
+import WorkerActivityReport from './WorkerActivityReport';
 
 const TabPanel = (props) => {
   const { children, value, index, ...other } = props;
@@ -102,7 +103,6 @@ const Reports = () => {
     try {
       const response = await apiClient.get('/properties');
       if (response.data) {
-        // Filter only active properties
         const activeProperties = response.data.filter(prop => prop.status === 'active');
         setProperties(activeProperties);
       }
@@ -148,7 +148,6 @@ const Reports = () => {
       const formattedStartDate = format(dateRange.start, 'yyyy-MM-dd');
       const formattedEndDate = format(dateRange.end, 'yyyy-MM-dd');
       
-      // Fetch all data without room filtering
       const [ticketsRes, requestsRes, tasksRes] = await Promise.all([
         apiClient.get(`/properties/${selectedProperty}/tickets?start_date=${formattedStartDate}&end_date=${formattedEndDate}`),
         apiClient.get(`/service-requests?property_id=${selectedProperty}&start_date=${formattedStartDate}&end_date=${formattedEndDate}`),
@@ -159,7 +158,6 @@ const Reports = () => {
       let allRequests = requestsRes.data?.requests || [];
       let allTasks = tasksRes.data?.tasks || [];
 
-      // Filter out completed items if hideCompleted is true
       if (hideCompleted) {
         allTickets = allTickets.filter(ticket => 
           ticket?.status?.toLowerCase() !== 'completed'
@@ -172,11 +170,9 @@ const Reports = () => {
         );
       }
 
-      // Fetch and attach history info for tickets
       const ticketWithHistory = await Promise.all(
         allTickets.map(async (ticket) => {
           const history = await fetchTicketHistory(ticket.ticket_id);
-          console.log('Ticket', ticket.ticket_id, 'history:', history);
           const { createdBy, createdAt } = getCreatorInfo(history);
           return {
             ...ticket,
@@ -194,11 +190,9 @@ const Reports = () => {
         })
       );
 
-      // Only declare taskWithHistory once (with debug logging)
       const taskWithHistory = await Promise.all(
         allTasks.map(async (task) => {
           const history = await fetchTaskHistory(task.task_id);
-          console.log('Task', task.task_id, 'history:', history);
           const { completedBy, completedAt } = getCompletedInfo(history);
           const { createdBy, createdAt } = getCreatorInfo(history);
           const assignmentHistory = getAssignmentHistory(history);
@@ -221,47 +215,27 @@ const Reports = () => {
           };
         })
       );
-
-      console.log('Raw data fetched:', {
-        tickets: ticketWithHistory.length,
-        requests: allRequests.length,
-        tasks: taskWithHistory.length
-      });
       
-      // Apply client-side filtering if a room is selected
       if (selectedRoom !== 'all') {
-        console.log('Filtering by room:', selectedRoom);
-        
-        // Filter tickets by room
         allTickets = allTickets.filter(ticket => {
           return ticket.room_id === selectedRoom || 
                  ticket.room?.room_id === selectedRoom ||
                  ticket.room_number === selectedRoom;
         });
         
-        // Filter service requests by room
         allRequests = allRequests.filter(request => {
           return request.room_id === selectedRoom || 
                  request.room?.room_id === selectedRoom ||
                  request.room_number === selectedRoom;
         });
         
-        console.log('Filtered tickets and requests:', {
-          filteredTickets: allTickets.length,
-          filteredRequests: allRequests.length
-        });
-        
-        // Filter tasks based on their relation to filtered tickets and requests
         const ticketIds = new Set(allTickets.map(t => t.ticket_id));
         const requestIds = new Set(allRequests.map(r => r.request_id));
         
-        // Keep only tasks related to the filtered tickets/requests
         allTasks = allTasks.filter(task => {
           return (task.ticket_id && ticketIds.has(task.ticket_id)) ||
                  (task.request_id && requestIds.has(task.request_id));
         });
-        
-        console.log('Filtered tasks:', allTasks.length);
       }
 
       setReportData({
@@ -287,13 +261,11 @@ const Reports = () => {
     const title = `${type.charAt(0).toUpperCase() + type.slice(1)} Report - ${property?.name}`;
     const date = format(selectedDate, 'MMMM dd, yyyy');
 
-    // Add title
     doc.setFontSize(16);
     doc.text(title, 14, 15);
     doc.setFontSize(12);
     doc.text(`Date: ${date}`, 14, 25);
 
-    // Add table
     const data = reportData[type].map(item => {
       if (type === 'tickets') {
         return [
@@ -354,7 +326,6 @@ const Reports = () => {
       headStyles: { fillColor: [66, 66, 66] }
     });
 
-    // Save PDF
     doc.save(`${type}_report_${format(selectedDate, 'yyyy-MM-dd')}.pdf`);
   };
 
@@ -593,18 +564,14 @@ const Reports = () => {
       const title = `${type.charAt(0).toUpperCase() + type.slice(1)} Report - ${property?.name}`;
       const date = format(dateRange.start, 'MM/dd/yyyy') + ' to ' + format(dateRange.end, 'MM/dd/yyyy');
       
-      // Get filtered data
       const data = getFilteredData(reportData[type] || [], type);
       
-      // Create worksheet data with header
       let wsData = [];
       
-      // Add title and date rows
       wsData.push([title]);
       wsData.push(['Date Range: ' + date]);
-      wsData.push([]);  // Empty row for spacing
+      wsData.push([]);
       
-      // Define headers based on report type
       let headers = [];
       if (type === 'tickets') {
         headers = ['ID', 'Title', 'Room', 'Status', 'Priority', 'Category', 'Subcategory', 'Created By', 'Created At'];
@@ -614,10 +581,8 @@ const Reports = () => {
         headers = ['ID', 'Type', 'Room', 'Group', 'Status', 'Priority', 'Guest', 'Created At'];
       }
       
-      // Add headers row
       wsData.push(headers);
       
-      // Add data rows
       data.forEach(item => {
         let row = [];
         if (type === 'tickets') {
@@ -666,26 +631,20 @@ const Reports = () => {
         wsData.push(row);
       });
       
-      // Create workbook and worksheet
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       
-      // Set column widths
       const colWidths = headers.map(h => ({ wch: Math.max(20, h.length * 1.5) }));
       ws['!cols'] = colWidths;
       
-      // Style the header cells (in Excel, styling is limited with this library)
-      // We can at least make the headers bold
       for (let i = 0; i < headers.length; i++) {
-        const cellRef = XLSX.utils.encode_cell({ r: 3, c: i }); // Headers are on row 4 (index 3)
+        const cellRef = XLSX.utils.encode_cell({ r: 3, c: i });
         if (!ws[cellRef]) ws[cellRef] = {};
         ws[cellRef].s = { font: { bold: true } };
       }
       
-      // Add the worksheet to the workbook
       XLSX.utils.book_append_sheet(wb, ws, type.charAt(0).toUpperCase() + type.slice(1));
       
-      // Generate Excel file and trigger download
       XLSX.writeFile(wb, `${type}_report_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
       
       toast.success(`Excel report downloaded successfully`);
@@ -859,6 +818,7 @@ const Reports = () => {
           <Tab label="Tickets Report" />
           <Tab label="Tasks Report" />
           <Tab label="Service Requests Report" />
+          <Tab label="Worker Activity" />
         </Tabs>
 
         {loading ? (
@@ -1019,7 +979,7 @@ const Reports = () => {
                 )}
               </Box>
               <Typography variant="h6" gutterBottom>
-                Pending tasks for {selectedActivityUser === 'all' ? 'All Staff' : users.find(user => user.user_id === selectedActivityUser)?.username || 'Selected User'} - {properties.find(p => p.property_id === selectedProperty)?.name || 'Hotel'}
+                Pending tasks for {selectedActivityUser === 'all' ? 'All Staff' : users.find(user => user.user_id === selectedActivityUser)?.username || 'Selected User'} - {properties.find(p => p.property_id === selectedProperty)?.name || 'Property'}
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {activityTasks.map((task) => (
@@ -1157,6 +1117,10 @@ const Reports = () => {
                 </Table>
               </TableContainer>
             </TabPanel>
+
+            <TabPanel value={tabValue} index={3}>
+              <WorkerActivityReport />
+            </TabPanel>
           </>
         )}
       </Paper>
@@ -1214,4 +1178,4 @@ const Reports = () => {
   );
 };
 
-export default Reports; 
+export default Reports;
