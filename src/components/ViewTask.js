@@ -253,8 +253,12 @@ const ViewTask = () => {
         return 'warning';
       case 'assigned':
         return 'primary';
+      case 'completed':
+        return 'success';
+      case 'reopened':
+        return 'primary';
       default:
-        return 'default';
+        return 'grey';
     }
   };
 

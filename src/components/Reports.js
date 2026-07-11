@@ -79,6 +79,7 @@ const Reports = () => {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [users, setUsers] = useState([]);
   const [openEmailDialog, setOpenEmailDialog] = useState(false);
+  const [selectedEmailReportType, setSelectedEmailReportType] = useState('current');
   const [dateRange, setDateRange] = useState({
     start: new Date(),
     end: new Date()
@@ -91,6 +92,7 @@ const Reports = () => {
   });
   const [openFilterDialog, setOpenFilterDialog] = useState(false);
   const [currentFilterType, setCurrentFilterType] = useState('');
+  const [selectedActivityUser, setSelectedActivityUser] = useState('all');
 
   useEffect(() => {
     fetchProperties();
@@ -381,7 +383,10 @@ const Reports = () => {
       const response = await apiClient.post('/api/reports/send-email', {
         property_id: selectedProperty,
         date: format(selectedDate, 'yyyy-MM-dd'),
-        type: reportType,
+        start_date: format(dateRange.start, 'yyyy-MM-dd'),
+        end_date: format(dateRange.end, 'yyyy-MM-dd'),
+        type: selectedEmailReportType === 'current' ? reportType : selectedEmailReportType,
+        activity_user_id: selectedActivityUser === 'all' ? null : selectedActivityUser,
         user_ids: selectedUsers.map(user => user.user_id)
       });
 
@@ -523,6 +528,41 @@ const Reports = () => {
     );
   };
 
+  const getTaskStaffName = (task) => (
+    task.current_assigned_to ||
+    task.assigned_to ||
+    users.find(user => user.user_id === task.assigned_to_id)?.username ||
+    (task.assignmentHistory?.length ? task.assignmentHistory[0].assignedTo : '') ||
+    'Unassigned'
+  );
+
+  const getTaskActivity = (task) => {
+    const latestHistory = task.history?.[0];
+    if (latestHistory?.action === 'updated' && latestHistory.field_name) {
+      return `${latestHistory.field_name} updated`;
+    }
+    if (latestHistory?.action) {
+      return latestHistory.action.replace(/_/g, ' ');
+    }
+    return task.status || 'Pending';
+  };
+
+  const getTaskComments = (task) => (
+    task.description || task.comments || task.comment || 'No comments'
+  );
+
+  const getTaskEffectiveDate = (task) => {
+    const dateValue = task.due_date || task.created_at;
+    return dateValue ? format(new Date(dateValue), 'MM/dd/yyyy') : 'N/A';
+  };
+
+  const getActivityTasks = () => getFilteredData(reportData.tasks || [], 'tasks').filter((task) => {
+    if (selectedActivityUser === 'all') return true;
+    const staffName = getTaskStaffName(task).toLowerCase();
+    const selectedUser = users.find(user => user.user_id === selectedActivityUser);
+    return task.assigned_to_id === selectedActivityUser || staffName === selectedUser?.username?.toLowerCase();
+  });
+
   const getFilteredData = (data, reportType) => {
     const currentFilters = filters[reportType];
     if (!currentFilters || Object.keys(currentFilters).length === 0) {
@@ -544,6 +584,8 @@ const Reports = () => {
       });
     });
   };
+
+  const activityTasks = getActivityTasks();
 
   const generateExcel = (type) => {
     try {
@@ -665,7 +707,7 @@ const Reports = () => {
         <Grid item xs={12} md={3}>
           <PropertySwitcher onPropertyChange={setSelectedProperty} />
         </Grid>
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
               Date Range
@@ -715,7 +757,7 @@ const Reports = () => {
             </Box>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={2}>
           <Paper sx={{ p: 2 }}>
             <FormControlLabel
               control={
@@ -727,6 +769,25 @@ const Reports = () => {
               }
               label="Hide Completed Items"
             />
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Paper sx={{ p: 2 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Activity by User</InputLabel>
+              <Select
+                value={selectedActivityUser}
+                label="Activity by User"
+                onChange={(e) => setSelectedActivityUser(e.target.value)}
+              >
+                <MenuItem value="all">All Users</MenuItem>
+                {users.map((user) => (
+                  <MenuItem key={user.user_id} value={user.user_id}>
+                    {user.username}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Paper>
         </Grid>
       </Grid>
@@ -742,6 +803,14 @@ const Reports = () => {
                 <Chip
                   label={`Room: ${rooms.find(r => r.room_id === selectedRoom)?.name || selectedRoom}`}
                   onDelete={() => setSelectedRoom('all')}
+                  color="primary"
+                  variant="outlined"
+                />
+              )}
+              {selectedActivityUser !== 'all' && (
+                <Chip
+                  label={`User: ${users.find(u => u.user_id === selectedActivityUser)?.username || selectedActivityUser}`}
+                  onDelete={() => setSelectedActivityUser('all')}
                   color="primary"
                   variant="outlined"
                 />
@@ -821,7 +890,11 @@ const Reports = () => {
                 <Button
                   variant="contained"
                   color="secondary"
-                  onClick={() => setOpenEmailDialog(true)}
+                  onClick={() => {
+                    setReportType('tickets');
+                    setSelectedEmailReportType('current');
+                    setOpenEmailDialog(true);
+                  }}
                   disabled={!reportData.tickets?.length}
                 >
                   Send to Email
@@ -917,7 +990,11 @@ const Reports = () => {
                 <Button
                   variant="contained"
                   color="secondary"
-                  onClick={() => setOpenEmailDialog(true)}
+                  onClick={() => {
+                    setReportType('tasks');
+                    setSelectedEmailReportType('current');
+                    setOpenEmailDialog(true);
+                  }}
                   disabled={!reportData.tasks?.length}
                 >
                   Send to Email
@@ -941,65 +1018,59 @@ const Reports = () => {
                   </Button>
                 )}
               </Box>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>ID</TableCell>
-                      <TableCell>Title</TableCell>
-                      <TableCell>Room</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Priority</TableCell>
-                      <TableCell>Category</TableCell>
-                      <TableCell>Created By</TableCell>
-                      <TableCell>Current Assignee</TableCell>
-                      <TableCell>Completed At/By</TableCell>
-                      <TableCell>History</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {getFilteredData(reportData.tasks || [], 'tasks').map((task) => (
-                      <TableRow key={task.task_id}>
-                        <TableCell>{task.task_id}</TableCell>
-                        <TableCell>{task.title}</TableCell>
-                        <TableCell>{task.room_info?.room_name || 'N/A'}</TableCell>
-                        <TableCell>{task.status}</TableCell>
-                        <TableCell>{task.priority}</TableCell>
-                        <TableCell>{task.category || 'N/A'}</TableCell>
-                        <TableCell>{task.created_by}</TableCell>
-                        <TableCell>{task.current_assigned_to}</TableCell>
-                        <TableCell>
-                          {task.completed_at ? format(new Date(task.completed_at), 'MM/dd/yyyy HH:mm') : 'N/A'}
-                          <br />
-                          {task.completed_by && (
-                            <span style={{fontSize: '0.8em', color: '#666'}}>by {task.completed_by}</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ maxHeight: '100px', overflow: 'auto' }}>
-                            {task.assignmentHistory && task.assignmentHistory.length > 0 && task.assignmentHistory.map((h, index) => (
-                              <Box key={`assign-${index}`} sx={{ mb: 1 }}>
-                                <Typography variant="body2">
-                                  Assigned to {h.assignedTo} by {h.assignedBy} at {format(new Date(h.assignedAt), 'MM/dd/yyyy HH:mm')}
-                                </Typography>
-                              </Box>
-                            ))}
-                            {(task.history || [])
-                              .filter(h => h.action === 'completed' || (h.action === 'updated' && h.field_name === 'status' && h.new_status === 'completed'))
-                              .map((h, index) => (
-                                <Box key={`complete-${index}`} sx={{ mb: 1 }}>
-                                  <Typography variant="body2">
-                                    Completed by {h.user} at {format(new Date(h.timestamp), 'MM/dd/yyyy HH:mm')}
-                                  </Typography>
-                                </Box>
-                            ))}
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              <Typography variant="h6" gutterBottom>
+                Pending tasks for {selectedActivityUser === 'all' ? 'All Staff' : users.find(user => user.user_id === selectedActivityUser)?.username || 'Selected User'} - {properties.find(p => p.property_id === selectedProperty)?.name || 'Hotel'}
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {activityTasks.map((task) => (
+                  <Paper key={task.task_id} variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                      {task.ticket_id ? `Ticket #${task.ticket_id}` : `Task #${task.task_id}`} - {task.title}
+                    </Typography>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableBody>
+                          <TableRow>
+                            <TableCell sx={{ width: 180, fontWeight: 700 }}>Activity</TableCell>
+                            <TableCell>{getTaskActivity(task)}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>Staff</TableCell>
+                            <TableCell>{getTaskStaffName(task)}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>Task</TableCell>
+                            <TableCell>{task.title}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>Comments</TableCell>
+                            <TableCell>{getTaskComments(task)}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>Ref No</TableCell>
+                            <TableCell>{task.ticket_id ? `Ticket #${task.ticket_id}` : `Task #${task.task_id}`}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>Effective Date</TableCell>
+                            <TableCell>{getTaskEffectiveDate(task)}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>Hotel / Property</TableCell>
+                            <TableCell>{properties.find(p => p.property_id === selectedProperty)?.name || 'Hotel'}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                            <TableCell>{task.status}</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Paper>
+                ))}
+                {activityTasks.length === 0 && (
+                  <Alert severity="info">No tasks match the selected management filters.</Alert>
+                )}
+              </Box>
             </TabPanel>
 
             <TabPanel value={tabValue} index={2}>
@@ -1025,7 +1096,11 @@ const Reports = () => {
                 <Button
                   variant="contained"
                   color="secondary"
-                  onClick={() => setOpenEmailDialog(true)}
+                  onClick={() => {
+                    setReportType('requests');
+                    setSelectedEmailReportType('current');
+                    setOpenEmailDialog(true);
+                  }}
                   disabled={!reportData.requests?.length}
                 >
                   Send to Email
@@ -1091,6 +1166,20 @@ const Reports = () => {
           <Typography variant="h6" gutterBottom>
             Select Users to Email
           </Typography>
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>Report Content</InputLabel>
+            <Select
+              value={selectedEmailReportType}
+              label="Report Content"
+              onChange={(e) => setSelectedEmailReportType(e.target.value)}
+            >
+              <MenuItem value="current">Current Tab ({reportType})</MenuItem>
+              <MenuItem value="all">Tickets, Tasks, and Requests</MenuItem>
+              <MenuItem value="tickets">Tickets Only</MenuItem>
+              <MenuItem value="tasks">Tasks Only</MenuItem>
+              <MenuItem value="requests">Service Requests Only</MenuItem>
+            </Select>
+          </FormControl>
           <Autocomplete
             multiple
             options={users}

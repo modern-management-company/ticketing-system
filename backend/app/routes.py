@@ -18,6 +18,7 @@ from werkzeug.utils import secure_filename
 from app.services.file_storage_service import FileStorageService
 import io
 import pytz
+from html import escape
 
 def get_user_from_jwt():
     """Helper function to get user from JWT identity"""
@@ -4651,57 +4652,150 @@ def send_report_email():
         if not property:
             return jsonify({"msg": "Property not found"}), 404
 
-        # Get report data based on type
-        report_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        # Get report data based on type. Email reports use a management-friendly
+        # table with consistent columns across tickets, tasks, and service requests.
         report_type = data['type']
+        activity_user_id = data.get('activity_user_id')
+        try:
+            activity_user_id = int(activity_user_id) if activity_user_id else None
+        except (TypeError, ValueError):
+            activity_user_id = None
 
-        # Get the data using the same endpoints as the frontend
-        if report_type == 'tickets':
-            tickets = Ticket.query.filter_by(property_id=data['property_id']).all()
-            items = []
-            for t in tickets:
-                creator = User.query.get(t.user_id)
-                items.append({
-                    'id': t.ticket_id,
-                    'title': t.title,
-                    'room': t.room_name if hasattr(t, 'room_name') else 'N/A',
-                    'status': t.status,
-                    'priority': t.priority,
-                    'created_by': creator.username if creator else 'Unknown',
-                    'created_at': t.created_at.strftime('%m/%d/%Y %H:%M')
-                })
-        elif report_type == 'tasks':
-            tasks = Task.query.filter_by(property_id=data['property_id']).all()
-            items = []
-            for t in tasks:
-                assigned_user = User.query.get(t.assigned_to_id) if t.assigned_to_id else None
-                items.append({
-                    'id': t.task_id,
-                    'title': t.title,
-                    'status': t.status,
-                    'priority': t.priority,
-                    'assigned_to': assigned_user.username if assigned_user else 'Unassigned',
-                    'due_date': t.due_date.strftime('%m/%d/%Y') if t.due_date else 'No due date',
-                    'created_at': t.created_at.strftime('%m/%d/%Y %H:%M') if t.created_at else 'N/A',
-                    'completed_at': t.completed_at.strftime('%m/%d/%Y %H:%M') if t.completed_at else 'N/A',
-                    'history': t.history if hasattr(t, 'history') else []
-                })
-        elif report_type == 'requests':
-            requests = ServiceRequest.query.filter_by(property_id=data['property_id']).all()
-            items = [{
-                'id': r.request_id,
-                'type': r.request_type,
-                'room': r.room_number or 'N/A',
-                'group': r.request_group,
-                'status': r.status,
-                'priority': r.priority,
-                'guest': r.guest_name or 'N/A',
-                'created_at': r.created_at.strftime('%m/%d/%Y %H:%M')
-            } for r in requests]
-        else:
+        start_date = datetime.strptime(data.get('start_date', data['date']), '%Y-%m-%d')
+        end_date = datetime.strptime(data.get('end_date', data['date']), '%Y-%m-%d') + timedelta(days=1)
+        if end_date <= start_date:
+            return jsonify({"msg": "End date must be on or after start date"}), 400
+
+        def fmt_datetime(value, date_only=False):
+            if not value:
+                return 'N/A'
+            return value.strftime('%m/%d/%Y' if date_only else '%m/%d/%Y %H:%M')
+
+        def add_management_row(rows, *, item_type, ref_no, title, status, priority, staff,
+                           comments, effective_date):
+            rows.append({
+                'Property': property.name,
+                'Staff': staff or 'Unassigned',
+                'Item Type': item_type,
+                'Ref No': ref_no,
+                'Ticket / Task': title or 'N/A',
+                'Status': status or 'N/A',
+                'Priority': priority or 'N/A',
+                'Comments': comments or 'N/A',
+                'Effective Date': effective_date or 'N/A'
+            })
+
+        items = []
+        include_tickets = report_type in ['tickets', 'all']
+        include_tasks = report_type in ['tasks', 'all']
+        include_requests = report_type in ['requests', 'all']
+
+        if not any([include_tickets, include_tasks, include_requests]):
             return jsonify({"msg": "Invalid report type"}), 400
 
-        # Generate HTML email content
+        tickets = []
+        tasks = []
+        service_requests = []
+
+        if include_tickets:
+            tickets_query = Ticket.query.filter(
+                Ticket.property_id == data['property_id'],
+                Ticket.created_at >= start_date,
+                Ticket.created_at < end_date
+            )
+            if activity_user_id:
+                tickets_query = tickets_query.filter(Ticket.user_id == activity_user_id)
+            tickets = tickets_query.all()
+
+        if include_tasks:
+            tasks_query = Task.query.filter(
+                Task.property_id == data['property_id'],
+                Task.created_at >= start_date,
+                Task.created_at < end_date
+            )
+            if activity_user_id:
+                tasks_query = tasks_query.filter(Task.assigned_to_id == activity_user_id)
+            tasks = tasks_query.all()
+
+        if include_requests:
+            requests_query = ServiceRequest.query.filter(
+                ServiceRequest.property_id == data['property_id'],
+                ServiceRequest.created_at >= start_date,
+                ServiceRequest.created_at < end_date
+            )
+            if activity_user_id:
+                requests_query = requests_query.filter(ServiceRequest.created_by_id == activity_user_id)
+            service_requests = requests_query.all()
+
+        user_ids = {
+            user_id
+            for user_id in (
+                [ticket.user_id for ticket in tickets] +
+                [task.assigned_to_id for task in tasks if task.assigned_to_id] +
+                [request.created_by_id for request in service_requests if request.created_by_id] +
+                ([activity_user_id] if activity_user_id else [])
+            )
+            if user_id
+        }
+        users_by_id = {
+            user.user_id: user
+            for user in User.query.filter(User.user_id.in_(user_ids)).all()
+        } if user_ids else {}
+
+        for ticket in tickets:
+            creator = users_by_id.get(ticket.user_id)
+            add_management_row(
+                items,
+                item_type='Ticket',
+                ref_no=f'Ticket #{ticket.ticket_id}',
+                title=ticket.title,
+                status=ticket.status,
+                priority=ticket.priority,
+                staff=creator.username if creator else 'Unknown',
+                comments=ticket.description,
+                effective_date=fmt_datetime(ticket.created_at)
+            )
+
+        for task in tasks:
+            assigned_user = users_by_id.get(task.assigned_to_id) if task.assigned_to_id else None
+            add_management_row(
+                items,
+                item_type='Task',
+                ref_no=f'Task #{task.task_id}',
+                title=task.title,
+                status=task.status,
+                priority=task.priority,
+                staff=assigned_user.username if assigned_user else 'Unassigned',
+                comments=task.description,
+                effective_date=fmt_datetime(task.due_date or task.created_at, date_only=bool(task.due_date))
+            )
+
+        for service_request in service_requests:
+            created_by = users_by_id.get(service_request.created_by_id) if service_request.created_by_id else None
+            add_management_row(
+                items,
+                item_type='Service Request',
+                ref_no=f'Request #{service_request.request_id}',
+                title=service_request.request_type,
+                status=service_request.status,
+                priority=service_request.priority,
+                staff=created_by.username if created_by else 'Unknown',
+                comments=service_request.notes,
+                effective_date=fmt_datetime(service_request.created_at)
+            )
+
+        staff_filter_user = users_by_id.get(activity_user_id) if activity_user_id else None
+        staff_filter_name = staff_filter_user.username if staff_filter_user else 'All Staff'
+
+        columns = ['Property', 'Staff', 'Item Type', 'Ref No', 'Ticket / Task', 'Status', 'Priority', 'Comments', 'Effective Date']
+        table_rows = ''.join(
+            '<tr>' + ''.join(
+                f'<td class="{escape(str(item.get("Priority", "")).lower())}">{escape(str(item.get(column, "N/A")))}</td>'
+                for column in columns
+            ) + '</tr>'
+            for item in items
+        ) or f'<tr><td colspan="{len(columns)}">No report items match the selected filters.</td></tr>'
+
         html_content = f"""
         <html>
         <head>
@@ -4709,40 +4803,29 @@ def send_report_email():
                 body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
                 .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
                 table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-                th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+                th, td {{ padding: 10px; text-align: left; border: 1px solid #ddd; vertical-align: top; }}
                 th {{ background-color: #f8f9fa; }}
-                .critical {{ color: #dc3545; }}
-                .high {{ color: #fd7e14; }}
-                .medium {{ color: #ffc107; }}
+                .critical, .urgent {{ color: #dc3545; font-weight: bold; }}
+                .high {{ color: #fd7e14; font-weight: bold; }}
+                .medium, .normal {{ color: #856404; }}
                 .low {{ color: #28a745; }}
-                .history {{ margin-top: 10px; font-size: 0.9em; color: #666; }}
             </style>
         </head>
         <body>
             <div class="header">
-                <h2>{report_type.capitalize()} Report - {property.name}</h2>
-                <p>Date: {report_date.strftime('%B %d, %Y')}</p>
+                <h2>{escape(report_type.replace('_', ' ').title())} Management Report - {escape(property.name)}</h2>
+                <p>Date Range: {escape(start_date.strftime('%B %d, %Y'))} - {escape((end_date - timedelta(days=1)).strftime('%B %d, %Y'))}</p>
+                <p>Staff Filter: {escape(staff_filter_name)}</p>
             </div>
-            
             <table>
                 <thead>
-                    <tr>
-                        {''.join(f'<th>{key.replace("_", " ").title()}</th>' for key in items[0].keys() if key not in ['id', 'history'])}
-                    </tr>
+                    <tr>{''.join(f'<th>{escape(column)}</th>' for column in columns)}</tr>
                 </thead>
-                <tbody>
-                    {''.join(f'''
-                    <tr>
-                        {''.join(f'<td class="{item["priority"].lower()}">{value}</td>' for key, value in item.items() if key not in ['id', 'history'])}
-                    </tr>
-                    {f'<tr><td colspan="{len(items[0].keys()) - 2}"><div class="history">{item.get("history", [])}</div></td></tr>' if report_type == 'tasks' and item.get('history') else ''}
-                    ''' for item in items)}
-                </tbody>
+                <tbody>{table_rows}</tbody>
             </table>
         </body>
         </html>
         """
-
         # Get recipient emails
         if 'user_ids' in data and data['user_ids']:
             recipients = User.query.filter(User.user_id.in_(data['user_ids'])).all()
@@ -4756,7 +4839,7 @@ def send_report_email():
         for email in recipient_emails:
             if not email_service.send_report_email(
                 to_email=email,
-                subject=f"{report_type.capitalize()} Report - {property.name}",
+                subject=f"{report_type.replace('_', ' ').title()} Management Report - {property.name}",
                 content=html_content,
                 is_html=True
             ):
