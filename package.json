@@ -72,9 +72,7 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
-    "@eslint/config-array": "^0.15.0",
-    "@eslint/object-schema": "^2.1.0",
-    "eslint": "^9.0.0",
+    "eslint": "^8.57.0",
     "eslint-config-react-app": "^7.0.1",
     "gh-pages": "^6.3.0"
   }
